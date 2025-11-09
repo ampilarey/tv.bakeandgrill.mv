@@ -1,0 +1,175 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
+import Card from '../../components/common/Card';
+import Spinner from '../../components/common/Spinner';
+import Button from '../../components/common/Button';
+
+export default function AdminDashboard() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user is admin
+    if (user?.role !== 'admin') {
+      navigate('/dashboard');
+      return;
+    }
+
+    fetchStats();
+  }, [user, navigate]);
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/analytics/overview');
+      setStats(response.data.overview);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <Spinner size="xl" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Top Bar */}
+      <div className="bg-background-light border-b border-slate-700 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+            <p className="text-sm text-text-secondary">Bake and Grill TV Management</p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={() => navigate('/dashboard')}>
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              User View
+            </Button>
+            <Button variant="ghost" onClick={logout}>Logout</Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="p-6 max-w-7xl mx-auto">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-text-muted text-sm mb-1">Total Users</p>
+                <p className="text-3xl font-bold text-white">{stats?.totalUsers || 0}</p>
+              </div>
+              <div className="bg-blue-500/20 p-3 rounded-lg">
+                <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-text-muted text-sm mb-1">Playlists</p>
+                <p className="text-3xl font-bold text-white">{stats?.totalPlaylists || 0}</p>
+              </div>
+              <div className="bg-primary/20 p-3 rounded-lg">
+                <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-text-muted text-sm mb-1">Total Displays</p>
+                <p className="text-3xl font-bold text-white">{stats?.totalDisplays || 0}</p>
+              </div>
+              <div className="bg-purple-500/20 p-3 rounded-lg">
+                <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-text-muted text-sm mb-1">Active Displays</p>
+                <p className="text-3xl font-bold text-green-400">{stats?.activeDisplays || 0}</p>
+              </div>
+              <div className="bg-green-500/20 p-3 rounded-lg">
+                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold text-white mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button variant="primary" size="lg" onClick={() => navigate('/admin/users')} className="justify-start">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              Manage Users
+            </Button>
+            
+            <Button variant="primary" size="lg" onClick={() => navigate('/admin/displays')} className="justify-start">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Manage Displays
+            </Button>
+            
+            <Button variant="primary" size="lg" onClick={() => navigate('/admin/analytics')} className="justify-start">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              View Analytics
+            </Button>
+          </div>
+        </div>
+
+        {/* Watch Statistics */}
+        {stats && (
+          <Card>
+            <h3 className="text-lg font-bold text-white mb-4">Watch Statistics</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-text-muted text-sm mb-1">Total Watch Time</p>
+                <p className="text-2xl font-bold text-white">
+                  {Math.floor((stats.totalWatchTime || 0) / 3600)} hours
+                </p>
+              </div>
+              <div>
+                <p className="text-text-muted text-sm mb-1">Total Sessions</p>
+                <p className="text-2xl font-bold text-white">{stats.totalSessions || 0}</p>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+

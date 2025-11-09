@@ -1,0 +1,75 @@
+# Root .gitignore for Bake & Grill TV
+
+# Environment variables (CRITICAL - Never commit!)
+.env
+.env.local
+.env.production
+.env.*.local
+server/.env
+server/.env.local
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Build outputs
+client/dist/
+client/dist-ssr/
+
+# Database files (local development only)
+server/database/*.sqlite
+server/database/*.db
+*.sqlite
+*.db
+
+# Uploads (user-generated content)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# Windows
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
