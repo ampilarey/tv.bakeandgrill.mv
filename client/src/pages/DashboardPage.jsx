@@ -99,13 +99,17 @@ export default function DashboardPage() {
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-white">Your Playlists</h2>
-          <Button variant="primary" onClick={() => setShowAddModal(true)}>
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Playlist
-          </Button>
+          <h2 className="text-2xl font-bold text-white">
+            {user?.role === 'user' ? 'Available Playlists' : 'Your Playlists'}
+          </h2>
+          {(user?.role === 'admin' || user?.role === 'staff') && (
+            <Button variant="primary" onClick={() => setShowAddModal(true)}>
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Playlist
+            </Button>
+          )}
         </div>
 
         {playlists.length === 0 ? (

@@ -13,7 +13,7 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newUser, setNewUser] = useState({ email: '', password: '', role: 'staff', first_name: '', last_name: '' });
+  const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', first_name: '', last_name: '' });
   const [error, setError] = useState('');
   
   const { user: currentUser, logout } = useAuth();
@@ -121,7 +121,7 @@ export default function UserManagement() {
                     <td className="py-3 px-4 text-white">{user.email}</td>
                     <td className="py-3 px-4 text-white">{user.first_name} {user.last_name}</td>
                     <td className="py-3 px-4">
-                      <Badge color={user.role === 'admin' ? 'primary' : 'default'}>
+                      <Badge color={user.role === 'admin' ? 'primary' : user.role === 'staff' ? 'success' : 'default'}>
                         {user.role}
                       </Badge>
                     </td>
@@ -195,8 +195,9 @@ export default function UserManagement() {
               onChange={(e) => setNewUser({...newUser, role: e.target.value})}
               className="w-full px-4 py-2 rounded-lg bg-background-lighter text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="staff">Staff</option>
-              <option value="admin">Admin</option>
+              <option value="user">User (View Only)</option>
+              <option value="staff">Staff (Manage Own Content)</option>
+              <option value="admin">Admin (Full Access)</option>
             </select>
           </div>
           
