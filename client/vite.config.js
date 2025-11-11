@@ -72,6 +72,10 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
+        // Add timestamp to filenames for cache busting
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'hls': ['hls.js']
