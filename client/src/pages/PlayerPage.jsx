@@ -17,6 +17,8 @@ export default function PlayerPage() {
   const [groups, setGroups] = useState([]);
   const [currentChannel, setCurrentChannel] = useState(null);
   const [favorites, setFavorites] = useState([]);
+  const [recentlyWatched, setRecentlyWatched] = useState([]);
+  const [showAllRecent, setShowAllRecent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
@@ -76,6 +78,43 @@ export default function PlayerPage() {
       fetchFavorites();
     }
   }, [playlistId]);
+
+  // Fetch recently watched channels
+  useEffect(() => {
+    const fetchRecentlyWatched = async () => {
+      try {
+        const response = await api.get(`/history?playlistId=${playlistId}&limit=20`);
+        const history = response.data.history || [];
+        
+        // Get unique channels (most recent first)
+        const uniqueChannels = [];
+        const seenIds = new Set();
+        
+        for (const item of history) {
+          if (!seenIds.has(item.channel_id) && uniqueChannels.length < 10) {
+            seenIds.add(item.channel_id);
+            
+            // Find full channel info from channels list
+            const channelInfo = channels.find(c => c.id === item.channel_id);
+            if (channelInfo) {
+              uniqueChannels.push({
+                ...channelInfo,
+                watched_at: item.watched_at
+              });
+            }
+          }
+        }
+        
+        setRecentlyWatched(uniqueChannels);
+      } catch (error) {
+        console.error('Error fetching watch history:', error);
+      }
+    };
+
+    if (playlistId && channels.length > 0) {
+      fetchRecentlyWatched();
+    }
+  }, [playlistId, channels]);
 
   // Filter channels
   useEffect(() => {
