@@ -130,6 +130,58 @@ CREATE TABLE IF NOT EXISTS display_commands (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
+-- Table: user_permissions
+-- Granular user permissions and limits
+-- ============================================
+CREATE TABLE IF NOT EXISTS user_permissions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  
+  -- Feature permissions (boolean)
+  can_add_playlists BOOLEAN DEFAULT FALSE,
+  can_edit_own_playlists BOOLEAN DEFAULT FALSE,
+  can_delete_own_playlists BOOLEAN DEFAULT FALSE,
+  can_manage_displays BOOLEAN DEFAULT FALSE,
+  can_control_displays BOOLEAN DEFAULT FALSE,
+  can_create_users BOOLEAN DEFAULT FALSE,
+  can_view_analytics BOOLEAN DEFAULT FALSE,
+  can_manage_schedules BOOLEAN DEFAULT FALSE,
+  
+  -- Resource limits (-1 = none, 0 = unlimited, N = specific number)
+  max_playlists INT DEFAULT -1,
+  max_displays INT DEFAULT -1,
+  
+  -- Metadata
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_user_permission (user_id),
+  INDEX idx_permissions_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table: user_assigned_playlists
+-- Admin can assign their playlists to users
+-- ============================================
+CREATE TABLE IF NOT EXISTS user_assigned_playlists (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  playlist_id INT NOT NULL,
+  assigned_by INT NOT NULL,
+  can_edit BOOLEAN DEFAULT FALSE,
+  can_delete BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+  FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_assignment (user_id, playlist_id),
+  INDEX idx_assigned_user (user_id),
+  INDEX idx_assigned_playlist (playlist_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
 -- Table: app_settings
 -- System-wide configuration
 -- ============================================

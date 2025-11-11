@@ -4,6 +4,9 @@ const { getDatabase } = require('../database/init');
 const { verifyToken, requireAdmin, verifyDisplayToken } = require('../middleware/auth');
 const { validateDisplayCreate } = require('../middleware/validation');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { checkPermission, checkResourceLimit } = require('../middleware/permissions');
+const axios = require('axios');
+const { parseM3U } = require('../utils/m3uParser');
 
 const router = express.Router();
 
@@ -151,14 +154,17 @@ router.patch('/commands/:id/execute', asyncHandler(async (req, res) => {
   });
 }));
 
-// Protected routes below require authentication and admin role
-router.use(verifyToken, requireAdmin);
+// Protected routes below require authentication
+// Some routes check for admin OR specific permissions
+router.use(verifyToken);
 
 /**
  * GET /api/displays
- * List all displays (Admin only)
+ * List all displays (requires permission)
  */
-router.get('/', asyncHandler(async (req, res) => {
+router.get('/', 
+  checkPermission('can_manage_displays'),
+  asyncHandler(async (req, res) => {
   const db = getDatabase();
   
   const [displays] = await db.query('SELECT * FROM displays ORDER BY created_at DESC');
@@ -196,9 +202,13 @@ router.get('/', asyncHandler(async (req, res) => {
 
 /**
  * POST /api/displays
- * Create new display (Admin only)
+ * Create new display (requires permission and checks limit)
  */
-router.post('/', validateDisplayCreate, asyncHandler(async (req, res) => {
+router.post('/', 
+  checkPermission('can_manage_displays'),
+  checkResourceLimit('displays', 'displays'),
+  validateDisplayCreate, 
+  asyncHandler(async (req, res) => {
   const { name, location, playlist_id } = req.body;
   const db = getDatabase();
   
@@ -397,9 +407,11 @@ router.get('/:id/status', asyncHandler(async (req, res) => {
 
 /**
  * POST /api/displays/:id/control
- * Send remote control command to display (Admin only)
+ * Send remote control command to display (requires permission)
  */
-router.post('/:id/control', asyncHandler(async (req, res) => {
+router.post('/:id/control', 
+  checkPermission('can_control_displays'),
+  asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
   const { action, channel_id, channel_name, volume } = req.body;

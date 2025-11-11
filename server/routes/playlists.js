@@ -3,6 +3,7 @@ const { getDatabase } = require('../database/init');
 const { verifyToken } = require('../middleware/auth');
 const { validatePlaylistCreate, isValidM3UUrl } = require('../middleware/validation');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { checkPermission, checkResourceLimit, getAssignedPlaylists } = require('../middleware/permissions');
 
 const router = express.Router();
 
@@ -11,23 +12,40 @@ router.use(verifyToken);
 
 /**
  * GET /api/playlists
- * List all playlists
+ * List all playlists (including assigned playlists for non-admins)
  */
 router.get('/', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { is_active } = req.query;
   
-  let query = 'SELECT * FROM playlists';
-  let params = [];
+  let playlists = [];
   
-  if (is_active !== undefined) {
-    query += ' WHERE is_active = ?';
-    params.push(is_active === 'true' ? 1 : 0);
+  // Admin sees all playlists
+  if (req.user.role === 'admin') {
+    let query = 'SELECT * FROM playlists';
+    let params = [];
+    
+    if (is_active !== undefined) {
+      query += ' WHERE is_active = ?';
+      params.push(is_active === 'true' ? 1 : 0);
+    }
+    
+    query += ' ORDER BY created_at DESC';
+    
+    const [allPlaylists] = await db.query(query, params);
+    playlists = allPlaylists;
+  } else {
+    // Non-admin: Get assigned playlists
+    const assignedPlaylists = await getAssignedPlaylists(req.user.id);
+    playlists = assignedPlaylists.map(ap => ({
+      id: ap.playlist_id,
+      name: ap.playlist_name,
+      m3u_url: ap.m3u_url,
+      is_assigned: true,
+      can_edit: ap.can_edit,
+      can_delete: ap.can_delete
+    }));
   }
-  
-  query += ' ORDER BY created_at DESC';
-  
-  const [playlists] = await db.query(query, params);
   
   res.json({
     success: true,
@@ -37,9 +55,13 @@ router.get('/', asyncHandler(async (req, res) => {
 
 /**
  * POST /api/playlists
- * Create new playlist
+ * Create new playlist (requires permission)
  */
-router.post('/', validatePlaylistCreate, asyncHandler(async (req, res) => {
+router.post('/', 
+  checkPermission('can_add_playlists'),
+  checkResourceLimit('playlists', 'playlists'),
+  validatePlaylistCreate, 
+  asyncHandler(async (req, res) => {
   const { name, m3u_url, description } = req.body;
   const db = getDatabase();
   
@@ -100,7 +122,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
  * PUT /api/playlists/:id
  * Update playlist
  */
-router.put('/:id', asyncHandler(async (req, res) => {
+router.put('/:id', 
+  checkPermission('can_edit_own_playlists'),
+  asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
   const { name, m3u_url, description, is_active } = req.body;
@@ -170,9 +194,11 @@ router.put('/:id', asyncHandler(async (req, res) => {
 
 /**
  * DELETE /api/playlists/:id
- * Delete playlist
+ * Delete playlist (requires permission)
  */
-router.delete('/:id', asyncHandler(async (req, res) => {
+router.delete('/:id', 
+  checkPermission('can_delete_own_playlists'),
+  asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
   

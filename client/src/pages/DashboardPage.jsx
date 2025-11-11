@@ -13,6 +13,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPlaylist, setNewPlaylist] = useState({ name: '', m3u_url: '', description: '' });
+  const [permissions, setPermissions] = useState(null);
   const [error, setError] = useState('');
   
   const { user, logout } = useAuth();
@@ -20,7 +21,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchPlaylists();
+    fetchPermissions();
   }, []);
+  
+  const fetchPermissions = async () => {
+    try {
+      const response = await api.get('/permissions/me');
+      setPermissions(response.data.permissions);
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+    }
+  };
 
   const fetchPlaylists = async () => {
     try {
@@ -102,12 +113,17 @@ export default function DashboardPage() {
           <h2 className="text-2xl font-bold text-white">
             {user?.role === 'user' ? 'Available Playlists' : 'Your Playlists'}
           </h2>
-          {(user?.role === 'admin' || user?.role === 'staff') && (
+          {(user?.role === 'admin' || permissions?.can_add_playlists) && (
             <Button variant="primary" onClick={() => setShowAddModal(true)}>
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Add Playlist
+              {permissions?.max_playlists > 0 && (
+                <span className="ml-2 text-xs opacity-75">
+                  ({playlists.length}/{permissions.max_playlists})
+                </span>
+              )}
             </Button>
           )}
         </div>

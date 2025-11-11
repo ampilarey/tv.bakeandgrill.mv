@@ -100,10 +100,10 @@ function validateUserCreate(req, res, next) {
     });
   }
   
-  if (role && !['admin', 'staff'].includes(role)) {
+  if (role && !['admin', 'staff', 'user'].includes(role)) {
     return res.status(400).json({
       success: false,
-      error: 'Invalid role. Must be "admin" or "staff"',
+      error: 'Invalid role. Must be "admin", "staff", or "user"',
       code: 'VALIDATION_ERROR'
     });
   }

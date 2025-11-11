@@ -8,11 +8,14 @@ import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
+import PermissionManager from '../../components/PermissionManager';
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', first_name: '', last_name: '' });
   const [error, setError] = useState('');
   
@@ -133,15 +136,29 @@ export default function UserManagement() {
                     <td className="py-3 px-4 text-text-muted text-sm">
                       {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                     </td>
-                    <td className="py-3 px-4 text-right">
-                      <Button 
-                        variant="danger" 
-                        size="sm"
-                        onClick={() => handleDeleteUser(user.id)}
-                        disabled={user.id === currentUser.id}
-                      >
-                        Delete
-                      </Button>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-2 justify-end">
+                        {user.role !== 'admin' && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setShowPermissionModal(true);
+                            }}
+                          >
+                            🔑 Permissions
+                          </Button>
+                        )}
+                        <Button 
+                          variant="danger" 
+                          size="sm"
+                          onClick={() => handleDeleteUser(user.id)}
+                          disabled={user.id === currentUser.id}
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -227,6 +244,21 @@ export default function UserManagement() {
           </div>
         </form>
       </Modal>
+
+      {/* Permission Management Modal */}
+      {showPermissionModal && selectedUser && (
+        <PermissionManager
+          userId={selectedUser.id}
+          userName={`${selectedUser.first_name} ${selectedUser.last_name}` || selectedUser.email}
+          onClose={() => {
+            setShowPermissionModal(false);
+            setSelectedUser(null);
+          }}
+          onUpdate={() => {
+            fetchUsers();
+          }}
+        />
+      )}
     </div>
   );
 }
