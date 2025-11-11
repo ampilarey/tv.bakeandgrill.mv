@@ -10,6 +10,7 @@ import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
 import PermissionManager from '../../components/PermissionManager';
 import MobileMenu from '../../components/MobileMenu';
+import Footer from '../../components/Footer';
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -76,7 +77,7 @@ export default function UserManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Top Bar */}
       <div className="bg-background-light border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
@@ -97,7 +98,7 @@ export default function UserManagement() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6 max-w-7xl mx-auto flex-1">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-white">All Users ({users.length})</h2>
           <Button variant="primary" onClick={() => setShowCreateModal(true)}>
@@ -318,6 +319,8 @@ export default function UserManagement() {
           }}
         />
       )}
+      
+      <Footer />
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import Card from '../../components/common/Card';
+import MobileMenu from '../../components/MobileMenu';
+import Footer from '../../components/Footer';
 import Spinner from '../../components/common/Spinner';
 import Button from '../../components/common/Button';
 
@@ -42,15 +44,18 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Top Bar */}
       <div className="bg-background-light border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-            <p className="text-sm text-text-secondary">Bake and Grill TV Management</p>
+          <div className="flex items-center gap-3">
+            <MobileMenu />
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-white">Admin Dashboard</h1>
+              <p className="text-xs md:text-sm text-text-secondary hidden sm:block">Bake and Grill TV Management</p>
+            </div>
           </div>
-          <div className="flex gap-3">
+          <div className="hidden md:flex gap-3">
             <Button variant="ghost" onClick={() => navigate('/dashboard')}>
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -63,7 +68,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6 max-w-7xl mx-auto flex-1 pb-mobile-nav">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
@@ -169,6 +174,8 @@ export default function AdminDashboard() {
           </Card>
         )}
       </div>
+      
+      <Footer />
     </div>
   );
 }

@@ -8,6 +8,8 @@ import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
+import MobileMenu from '../../components/MobileMenu';
+import Footer from '../../components/Footer';
 
 export default function DisplayManagement() {
   const [displays, setDisplays] = useState([]);
@@ -216,18 +218,21 @@ export default function DisplayManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Top Bar */}
       <div className="bg-background-light border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Display Management</h1>
-            <p className="text-sm text-text-secondary">
-              Manage cafe TV displays
-              <span className="ml-3 text-xs text-green-400 animate-pulse">● Auto-refresh (10s)</span>
-            </p>
+          <div className="flex items-center gap-3">
+            <MobileMenu />
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-white">Display Management</h1>
+              <p className="text-xs md:text-sm text-text-secondary hidden sm:block">
+                Manage cafe TV displays
+                <span className="ml-3 text-xs text-green-400 animate-pulse">● Auto-refresh (10s)</span>
+              </p>
+            </div>
           </div>
-          <div className="flex gap-3">
+          <div className="hidden md:flex gap-3">
             <Button variant="ghost" onClick={() => navigate('/admin/dashboard')}>
               ← Admin Home
             </Button>
@@ -237,7 +242,7 @@ export default function DisplayManagement() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6 max-w-7xl mx-auto flex-1 pb-mobile-nav">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-white">Displays ({displays.length})</h2>
           <Button variant="primary" onClick={() => setShowCreateModal(true)}>
@@ -630,6 +635,8 @@ export default function DisplayManagement() {
           </div>
         )}
       </Modal>
+      
+      <Footer />
     </div>
   );
 }

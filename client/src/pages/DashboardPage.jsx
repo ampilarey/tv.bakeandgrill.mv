@@ -7,6 +7,7 @@ import Card from '../components/common/Card';
 import Spinner from '../components/common/Spinner';
 import Modal from '../components/common/Modal';
 import Input from '../components/common/Input';
+import Footer from '../components/Footer';
 
 export default function DashboardPage() {
   const [playlists, setPlaylists] = useState([]);
@@ -71,7 +72,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Top Bar */}
       <div className="bg-background-light border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
@@ -108,7 +109,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6 max-w-7xl mx-auto flex-1">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-white">
             {user?.role === 'user' ? 'Available Playlists' : 'Your Playlists'}
@@ -222,6 +223,8 @@ export default function DashboardPage() {
           </div>
         </form>
       </Modal>
+      
+      <Footer />
     </div>
   );
 }
