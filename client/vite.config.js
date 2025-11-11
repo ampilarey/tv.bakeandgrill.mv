@@ -17,6 +17,10 @@ export default defineConfig({
         background_color: '#0F172A',
         theme_color: '#F59E0B',
         orientation: 'any',
+        categories: ['entertainment', 'lifestyle'],
+        lang: 'en',
+        dir: 'ltr',
+        scope: '/',
         icons: [
           {
             src: '/pwa-192x192.png',
@@ -25,10 +29,18 @@ export default defineConfig({
             purpose: 'any maskable'
           },
           {
-            src: '/pwa-512x512.png',
+            src: '/pwa-192x192.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
+          }
+        ],
+        screenshots: [
+          {
+            src: '/pwa-192x192.png',
+            sizes: '540x720',
+            type: 'image/png',
+            label: 'Bake & Grill TV - Watch your favorite channels'
           }
         ]
       },
@@ -36,16 +48,42 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/api\..*/i,
+            // API calls - Network first, fallback to cache
+            urlPattern: /^https?:\/\/.*\/api\/.*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
               expiration: {
-                maxEntries: 10,
+                maxEntries: 50,
                 maxAgeSeconds: 60 * 60 // 1 hour
               },
               cacheableResponse: {
                 statuses: [0, 200]
+              },
+              networkTimeoutSeconds: 10
+            }
+          },
+          {
+            // Images and static assets - Cache first
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'image-cache',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+              }
+            }
+          },
+          {
+            // Fonts - Cache first
+            urlPattern: /\.(?:woff|woff2|ttf|otf)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'font-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 365 * 24 * 60 * 60 // 1 year
               }
             }
           }
