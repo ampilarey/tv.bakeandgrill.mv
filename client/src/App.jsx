@@ -13,6 +13,9 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import UserManagement from './pages/admin/UserManagement';
 import DisplayManagement from './pages/admin/DisplayManagement';
 
+// Mobile Components
+import BottomNav from './components/BottomNav';
+
 // Protected Route Component
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -108,6 +111,7 @@ function AppRouter() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      <BottomNav />
     </Router>
   );
 }

@@ -85,3 +85,15 @@ video {
   animation: slideIn 0.3s ease-out;
 }
 
+/* Mobile safe area for bottom navigation */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Add padding to pages with bottom nav on mobile */
+@media (max-width: 768px) {
+  .pb-mobile-nav {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+}
+

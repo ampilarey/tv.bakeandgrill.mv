@@ -117,19 +117,19 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
   return (
     <>
       <Modal isOpen={true} onClose={onClose} title={`Manage Permissions: ${userName}`} size="xl">
-        <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+        <div className="space-y-4 md:space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
           
           {/* Playlist Permissions */}
           <div className="bg-background-lighter rounded-lg p-4 border border-slate-700">
             <h3 className="text-lg font-semibold text-white mb-3">📋 Playlist Permissions</h3>
             
             <div className="space-y-3">
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_add_playlists}
                   onChange={(e) => setPermissions({...permissions, can_add_playlists: e.target.checked})}
-                  className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                 />
                 <div>
                   <span className="text-white font-medium">Can Add Playlists</span>
@@ -137,12 +137,12 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
                 </div>
               </label>
               
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_edit_own_playlists}
                   onChange={(e) => setPermissions({...permissions, can_edit_own_playlists: e.target.checked})}
-                  className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                 />
                 <div>
                   <span className="text-white font-medium">Can Edit Own Playlists</span>
@@ -150,12 +150,12 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
                 </div>
               </label>
               
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_delete_own_playlists}
                   onChange={(e) => setPermissions({...permissions, can_delete_own_playlists: e.target.checked})}
-                  className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                 />
                 <div>
                   <span className="text-white font-medium">Can Delete Own Playlists</span>
@@ -188,12 +188,12 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
             <h3 className="text-lg font-semibold text-white mb-3">🖥️ Display Permissions</h3>
             
             <div className="space-y-3">
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_manage_displays}
                   onChange={(e) => setPermissions({...permissions, can_manage_displays: e.target.checked})}
-                  className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                 />
                 <div>
                   <span className="text-white font-medium">Can Manage Displays</span>
@@ -201,12 +201,12 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
                 </div>
               </label>
               
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_control_displays}
                   onChange={(e) => setPermissions({...permissions, can_control_displays: e.target.checked})}
-                  className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                 />
                 <div>
                   <span className="text-white font-medium">Can Control Displays (Remote)</span>
@@ -239,12 +239,12 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
             <h3 className="text-lg font-semibold text-white mb-3">⚙️ Advanced Permissions</h3>
             
             <div className="space-y-3">
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_create_users}
                   onChange={(e) => setPermissions({...permissions, can_create_users: e.target.checked})}
-                  className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                 />
                 <div>
                   <span className="text-white font-medium">Can Create Users</span>
@@ -252,12 +252,12 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
                 </div>
               </label>
               
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_view_analytics}
                   onChange={(e) => setPermissions({...permissions, can_view_analytics: e.target.checked})}
-                  className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                 />
                 <div>
                   <span className="text-white font-medium">Can View Analytics</span>
@@ -265,12 +265,12 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
                 </div>
               </label>
               
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_manage_schedules}
                   onChange={(e) => setPermissions({...permissions, can_manage_schedules: e.target.checked})}
-                  className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                 />
                 <div>
                   <span className="text-white font-medium">Can Manage Schedules</span>

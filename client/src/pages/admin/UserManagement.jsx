@@ -9,6 +9,7 @@ import Input from '../../components/common/Input';
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
 import PermissionManager from '../../components/PermissionManager';
+import MobileMenu from '../../components/MobileMenu';
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -79,11 +80,14 @@ export default function UserManagement() {
       {/* Top Bar */}
       <div className="bg-background-light border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">User Management</h1>
-            <p className="text-sm text-text-secondary">Manage admin and staff accounts</p>
+          <div className="flex items-center gap-3">
+            <MobileMenu />
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-white">User Management</h1>
+              <p className="text-xs md:text-sm text-text-secondary hidden sm:block">Manage admin and staff accounts</p>
+            </div>
           </div>
-          <div className="flex gap-3">
+          <div className="hidden md:flex gap-3">
             <Button variant="ghost" onClick={() => navigate('/admin/dashboard')}>
               ← Admin Home
             </Button>
@@ -104,68 +108,123 @@ export default function UserManagement() {
           </Button>
         </div>
 
-        {/* Users Table */}
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-700">
-                  <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Email</th>
-                  <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Name</th>
-                  <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Role</th>
-                  <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Status</th>
-                  <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Last Login</th>
-                  <th className="text-right py-3 px-4 text-text-secondary font-medium text-sm">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user.id} className="border-b border-slate-800 hover:bg-background-lighter">
-                    <td className="py-3 px-4 text-white">{user.email}</td>
-                    <td className="py-3 px-4 text-white">{user.first_name} {user.last_name}</td>
-                    <td className="py-3 px-4">
-                      <Badge color={user.role === 'admin' ? 'primary' : user.role === 'staff' ? 'success' : 'default'}>
-                        {user.role}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4">
-                      <Badge color={user.is_active ? 'success' : 'danger'}>
-                        {user.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4 text-text-muted text-sm">
-                      {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex gap-2 justify-end">
-                        {user.role !== 'admin' && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setShowPermissionModal(true);
-                            }}
-                          >
-                            🔑 Permissions
-                          </Button>
-                        )}
-                        <Button 
-                          variant="danger" 
-                          size="sm"
-                          onClick={() => handleDeleteUser(user.id)}
-                          disabled={user.id === currentUser.id}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
+        {/* Users - Desktop Table View */}
+        <div className="hidden md:block">
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Email</th>
+                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Name</th>
+                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Role</th>
+                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Status</th>
+                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Last Login</th>
+                    <th className="text-right py-3 px-4 text-text-secondary font-medium text-sm">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id} className="border-b border-slate-800 hover:bg-background-lighter">
+                      <td className="py-3 px-4 text-white">{user.email}</td>
+                      <td className="py-3 px-4 text-white">{user.first_name} {user.last_name}</td>
+                      <td className="py-3 px-4">
+                        <Badge color={user.role === 'admin' ? 'primary' : user.role === 'staff' ? 'success' : 'default'}>
+                          {user.role}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge color={user.is_active ? 'success' : 'danger'}>
+                          {user.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-text-muted text-sm">
+                        {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex gap-2 justify-end">
+                          {user.role !== 'admin' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setShowPermissionModal(true);
+                              }}
+                            >
+                              🔑 Permissions
+                            </Button>
+                          )}
+                          <Button 
+                            variant="danger" 
+                            size="sm"
+                            onClick={() => handleDeleteUser(user.id)}
+                            disabled={user.id === currentUser.id}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+
+        {/* Users - Mobile Card View */}
+        <div className="md:hidden space-y-4">
+          {users.map((user) => (
+            <Card key={user.id}>
+              <div className="space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white mb-1">{user.first_name} {user.last_name}</h3>
+                    <p className="text-sm text-text-secondary">{user.email}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge color={user.role === 'admin' ? 'primary' : user.role === 'staff' ? 'success' : 'default'}>
+                      {user.role}
+                    </Badge>
+                    <Badge color={user.is_active ? 'success' : 'danger'}>
+                      {user.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </div>
+                </div>
+                
+                <div className="text-xs text-text-muted">
+                  Last login: {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                </div>
+                
+                <div className="flex gap-2 pt-2">
+                  {user.role !== 'admin' && (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setShowPermissionModal(true);
+                      }}
+                      className="flex-1 min-h-[44px]"
+                    >
+                      🔑 Permissions
+                    </Button>
+                  )}
+                  <Button 
+                    variant="danger" 
+                    size="md"
+                    onClick={() => handleDeleteUser(user.id)}
+                    disabled={user.id === currentUser.id}
+                    className="flex-1 min-h-[44px]"
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
       </div>
 
       {/* Create User Modal */}

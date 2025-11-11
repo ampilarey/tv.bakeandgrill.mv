@@ -1,3 +1,5 @@
+import { lightTap } from '../../utils/haptics';
+
 export default function Button({
   children,
   variant = 'primary',
@@ -9,6 +11,12 @@ export default function Button({
   className = '',
   ...props
 }) {
+  const handleClick = (e) => {
+    if (!disabled && !loading) {
+      lightTap(); // Haptic feedback on mobile
+      if (onClick) onClick(e);
+    }
+  };
   const baseStyles = 'font-medium rounded-lg transition-all duration-200 focus-ring inline-flex items-center justify-center';
   
   const variants = {
@@ -29,7 +37,7 @@ export default function Button({
   return (
     <button
       type={type}
-      onClick={onClick}
+      onClick={handleClick}
       disabled={disabled || loading}
       className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${disabled || loading ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
       {...props}
