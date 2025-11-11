@@ -23,11 +23,19 @@ export default function PlayerPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [isAutoPlay, setIsAutoPlay] = useState(false);
   
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const navigate = useNavigate();
   const { logout } = useAuth();
+
+  // Remember last visited playlist for quick access via bottom navigation
+  useEffect(() => {
+    if (playlistId && typeof window !== 'undefined') {
+      window.localStorage.setItem('lastPlaylistId', playlistId);
+    }
+  }, [playlistId]);
 
   // Fetch channels from playlist
   useEffect(() => {
@@ -49,10 +57,8 @@ export default function PlayerPage() {
         setFilteredChannels(channelsList);
         setGroups(groupsList);
         
-        // Auto-play first channel
-        if (channelsList.length > 0) {
-          setCurrentChannel(channelsList[0]);
-        }
+        // Don't auto-play any channel on page load
+        // User should manually select a channel to watch
       } catch (error) {
         console.error('Error fetching channels:', error);
       } finally {
@@ -83,7 +89,7 @@ export default function PlayerPage() {
   useEffect(() => {
     const fetchRecentlyWatched = async () => {
       try {
-        const response = await api.get(`/history?playlistId=${playlistId}&limit=20`);
+        const response = await api.get(`/history?playlistId=${playlistId}&limit=100`);
         const history = response.data.history || [];
         
         // Get unique channels (most recent first)
@@ -91,7 +97,7 @@ export default function PlayerPage() {
         const seenIds = new Set();
         
         for (const item of history) {
-          if (!seenIds.has(item.channel_id) && uniqueChannels.length < 10) {
+          if (!seenIds.has(item.channel_id) && uniqueChannels.length < 50) {
             seenIds.add(item.channel_id);
             
             // Find full channel info from channels list
@@ -245,6 +251,7 @@ export default function PlayerPage() {
 
   const handleChannelClick = (channel) => {
     setCurrentChannel(channel);
+    setIsAutoPlay(false); // Mark as user-initiated
   };
 
   const toggleFavorite = async (channel) => {
@@ -330,12 +337,75 @@ export default function PlayerPage() {
 
         {/* Channel List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {/* Recently Watched Section */}
+          {recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
+            <div className="p-2 border-b border-slate-700">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
+                  🕒 Recently Watched
+                </h3>
+                {recentlyWatched.length > 5 && (
+                  <button
+                    onClick={() => setShowAllRecent(!showAllRecent)}
+                    className="text-xs text-primary hover:text-primary-light transition-colors"
+                  >
+                    {showAllRecent ? 'Show Less' : `Show All (${recentlyWatched.length})`}
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1">
+                {(showAllRecent ? recentlyWatched : recentlyWatched.slice(0, 5)).map((channel) => (
+                  <div
+                    key={`recent-${channel.id}`}
+                    onClick={() => handleChannelClick(channel)}
+                    className={`
+                      p-3 rounded-lg cursor-pointer transition-all
+                      ${currentChannel?.id === channel.id 
+                        ? 'bg-primary/20 border border-primary' 
+                        : 'bg-background-lighter/50 hover:bg-background-lighter border border-transparent'
+                      }
+                    `}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-medium text-white truncate text-sm">{channel.name}</h3>
+                          {currentChannel?.id === channel.id && (
+                            <Badge color="success" size="sm">Playing</Badge>
+                          )}
+                        </div>
+                        {channel.group && (
+                          <p className="text-xs text-text-muted">{channel.group}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(channel);
+                        }}
+                        className="ml-2 p-1 hover:scale-110 transition-transform"
+                      >
+                        {isFavorite(channel.id) ? '⭐' : '☆'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* All Channels Section */}
           {filteredChannels.length === 0 ? (
             <div className="p-8 text-center text-text-muted">
               <p>No channels found</p>
             </div>
           ) : (
             <div className="p-2">
+              {recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
+                <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-2 px-1">
+                  📺 All Channels
+                </h3>
+              )}
               {filteredChannels.map((channel) => (
                 <div
                   key={channel.id}

@@ -50,7 +50,7 @@ export default function UserManagement() {
     try {
       await api.post('/users', newUser);
       setShowCreateModal(false);
-      setNewUser({ email: '', password: '', role: 'staff', first_name: '', last_name: '' });
+      setNewUser({ email: '', password: '', role: 'user', first_name: '', last_name: '' });
       fetchUsers();
     } catch (error) {
       setError(error.response?.data?.error || 'Failed to create user');
@@ -234,7 +234,7 @@ export default function UserManagement() {
         onClose={() => {
           setShowCreateModal(false);
           setError('');
-          setNewUser({ email: '', password: '', role: 'staff', first_name: '', last_name: '' });
+          setNewUser({ email: '', password: '', role: 'user', first_name: '', last_name: '' });
         }}
         title="Create New User"
       >

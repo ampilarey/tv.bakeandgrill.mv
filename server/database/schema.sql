@@ -28,11 +28,14 @@ CREATE TABLE IF NOT EXISTS playlists (
   name VARCHAR(255) NOT NULL,
   m3u_url TEXT NOT NULL,
   description TEXT,
+  created_by INT NULL,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   last_fetched TIMESTAMP NULL,
-  INDEX idx_playlists_active (is_active)
+  INDEX idx_playlists_active (is_active),
+  INDEX idx_playlists_owner (created_by),
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
@@ -83,6 +86,7 @@ CREATE TABLE IF NOT EXISTS displays (
   playlist_id INT,
   current_channel_id VARCHAR(255),
   token VARCHAR(255) UNIQUE NOT NULL,
+  created_by INT NULL,
   last_heartbeat TIMESTAMP NULL,
   is_active BOOLEAN DEFAULT TRUE,
   auto_play BOOLEAN DEFAULT TRUE,
@@ -90,8 +94,10 @@ CREATE TABLE IF NOT EXISTS displays (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_displays_token (token),
-  INDEX idx_displays_active (is_active)
+  INDEX idx_displays_active (is_active),
+  INDEX idx_displays_owner (created_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================

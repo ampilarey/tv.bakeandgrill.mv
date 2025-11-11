@@ -62,7 +62,7 @@ function checkPermission(permission) {
  * @param {string} table - Database table name
  * @param {string} userIdColumn - Column name for user ID
  */
-function checkResourceLimit(resource, table, userIdColumn = 'user_id') {
+function checkResourceLimit(resource, table, options = {}) {
   return async (req, res, next) => {
     try {
       // Admin has unlimited resources
@@ -71,6 +71,11 @@ function checkResourceLimit(resource, table, userIdColumn = 'user_id') {
       }
       
       const db = getDatabase();
+      const {
+        userIdColumn = 'user_id',
+        countQuery = null,
+        countParamsBuilder = null
+      } = options;
       
       // Get user permissions
       const [permissions] = await db.query(
@@ -105,12 +110,29 @@ function checkResourceLimit(resource, table, userIdColumn = 'user_id') {
       }
       
       // Check current count
-      const [count] = await db.query(
-        `SELECT COUNT(*) as count FROM ${table} WHERE ${userIdColumn} = ?`,
-        [req.user.id]
-      );
-      
-      const currentCount = count[0].count;
+      let currentCount = 0;
+      try {
+        let query = countQuery;
+        let params;
+        
+        if (query) {
+          params = typeof countParamsBuilder === 'function'
+            ? countParamsBuilder(req)
+            : [req.user.id];
+        } else {
+          query = `SELECT COUNT(*) as count FROM ${table} WHERE ${userIdColumn} = ?`;
+          params = [req.user.id];
+        }
+        
+        const [count] = await db.query(query, params);
+        currentCount = Array.isArray(count) && count.length > 0 && count[0].count !== undefined
+          ? count[0].count
+          : 0;
+      } catch (error) {
+        // If the resource tracking column/table doesn't exist yet, log and skip the limit.
+        console.error('Resource limit count failed:', error.code || error.message);
+        return next();
+      }
       
       if (currentCount >= maxAllowed) {
         return res.status(403).json({

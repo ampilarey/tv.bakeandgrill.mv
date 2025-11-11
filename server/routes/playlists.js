@@ -59,7 +59,10 @@ router.get('/', asyncHandler(async (req, res) => {
  */
 router.post('/', 
   checkPermission('can_add_playlists'),
-  checkResourceLimit('playlists', 'playlists'),
+  checkResourceLimit('playlists', 'user_assigned_playlists', {
+    countQuery: 'SELECT COUNT(*) as count FROM user_assigned_playlists WHERE user_id = ? AND assigned_by = ?',
+    countParamsBuilder: (req) => [req.user.id, req.user.id]
+  }),
   validatePlaylistCreate, 
   asyncHandler(async (req, res) => {
   const { name, m3u_url, description } = req.body;
@@ -80,13 +83,44 @@ router.post('/',
   }
   
   // Insert playlist
-  const [result] = await db.query(
-    'INSERT INTO playlists (name, m3u_url, description) VALUES (?, ?, ?)',
-    [name, m3u_url, description]
-  );
+  let playlistId;
+  try {
+    const [result] = await db.query(
+      'INSERT INTO playlists (name, m3u_url, description, created_by) VALUES (?, ?, ?, ?)',
+      [name, m3u_url, description, req.user.id]
+    );
+    playlistId = result.insertId;
+  } catch (error) {
+    if (error.code === 'ER_BAD_FIELD_ERROR') {
+      // Fallback for legacy schemas without created_by column
+      const [result] = await db.query(
+        'INSERT INTO playlists (name, m3u_url, description) VALUES (?, ?, ?)',
+        [name, m3u_url, description]
+      );
+      playlistId = result.insertId;
+    } else {
+      throw error;
+    }
+  }
   
   // Get created playlist
-  const [playlists] = await db.query('SELECT * FROM playlists WHERE id = ?', [result.insertId]);
+  
+  // Ensure non-admin creators have access to their playlist
+  if (req.user.role !== 'admin') {
+    try {
+      await db.query(
+        `INSERT INTO user_assigned_playlists 
+         (user_id, playlist_id, assigned_by, can_edit, can_delete)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE can_edit = VALUES(can_edit), can_delete = VALUES(can_delete)`,
+        [req.user.id, playlistId, req.user.id, true, true]
+      );
+    } catch (error) {
+      console.error('Failed to assign playlist to creator:', error.code || error.message);
+    }
+  }
+  
+  const [playlists] = await db.query('SELECT * FROM playlists WHERE id = ?', [playlistId]);
   
   res.status(201).json({
     success: true,

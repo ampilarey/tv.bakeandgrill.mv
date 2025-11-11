@@ -6,6 +6,30 @@ export default function BottomNav() {
   const location = useLocation();
   const { user } = useAuth();
   
+  const handleNavigate = (item) => {
+    if (item.requiresPlaylist) {
+      const params = new URLSearchParams(location.search);
+      const currentPlaylistId = params.get('playlistId');
+      let lastPlaylistId = null;
+      
+      if (typeof window !== 'undefined') {
+        lastPlaylistId = window.localStorage.getItem('lastPlaylistId');
+      }
+      
+      const targetPlaylistId = currentPlaylistId || lastPlaylistId;
+      
+      if (targetPlaylistId) {
+        navigate(`${item.path}?playlistId=${targetPlaylistId}`);
+      } else {
+        // No playlist stored yet; send user to dashboard to pick one.
+        navigate('/dashboard');
+      }
+      return;
+    }
+    
+    navigate(item.path);
+  };
+  
   // Don't show on kiosk mode or login page
   if (location.pathname === '/display' || location.pathname === '/login' || location.pathname === '/') {
     return null;
@@ -30,13 +54,12 @@ export default function BottomNav() {
           return (
             <button
               key={item.path}
-              onClick={() => navigate(item.path)}
+              onClick={() => handleNavigate(item)}
               className={`flex flex-col items-center justify-center px-3 py-2 rounded-lg transition-all min-h-[56px] min-w-[64px] ${
                 isActive
                   ? 'bg-primary text-white scale-105'
                   : 'text-text-secondary hover:text-white hover:bg-background-lighter'
               }`}
-              disabled={item.requiresPlaylist && !location.search.includes('playlistId')}
             >
               <span className="text-2xl mb-1">{item.icon}</span>
               <span className="text-xs font-medium">{item.label}</span>

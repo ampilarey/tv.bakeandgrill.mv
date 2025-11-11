@@ -206,7 +206,10 @@ router.get('/',
  */
 router.post('/', 
   checkPermission('can_manage_displays'),
-  checkResourceLimit('displays', 'displays'),
+  checkResourceLimit('displays', 'displays', {
+    countQuery: 'SELECT COUNT(*) as count FROM displays WHERE created_by = ?',
+    countParamsBuilder: (req) => [req.user.id]
+  }),
   validateDisplayCreate, 
   asyncHandler(async (req, res) => {
   const { name, location, playlist_id } = req.body;
@@ -216,10 +219,22 @@ router.post('/',
   const token = uuidv4();
   
   // Insert display
-  const [result] = await db.query(
-    'INSERT INTO displays (name, location, playlist_id, token) VALUES (?, ?, ?, ?)',
-    [name, location, playlist_id, token]
-  );
+  let result;
+  try {
+    [result] = await db.query(
+      'INSERT INTO displays (name, location, playlist_id, token, created_by) VALUES (?, ?, ?, ?, ?)',
+      [name, location, playlist_id, token, req.user.id]
+    );
+  } catch (error) {
+    if (error.code === 'ER_BAD_FIELD_ERROR') {
+      [result] = await db.query(
+        'INSERT INTO displays (name, location, playlist_id, token) VALUES (?, ?, ?, ?)',
+        [name, location, playlist_id, token]
+      );
+    } else {
+      throw error;
+    }
+  }
   
   // Get created display
   const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [result.insertId]);

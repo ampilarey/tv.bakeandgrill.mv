@@ -60,6 +60,9 @@ export default function DashboardPage() {
   };
 
   const handlePlaylistClick = (playlistId) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('lastPlaylistId', playlistId);
+    }
     navigate(`/player?playlistId=${playlistId}`);
   };
 
