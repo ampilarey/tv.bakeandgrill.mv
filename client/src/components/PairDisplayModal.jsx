@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../services/api';
 import Modal from './common/Modal';
 import Button from './common/Button';
@@ -16,7 +16,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
   const [qrCode, setQrCode] = useState('');
   const [playlists, setPlaylists] = useState([]);
 
-  useState(() => {
+  useEffect(() => {
     if (isOpen) {
       fetchPlaylists();
     }
