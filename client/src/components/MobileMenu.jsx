@@ -17,6 +17,7 @@ export default function MobileMenu() {
       { path: '/admin/users', icon: '👥', label: 'Users' },
       { path: '/admin/displays', icon: '🖥️', label: 'Displays' },
       { path: '/admin/analytics', icon: '📊', label: 'Analytics' },
+      { path: '/admin/settings', icon: '🔧', label: 'Settings' },
     ] : []),
   ];
   

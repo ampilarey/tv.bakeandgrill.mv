@@ -15,6 +15,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import UserManagement from './pages/admin/UserManagement';
 import DisplayManagement from './pages/admin/DisplayManagement';
 import Analytics from './pages/admin/Analytics';
+import Settings from './pages/admin/Settings';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -130,6 +131,14 @@ function AppRouter() {
           element={
             <AdminRoute>
               <Analytics />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <AdminRoute>
+              <Settings />
             </AdminRoute>
           }
         />

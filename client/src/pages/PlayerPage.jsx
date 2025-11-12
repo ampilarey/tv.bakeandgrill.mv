@@ -31,6 +31,14 @@ export default function PlayerPage() {
   const [viewMode, setViewMode] = useState(
     typeof window !== 'undefined' ? localStorage.getItem('channelViewMode') || 'list' : 'list'
   );
+  const [displayedChannels, setDisplayedChannels] = useState(50); // Show 50 initially
+  const [searchHistory, setSearchHistory] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return JSON.parse(localStorage.getItem('searchHistory') || '[]');
+    }
+    return [];
+  });
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
@@ -351,6 +359,22 @@ export default function PlayerPage() {
     setRetryCount(0); // Reset retry counter
   };
 
+  const handleSearch = (value) => {
+    setSearchQuery(value);
+    
+    // Save to search history if not empty and different from last search
+    if (value.trim() && value !== searchHistory[0]) {
+      const newHistory = [value, ...searchHistory.filter(h => h !== value)].slice(0, 10);
+      setSearchHistory(newHistory);
+      localStorage.setItem('searchHistory', JSON.stringify(newHistory));
+    }
+  };
+
+  const clearSearchHistory = () => {
+    setSearchHistory([]);
+    localStorage.removeItem('searchHistory');
+  };
+
   const togglePictureInPicture = async () => {
     if (!videoRef.current) return;
 
@@ -557,13 +581,44 @@ export default function PlayerPage() {
             </Button>
           </div>
 
-          {/* Search */}
-          <Input
-            placeholder="Search channels..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="mb-3"
-          />
+          {/* Search with Autocomplete */}
+          <div className="relative mb-3">
+            <Input
+              placeholder="Search channels..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              onFocus={() => setShowSearchSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 200)}
+            />
+            
+            {/* Search History Dropdown */}
+            {showSearchSuggestions && searchHistory.length > 0 && !searchQuery && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background-light border border-slate-600 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+                <div className="flex items-center justify-between p-2 border-b border-slate-700">
+                  <span className="text-xs text-text-secondary font-medium">Recent Searches</span>
+                  <button
+                    onClick={clearSearchHistory}
+                    className="text-xs text-red-400 hover:text-red-300"
+                  >
+                    Clear
+                  </button>
+                </div>
+                {searchHistory.map((term, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setSearchQuery(term);
+                      setShowSearchSuggestions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-background-lighter text-white text-sm transition-colors flex items-center gap-2"
+                  >
+                    <span>🔍</span>
+                    <span>{term}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Filters */}
           <div className="flex flex-wrap gap-2 items-center">
@@ -686,7 +741,7 @@ export default function PlayerPage() {
               )}
               
               {/* List View */}
-              {viewMode === 'list' && filteredChannels.map((channel) => (
+              {viewMode === 'list' && filteredChannels.slice(0, displayedChannels).map((channel) => (
                 <div
                   key={channel.id}
                   onClick={() => handleChannelClick(channel)}
@@ -726,7 +781,7 @@ export default function PlayerPage() {
               {/* Grid View */}
               {viewMode === 'grid' && (
                 <div className="grid grid-cols-2 gap-2">
-                  {filteredChannels.map((channel) => (
+                  {filteredChannels.slice(0, displayedChannels).map((channel) => (
                     <div
                       key={channel.id}
                       onClick={() => handleChannelClick(channel)}
@@ -743,6 +798,7 @@ export default function PlayerPage() {
                           <img 
                             src={channel.logo} 
                             alt={channel.name}
+                            loading="lazy"
                             className="w-16 h-16 mx-auto mb-2 rounded object-cover"
                             onError={(e) => { e.target.style.display = 'none'; }}
                           />
@@ -776,13 +832,27 @@ export default function PlayerPage() {
                   ))}
                 </div>
               )}
+
+              {/* Load More Button */}
+              {filteredChannels.length > displayedChannels && (
+                <div className="mt-4 text-center">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setDisplayedChannels(prev => prev + 50)}
+                    className="w-full"
+                  >
+                    Load More ({filteredChannels.length - displayedChannels} remaining)
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Channel Count */}
         <div className="p-3 border-t border-slate-700 text-sm text-text-muted text-center">
-          {filteredChannels.length} of {channels.length} channels
+          Showing {Math.min(displayedChannels, filteredChannels.length)} of {filteredChannels.length} channels
+          {filteredChannels.length !== channels.length && ` (${channels.length} total)`}
         </div>
       </div>
 
