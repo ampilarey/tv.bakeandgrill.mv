@@ -39,15 +39,18 @@ export default function DisplayPairingPage() {
 
   const fetchLocations = async () => {
     try {
+      // Public route - no auth needed
       const response = await api.get('/pairing/locations');
       setLocations(response.data.locations || []);
     } catch (error) {
       console.error('Error fetching locations:', error);
+      setLocations([]); // Set empty array on error
     }
   };
 
   const checkAutoPairing = async () => {
     try {
+      // Public route - no auth needed
       const response = await api.post('/pairing/auto-pair');
       if (response.data.success && response.data.display) {
         handlePairingSuccess(response.data.display);
@@ -55,6 +58,7 @@ export default function DisplayPairingPage() {
     } catch (error) {
       // Auto-pairing not available, that's ok
       console.log('Auto-pairing not available');
+      // Don't show error to user
     }
   };
 

@@ -30,8 +30,8 @@ export default function BottomNav() {
     navigate(item.path);
   };
   
-  // Don't show on kiosk mode or login page
-  if (location.pathname === '/display' || location.pathname === '/login' || location.pathname === '/') {
+  // Don't show on kiosk mode, login page, or pairing page
+  if (location.pathname === '/display' || location.pathname === '/login' || location.pathname === '/' || location.pathname === '/pair') {
     return null;
   }
   

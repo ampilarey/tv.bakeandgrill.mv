@@ -31,8 +31,11 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
-      // Redirect to login if not already there
-      if (window.location.pathname !== '/login') {
+      // Don't redirect if on public pages (display, pair, login)
+      const publicPages = ['/login', '/display', '/pair'];
+      const isPublicPage = publicPages.some(page => window.location.pathname.startsWith(page));
+      
+      if (!isPublicPage) {
         window.location.href = '/login';
       }
     }
