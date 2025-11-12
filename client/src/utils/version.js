@@ -3,36 +3,51 @@
 const APP_VERSION = '1.0.5'; // Semantic versioning
 
 export function checkVersion() {
-  const storedVersion = localStorage.getItem('app_version');
-  
-  // Only reload if stored version exists AND is different
-  if (storedVersion && storedVersion !== APP_VERSION) {
-    console.log(`New version detected: ${storedVersion} → ${APP_VERSION}`);
+  try {
+    // Check if we just reloaded (prevent reload loop)
+    const lastReload = sessionStorage.getItem('last_version_reload');
+    const now = Date.now();
     
-    // Clear caches
-    if ('caches' in window) {
-      caches.keys().then(names => {
-        names.forEach(name => caches.delete(name));
-      }).then(() => {
-        // Update version BEFORE reload to prevent loop
-        localStorage.setItem('app_version', APP_VERSION);
-        // Small delay to ensure localStorage is saved
-        setTimeout(() => {
-          window.location.reload(true);
-        }, 100);
-      });
-    } else {
-      // No cache API, just update and reload
+    // If we reloaded less than 5 seconds ago, don't reload again
+    if (lastReload && (now - parseInt(lastReload)) < 5000) {
+      console.log('Recent reload detected, skipping version check');
       localStorage.setItem('app_version', APP_VERSION);
-      setTimeout(() => {
-        window.location.reload(true);
-      }, 100);
+      return true;
     }
-    return false;
+    
+    const storedVersion = localStorage.getItem('app_version');
+    
+    // Only reload if stored version exists AND is different
+    if (storedVersion && storedVersion !== APP_VERSION) {
+      console.log(`New version detected: ${storedVersion} → ${APP_VERSION}`);
+      
+      // Update version BEFORE reload to prevent loop
+      localStorage.setItem('app_version', APP_VERSION);
+      sessionStorage.setItem('last_version_reload', String(now));
+      
+      // Clear caches
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          names.forEach(name => caches.delete(name));
+        }).then(() => {
+          window.location.reload(true);
+        }).catch(err => {
+          console.error('Cache clear error:', err);
+          window.location.reload(true);
+        });
+      } else {
+        window.location.reload(true);
+      }
+      return false;
+    }
+    
+    // First visit or same version - no reload
+    localStorage.setItem('app_version', APP_VERSION);
+    return true;
+  } catch (error) {
+    console.error('Version check error:', error);
+    // On error, just continue without reload
+    return true;
   }
-  
-  // First visit or same version - no reload
-  localStorage.setItem('app_version', APP_VERSION);
-  return true;
 }
 
