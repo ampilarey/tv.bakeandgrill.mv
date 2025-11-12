@@ -572,11 +572,23 @@ export default function PlayerPage() {
         {/* Header */}
         <div className="p-4 border-b border-slate-700">
           <div className="flex items-center justify-between mb-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => {
+                if (currentChannel) {
+                  // If video is playing, just stop it and show channel list
+                  setCurrentChannel(null);
+                } else {
+                  // If no video playing, go back to dashboard
+                  navigate('/dashboard');
+                }
+              }}
+            >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Back
+              {currentChannel ? 'Stop' : 'Back'}
             </Button>
             <Button variant="ghost" size="sm" onClick={logout}>
               Logout
