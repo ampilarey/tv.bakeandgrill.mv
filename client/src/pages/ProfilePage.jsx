@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import api from '../services/api';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -9,6 +10,7 @@ import { lightTap, successFeedback, errorFeedback } from '../utils/haptics';
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -266,6 +268,29 @@ export default function ProfilePage() {
               </div>
             </form>
           )}
+        </Card>
+
+        {/* Appearance */}
+        <Card>
+          <h2 className="text-xl font-bold text-white mb-4">Appearance</h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-white font-medium mb-1">Theme</p>
+              <p className="text-text-secondary text-sm">
+                Choose your preferred color scheme
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                toggleTheme();
+                lightTap();
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-background-lighter hover:bg-background rounded-lg transition-colors"
+            >
+              {theme === 'dark' ? '🌙' : '☀️'}
+              <span className="text-white capitalize">{theme}</span>
+            </button>
+          </div>
         </Card>
 
         {/* Account Information */}

@@ -16,6 +16,52 @@
   #root {
     @apply h-full w-full m-0 p-0 overflow-hidden;
   }
+
+  /* Light theme overrides */
+  .light-theme {
+    --color-background: #f8fafc;
+    --color-background-light: #ffffff;
+    --color-background-lighter: #f1f5f9;
+    --color-text: #1e293b;
+    --color-text-secondary: #64748b;
+    --color-text-muted: #94a3b8;
+  }
+
+  .light-theme * {
+    @apply border-slate-300;
+  }
+
+  .light-theme body {
+    @apply bg-slate-50 text-slate-900;
+  }
+
+  .light-theme .bg-background {
+    @apply bg-slate-50;
+  }
+
+  .light-theme .bg-background-light {
+    @apply bg-white;
+  }
+
+  .light-theme .bg-background-lighter {
+    @apply bg-slate-100;
+  }
+
+  .light-theme .text-white {
+    @apply text-slate-900;
+  }
+
+  .light-theme .text-text-secondary {
+    @apply text-slate-600;
+  }
+
+  .light-theme .text-text-muted {
+    @apply text-slate-500;
+  }
+
+  .light-theme .border-slate-700 {
+    @apply border-slate-300;
+  }
 }
 
 @layer components {
