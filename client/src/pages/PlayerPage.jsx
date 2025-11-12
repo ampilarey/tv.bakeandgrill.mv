@@ -202,16 +202,16 @@ export default function PlayerPage() {
 
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
-        // Android compatibility fixes
+        lowLatencyMode: false, // Better compatibility
+        // Balanced buffer settings for all devices
         maxBufferLength: 30,
         maxMaxBufferLength: 600,
         maxBufferSize: 60 * 1000 * 1000, // 60MB
         maxBufferHole: 0.5,
         backBufferLength: 90,
-        // Force specific codecs for Android
+        // CORS setup without credentials
         xhrSetup: function(xhr, url) {
-          xhr.withCredentials = false; // Disable credentials for CORS
+          // Don't set withCredentials - let browser decide based on CORS headers
         }
       });
 
@@ -220,8 +220,7 @@ export default function PlayerPage() {
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        // Force video to load metadata before playing
-        video.load();
+        // Auto-play once manifest is ready
         video.play().catch(err => console.error('Play error:', err));
       });
 
@@ -494,10 +493,7 @@ export default function PlayerPage() {
                 controls
                 autoPlay
                 playsInline
-                webkit-playsinline="true"
-                x5-playsinline="true"
-                preload="metadata"
-                crossOrigin="anonymous"
+                preload="auto"
               />
             </div>
 
