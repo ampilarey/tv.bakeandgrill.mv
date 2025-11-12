@@ -265,16 +265,35 @@ export default function PlayerPage() {
           subtitles: data.subtitles?.length || 0
         });
         
-        // Log available quality levels
+        // Check for video codec compatibility
+        let hasVideoTrack = false;
+        
         if (data.levels) {
           data.levels.forEach((level, i) => {
             console.log(`Level ${i}:`, {
               width: level.width,
               height: level.height,
               bitrate: level.bitrate,
-              codecs: level.videoCodec + ', ' + level.audioCodec
+              videoCodec: level.videoCodec,
+              audioCodec: level.audioCodec
             });
+            
+            // Check if this level has video
+            if (level.width > 0 && level.height > 0 && level.videoCodec) {
+              hasVideoTrack = true;
+              
+              // Warn about potentially unsupported codecs
+              if (level.videoCodec.toLowerCase().includes('hev') || 
+                  level.videoCodec.toLowerCase().includes('h265')) {
+                console.warn('⚠️ H.265/HEVC codec detected - may not work on all devices');
+              }
+            }
           });
+          
+          if (!hasVideoTrack) {
+            console.error('❌ No video tracks found in stream - this is audio-only!');
+            setVideoError('This stream appears to be audio-only or using an incompatible format.');
+          }
         }
         
         // Auto-play once manifest is ready
