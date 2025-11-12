@@ -91,12 +91,12 @@ app.use('/api/channels', channelsRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/displays', displaysRoutes);
-app.use('/api', schedulesRoutes); // Includes /api/schedules/* routes
 app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/permissions', permissionsRoutes);
 app.use('/api/notifications', notificationsRoutes);
-app.use('/api/pairing', pairingRoutes);
+app.use('/api/pairing', pairingRoutes); // Must be before catch-all schedules route
+app.use('/api', schedulesRoutes); // Includes /api/schedules/* routes - KEEP THIS LAST
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

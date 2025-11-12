@@ -30,6 +30,8 @@ setInterval(() => {
  * Display requests to generate a PIN for pairing
  */
 router.post('/request-pin', asyncHandler(async (req, res) => {
+  console.log('🔢 PIN request received');
+  
   // Generate 6-digit PIN
   const pin = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = Date.now() + (5 * 60 * 1000); // 5 minutes
@@ -39,6 +41,8 @@ router.post('/request-pin', asyncHandler(async (req, res) => {
     requestedAt: Date.now(),
     expiresAt
   });
+
+  console.log('✅ Generated PIN:', pin);
 
   res.json({
     success: true,
