@@ -9,6 +9,7 @@ import PlayerPage from './pages/PlayerPage';
 import ProfilePage from './pages/ProfilePage';
 import HistoryPage from './pages/HistoryPage';
 import KioskModePage from './pages/KioskModePage';
+import DisplayPairingPage from './pages/DisplayPairingPage';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -66,6 +67,7 @@ function AppRouter() {
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/display" element={<KioskModePage />} />
+        <Route path="/pair" element={<DisplayPairingPage />} />
 
         {/* Protected User Routes */}
         <Route

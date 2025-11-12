@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS displays (
   playlist_id INT,
   current_channel_id VARCHAR(255),
   token VARCHAR(255) UNIQUE NOT NULL,
+  location_pin VARCHAR(4),
+  last_ip VARCHAR(45),
   created_by INT NULL,
   last_heartbeat TIMESTAMP NULL,
   is_active BOOLEAN DEFAULT TRUE,
@@ -97,7 +99,9 @@ CREATE TABLE IF NOT EXISTS displays (
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_displays_token (token),
   INDEX idx_displays_active (is_active),
-  INDEX idx_displays_owner (created_by)
+  INDEX idx_displays_owner (created_by),
+  INDEX idx_displays_location_pin (location_pin),
+  INDEX idx_displays_last_ip (last_ip)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
