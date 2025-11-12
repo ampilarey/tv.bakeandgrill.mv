@@ -11,8 +11,8 @@ cd ~/tv.bakeandgrill.mv || exit 1
 echo "📥 Pulling latest code..."
 git pull origin main
 
-# Define web root path
-WEB_ROOT=~/public_html/tv.bakeandgrill.mv
+# Define web root path (subdomain points to git repo root, not public_html!)
+WEB_ROOT=~/tv.bakeandgrill.mv
 
 # Copy built files to web root
 echo "📦 Deploying frontend files to $WEB_ROOT..."
