@@ -44,6 +44,10 @@ cp -v client/dist/*.webmanifest "$WEB_ROOT/" 2>/dev/null || true
 # Update .htaccess with correct rules
 echo "⚙️  Updating .htaccess..."
 cat > "$WEB_ROOT/.htaccess" << 'HTACCESS_EOF'
+# Enable .htaccess processing
+Options +FollowSymLinks -Indexes
+RewriteBase /
+
 # Force correct MIME types FIRST
 AddType application/javascript .js
 AddType text/css .css
