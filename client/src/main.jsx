@@ -2,10 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
-import { checkVersion } from './utils/version.js';
-
-// Check for new version and auto-reload if needed
-checkVersion();
+// Temporarily disabled version check
+// import { checkVersion } from './utils/version.js';
+// checkVersion();
 
 // Register PWA service worker
 if ('serviceWorker' in navigator) {
