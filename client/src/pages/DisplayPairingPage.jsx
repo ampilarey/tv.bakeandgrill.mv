@@ -39,7 +39,7 @@ export default function DisplayPairingPage() {
 
   const fetchLocations = async () => {
     try {
-      const response = await api.get('/displays/locations');
+      const response = await api.get('/pairing/locations');
       setLocations(response.data.locations || []);
     } catch (error) {
       console.error('Error fetching locations:', error);
@@ -48,7 +48,7 @@ export default function DisplayPairingPage() {
 
   const checkAutoPairing = async () => {
     try {
-      const response = await api.post('/displays/auto-pair');
+      const response = await api.post('/pairing/auto-pair');
       if (response.data.success && response.data.display) {
         handlePairingSuccess(response.data.display);
       }
@@ -65,9 +65,11 @@ export default function DisplayPairingPage() {
     setError('');
 
     try {
-      const response = await api.post('/displays/pair-with-pin', { pin: pinCode });
-      if (response.data.success && response.data.display) {
+      const response = await api.post('/pairing/check-pin', { pin: pinCode });
+      if (response.data.success && response.data.paired && response.data.display) {
         handlePairingSuccess(response.data.display);
+      } else {
+        setError('PIN not paired yet. Please wait for admin to complete pairing.');
       }
     } catch (error) {
       setError(error.response?.data?.error || 'Pairing failed. Please try again.');
@@ -86,7 +88,7 @@ export default function DisplayPairingPage() {
     setError('');
 
     try {
-      const response = await api.post('/displays/pair-with-location', {
+      const response = await api.post('/pairing/pair-with-location', {
         location_id: selectedLocation,
         pin: locationPin
       });
@@ -125,7 +127,7 @@ export default function DisplayPairingPage() {
   const pairWithQR = async (token) => {
     setLoading(true);
     try {
-      const response = await api.post('/displays/pair-with-qr', { qr_token: token });
+      const response = await api.post('/pairing/pair-with-qr', { qr_token: token });
       if (response.data.success && response.data.display) {
         handlePairingSuccess(response.data.display);
       }

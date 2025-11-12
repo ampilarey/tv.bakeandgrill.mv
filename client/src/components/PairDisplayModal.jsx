@@ -48,7 +48,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
     setError('');
 
     try {
-      const response = await api.post('/displays/admin-pair-pin', {
+      const response = await api.post('/pairing/admin-pair-pin', {
         pin: pinCode,
         name: displayName,
         location: displayLocation,
@@ -77,7 +77,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
     setError('');
 
     try {
-      const response = await api.post('/displays/generate-qr', {
+      const response = await api.post('/pairing/generate-qr', {
         name: displayName,
         location: displayLocation,
         playlist_id: parseInt(playlistId)
