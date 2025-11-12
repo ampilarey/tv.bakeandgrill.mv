@@ -13,11 +13,30 @@ git pull origin main
 
 # Copy built files to web root
 echo "📦 Deploying frontend files..."
-rm -rf assets/*.js assets/*.css 2>/dev/null
-cp -r client/dist/assets/* assets/ 2>/dev/null || mkdir -p assets && cp -r client/dist/assets/* assets/
-cp client/dist/*.html .
-cp client/dist/*.js . 2>/dev/null
-cp client/dist/*.webmanifest . 2>/dev/null
+
+# Ensure assets directory exists
+mkdir -p assets
+
+# Copy assets (JS, CSS, etc.)
+if [ -d "client/dist/assets" ]; then
+  cp -v client/dist/assets/* assets/ 2>/dev/null || echo "⚠️  No assets found in client/dist/assets/"
+else
+  echo "❌ ERROR: client/dist/assets directory not found!"
+  echo "   Run 'npm run build' in the client directory first."
+  exit 1
+fi
+
+# Copy HTML files
+if [ -f "client/dist/index.html" ]; then
+  cp -v client/dist/*.html .
+else
+  echo "❌ ERROR: index.html not found in client/dist/"
+  exit 1
+fi
+
+# Copy other files (JS, webmanifest, SW)
+cp -v client/dist/*.js . 2>/dev/null || true
+cp -v client/dist/*.webmanifest . 2>/dev/null || true
 
 # Update .htaccess with correct rules
 echo "⚙️  Updating .htaccess..."
