@@ -202,7 +202,17 @@ export default function PlayerPage() {
 
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true
+        lowLatencyMode: true,
+        // Android compatibility fixes
+        maxBufferLength: 30,
+        maxMaxBufferLength: 600,
+        maxBufferSize: 60 * 1000 * 1000, // 60MB
+        maxBufferHole: 0.5,
+        backBufferLength: 90,
+        // Force specific codecs for Android
+        xhrSetup: function(xhr, url) {
+          xhr.withCredentials = false; // Disable credentials for CORS
+        }
       });
 
       hlsRef.current = hls;
@@ -210,11 +220,31 @@ export default function PlayerPage() {
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Force video to load metadata before playing
+        video.load();
         video.play().catch(err => console.error('Play error:', err));
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
         console.error('HLS Error:', data);
+        
+        // Try to recover from errors
+        if (data.fatal) {
+          switch(data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.log('Network error, trying to recover...');
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.log('Media error, trying to recover...');
+              hls.recoverMediaError();
+              break;
+            default:
+              console.log('Fatal error, destroying HLS...');
+              hls.destroy();
+              break;
+          }
+        }
       });
 
     } else {
@@ -463,6 +493,11 @@ export default function PlayerPage() {
                 className="w-full h-full"
                 controls
                 autoPlay
+                playsInline
+                webkit-playsinline="true"
+                x5-playsinline="true"
+                preload="metadata"
+                crossOrigin="anonymous"
               />
             </div>
 
