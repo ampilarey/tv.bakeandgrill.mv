@@ -113,14 +113,28 @@ router.post('/admin-pair-pin', verifyToken, requireAdmin, asyncHandler(async (re
     });
   }
 
+  // Create display user (for tracking history/favorites)
+  const bcrypt = require('bcrypt');
+  const displayEmail = `display_${Date.now()}@internal.system`;
+  const displayPassword = crypto.randomBytes(32).toString('hex');
+  const passwordHash = await bcrypt.hash(displayPassword, 10);
+  
+  const [userResult] = await db.query(
+    `INSERT INTO users (email, password_hash, role, first_name, last_name, is_active)
+     VALUES (?, ?, 'display', ?, ?, 1)`,
+    [displayEmail, passwordHash, `Display: ${name}`, location || 'Kiosk']
+  );
+  
+  const displayUserId = userResult.insertId;
+
   // Create display
   const token = crypto.randomBytes(32).toString('hex');
   const locationPin = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit
 
   const [result] = await db.query(
-    `INSERT INTO displays (name, location, token, playlist_id, location_pin, created_by)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [name, location || null, token, playlist_id, locationPin, req.user.id]
+    `INSERT INTO displays (name, location, token, playlist_id, location_pin, created_by, user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [name, location || null, token, playlist_id, locationPin, req.user.id, displayUserId]
   );
 
   // Update PIN data with display ID
