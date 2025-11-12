@@ -197,31 +197,9 @@ export default function PlayerPage() {
     // Check if browser has native HLS support (Safari/iOS)
     const hasNativeHLS = video.canPlayType('application/vnd.apple.mpegurl') !== '';
 
-    if (isHLS && hasNativeHLS) {
-      // Use native HLS (Safari/iOS)
-      console.log('Using native HLS playback for:', currentChannel.name);
-      
-      // Add event listeners to debug video track issues
-      video.addEventListener('loadedmetadata', () => {
-        console.log('Video metadata loaded');
-        console.log('Video tracks:', video.videoTracks?.length || 'N/A');
-        console.log('Audio tracks:', video.audioTracks?.length || 'N/A');
-        console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
-        
-        // Force video display if dimensions are 0
-        if (video.videoWidth === 0 || video.videoHeight === 0) {
-          console.warn('Video dimensions are 0, possible audio-only stream or codec issue');
-        }
-      });
-      
-      video.addEventListener('error', (e) => {
-        console.error('Native video error:', e, video.error);
-      });
-      
-      video.src = currentChannel.url;
-      video.load(); // Explicitly load the video
-      video.play().catch(err => console.error('Play error:', err));
-    } else if (isHLS && Hls.isSupported()) {
+    // Always use HLS.js for better codec compatibility, even on iOS
+    // iOS Safari can't handle all HLS codecs natively
+    if (isHLS && Hls.isSupported()) {
       // HLS.js playback
       if (hlsRef.current) {
         hlsRef.current.destroy();
@@ -230,23 +208,51 @@ export default function PlayerPage() {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
-        // Balanced buffer settings
+        // Buffer settings
         maxBufferLength: 30,
         maxMaxBufferLength: 600,
         maxBufferSize: 60 * 1000 * 1000,
         maxBufferHole: 0.5,
         backBufferLength: 90,
-        // iOS/Android compatibility
+        // Mobile compatibility
         forceKeyFrameOnDiscontinuity: true,
         startFragPrefetch: true,
-        testBandwidth: false
+        testBandwidth: false,
+        // Force video to decode properly on mobile
+        autoStartLoad: true,
+        startPosition: -1,
+        debug: false,
+        // Prevent audio-only issues
+        capLevelToPlayerSize: false,
+        // Better video quality selection
+        abrEwmaDefaultEstimate: 500000,
+        abrBandWidthFactor: 0.95,
+        abrBandWidthUpFactor: 0.7
       });
 
       hlsRef.current = hls;
       hls.loadSource(currentChannel.url);
       hls.attachMedia(video);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+        console.log('HLS manifest parsed:', {
+          levels: data.levels?.length || 0,
+          audioTracks: data.audioTracks?.length || 0,
+          subtitles: data.subtitles?.length || 0
+        });
+        
+        // Log available quality levels
+        if (data.levels) {
+          data.levels.forEach((level, i) => {
+            console.log(`Level ${i}:`, {
+              width: level.width,
+              height: level.height,
+              bitrate: level.bitrate,
+              codecs: level.videoCodec + ', ' + level.audioCodec
+            });
+          });
+        }
+        
         // Auto-play once manifest is ready
         video.play().catch(err => console.error('Play error:', err));
       });
