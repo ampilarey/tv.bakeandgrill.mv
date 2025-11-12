@@ -13,7 +13,7 @@ node_modules/
 */node_modules/
 
 # Build outputs
-client/dist/
+# client/dist/ - COMMENTED OUT: Need to commit dist for cPanel deployment
 client/dist-ssr/
 
 # Database files (local development only)
