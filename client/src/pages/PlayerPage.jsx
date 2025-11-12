@@ -7,6 +7,7 @@ import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import Spinner from '../components/common/Spinner';
 import Badge from '../components/common/Badge';
+import SkeletonLoader from '../components/SkeletonLoader';
 
 export default function PlayerPage() {
   const [searchParams] = useSearchParams();
@@ -24,6 +25,9 @@ export default function PlayerPage() {
   const [selectedGroup, setSelectedGroup] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [isAutoPlay, setIsAutoPlay] = useState(false);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [videoError, setVideoError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
   
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
@@ -265,14 +269,33 @@ export default function PlayerPage() {
           switch(data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               console.log('Network error, trying to recover...');
-              hls.startLoad();
+              if (retryCount < 3) {
+                setRetryCount(prev => prev + 1);
+                setVideoError('Network error. Retrying...');
+                setTimeout(() => {
+                  hls.startLoad();
+                  setVideoError(null);
+                }, 1000);
+              } else {
+                setVideoError('Network error. Unable to load stream after 3 attempts.');
+              }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               console.log('Media error, trying to recover...');
-              hls.recoverMediaError();
+              if (retryCount < 3) {
+                setRetryCount(prev => prev + 1);
+                setVideoError('Media error. Retrying...');
+                setTimeout(() => {
+                  hls.recoverMediaError();
+                  setVideoError(null);
+                }, 1000);
+              } else {
+                setVideoError('Media error. This stream may not be compatible.');
+              }
               break;
             default:
               console.log('Fatal error, destroying HLS...');
+              setVideoError('Unable to play this channel. The stream may be offline.');
               hls.destroy();
               break;
           }
@@ -314,7 +337,107 @@ export default function PlayerPage() {
   const handleChannelClick = (channel) => {
     setCurrentChannel(channel);
     setIsAutoPlay(false); // Mark as user-initiated
+    setVideoError(null); // Clear any previous errors
+    setRetryCount(0); // Reset retry counter
   };
+
+  const togglePictureInPicture = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else if (document.pictureInPictureEnabled) {
+        await videoRef.current.requestPictureInPicture();
+      }
+    } catch (error) {
+      console.error('PiP error:', error);
+    }
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Don't trigger if typing in input field
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const video = videoRef.current;
+      if (!video) return;
+
+      switch(e.key.toLowerCase()) {
+        case ' ':
+        case 'k':
+          e.preventDefault();
+          if (video.paused) {
+            video.play();
+          } else {
+            video.pause();
+          }
+          break;
+        
+        case 'f':
+          e.preventDefault();
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            video.requestFullscreen();
+          }
+          break;
+        
+        case 'm':
+          e.preventDefault();
+          video.muted = !video.muted;
+          break;
+        
+        case 'p':
+          e.preventDefault();
+          togglePictureInPicture();
+          break;
+        
+        case 'arrowup':
+          e.preventDefault();
+          video.volume = Math.min(1, video.volume + 0.1);
+          break;
+        
+        case 'arrowdown':
+          e.preventDefault();
+          video.volume = Math.max(0, video.volume - 0.1);
+          break;
+        
+        case 'arrowright':
+          e.preventDefault();
+          // Next channel
+          if (currentChannel && filteredChannels.length > 0) {
+            const currentIndex = filteredChannels.findIndex(ch => ch.id === currentChannel.id);
+            const nextIndex = (currentIndex + 1) % filteredChannels.length;
+            handleChannelClick(filteredChannels[nextIndex]);
+          }
+          break;
+        
+        case 'arrowleft':
+          e.preventDefault();
+          // Previous channel
+          if (currentChannel && filteredChannels.length > 0) {
+            const currentIndex = filteredChannels.findIndex(ch => ch.id === currentChannel.id);
+            const prevIndex = currentIndex === 0 ? filteredChannels.length - 1 : currentIndex - 1;
+            handleChannelClick(filteredChannels[prevIndex]);
+          }
+          break;
+        
+        case '?':
+        case '/':
+          e.preventDefault();
+          setShowKeyboardHelp(!showKeyboardHelp);
+          break;
+        
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [currentChannel, filteredChannels, showKeyboardHelp]);
 
   const toggleFavorite = async (channel) => {
     const isFavorite = favorites.some(f => f.channel_id === channel.id);
@@ -343,8 +466,20 @@ export default function PlayerPage() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <Spinner size="xl" />
+      <div className="h-screen flex flex-col md:flex-row bg-background overflow-hidden">
+        {/* Sidebar Skeleton */}
+        <div className="w-full md:w-96 bg-background-light border-r border-slate-700 p-4">
+          <div className="mb-4 space-y-3">
+            <div className="h-10 bg-slate-700 rounded animate-pulse"></div>
+            <div className="h-10 bg-slate-700 rounded animate-pulse"></div>
+          </div>
+          <SkeletonLoader type="list" count={10} />
+        </div>
+        
+        {/* Player Skeleton */}
+        <div className="flex-1 flex items-center justify-center bg-black">
+          <Spinner size="xl" />
+        </div>
       </div>
     );
   }
@@ -532,20 +667,73 @@ export default function PlayerPage() {
                 muted={false}
                 style={{ minHeight: '200px' }}
               />
+              
+              {/* Error Overlay */}
+              {videoError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                  <div className="text-center p-6 max-w-md">
+                    <div className="text-6xl mb-4">⚠️</div>
+                    <h3 className="text-xl font-bold text-white mb-2">Playback Error</h3>
+                    <p className="text-text-secondary mb-4">{videoError}</p>
+                    <div className="flex gap-2 justify-center">
+                      <Button
+                        onClick={() => {
+                          setVideoError(null);
+                          setRetryCount(0);
+                          // Force reload channel
+                          const current = currentChannel;
+                          setCurrentChannel(null);
+                          setTimeout(() => setCurrentChannel(current), 100);
+                        }}
+                      >
+                        🔄 Retry
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setVideoError(null);
+                          setCurrentChannel(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Current Channel Info */}
             <div className="bg-background-light p-4 border-t border-slate-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-white">{currentChannel.name}</h2>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold text-white truncate">{currentChannel.name}</h2>
                   {currentChannel.group && (
                     <p className="text-sm text-text-secondary">{currentChannel.group}</p>
                   )}
                 </div>
-                <Button variant="ghost" onClick={() => toggleFavorite(currentChannel)}>
-                  {isFavorite(currentChannel.id) ? '⭐ Favorited' : '☆ Add to Favorites'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setShowKeyboardHelp(true)}
+                    title="Keyboard Shortcuts (?)"
+                    className="hidden md:flex"
+                  >
+                    ⌨️
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={togglePictureInPicture}
+                    title="Picture-in-Picture (P)"
+                  >
+                    🖼️
+                  </Button>
+                  <Button variant="ghost" onClick={() => toggleFavorite(currentChannel)}>
+                    {isFavorite(currentChannel.id) ? '⭐' : '☆'}
+                  </Button>
+                </div>
               </div>
             </div>
           </>
@@ -560,6 +748,108 @@ export default function PlayerPage() {
           </div>
         )}
       </div>
+
+      {/* Keyboard Shortcuts Help Modal */}
+      {showKeyboardHelp && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowKeyboardHelp(false)}
+        >
+          <div 
+            className="bg-background-light rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white">⌨️ Keyboard Shortcuts</h2>
+              <button
+                onClick={() => setShowKeyboardHelp(false)}
+                className="text-text-secondary hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Playback Controls */}
+              <div>
+                <h3 className="text-lg font-semibold text-primary mb-3">Playback Controls</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Play / Pause</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">Space</kbd>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Play / Pause (alternate)</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">K</kbd>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Mute / Unmute</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">M</kbd>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Volume Up</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">↑</kbd>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Volume Down</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">↓</kbd>
+                  </div>
+                </div>
+              </div>
+
+              {/* Display Controls */}
+              <div>
+                <h3 className="text-lg font-semibold text-primary mb-3">Display Controls</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Fullscreen</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">F</kbd>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Picture-in-Picture</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">P</kbd>
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigation */}
+              <div>
+                <h3 className="text-lg font-semibold text-primary mb-3">Channel Navigation</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Next Channel</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">→</kbd>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Previous Channel</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">←</kbd>
+                  </div>
+                </div>
+              </div>
+
+              {/* Help */}
+              <div>
+                <h3 className="text-lg font-semibold text-primary mb-3">Help</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
+                    <span className="text-white">Show/Hide This Help</span>
+                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">?</kbd>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-slate-700">
+              <Button 
+                onClick={() => setShowKeyboardHelp(false)}
+                className="w-full"
+              >
+                Got it!
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
