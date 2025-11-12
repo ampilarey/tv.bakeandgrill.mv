@@ -199,8 +199,27 @@ export default function PlayerPage() {
 
     if (isHLS && hasNativeHLS) {
       // Use native HLS (Safari/iOS)
-      console.log('Using native HLS playback');
+      console.log('Using native HLS playback for:', currentChannel.name);
+      
+      // Add event listeners to debug video track issues
+      video.addEventListener('loadedmetadata', () => {
+        console.log('Video metadata loaded');
+        console.log('Video tracks:', video.videoTracks?.length || 'N/A');
+        console.log('Audio tracks:', video.audioTracks?.length || 'N/A');
+        console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+        
+        // Force video display if dimensions are 0
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+          console.warn('Video dimensions are 0, possible audio-only stream or codec issue');
+        }
+      });
+      
+      video.addEventListener('error', (e) => {
+        console.error('Native video error:', e, video.error);
+      });
+      
       video.src = currentChannel.url;
+      video.load(); // Explicitly load the video
       video.play().catch(err => console.error('Play error:', err));
     } else if (isHLS && Hls.isSupported()) {
       // HLS.js playback
@@ -497,13 +516,15 @@ export default function PlayerPage() {
             <div className="flex-1 relative">
               <video
                 ref={videoRef}
-                className="w-full h-full"
+                className="w-full h-full object-contain bg-black"
                 controls
                 autoPlay
                 playsInline
                 webkit-playsinline="true"
+                x-webkit-airplay="allow"
                 preload="auto"
                 muted={false}
+                style={{ minHeight: '200px' }}
               />
             </div>
 
