@@ -1,3 +1,27 @@
+# Force correct MIME types FIRST
+AddType application/javascript .js
+AddType text/css .css
+AddType application/json .webmanifest
+
+# Enable rewrite engine
+RewriteEngine On
+
+# FIRST: Serve static assets directly (before any other rules!)
+RewriteRule ^assets/.+ - [L]
+RewriteRule ^.*\.(js|css|png|jpg|jpeg|svg|woff|woff2|webmanifest|ico)$ - [L]
+
+# API proxy - proxy /api requests to Node.js backend
+RewriteCond %{REQUEST_URI} ^/api
+RewriteRule ^(.*)$ http://127.0.0.1:4000/$1 [P,L]
+
+# Don't rewrite if file or directory exists
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Redirect all other requests to index.html (SPA routing)
+RewriteRule ^ index.html [L]
+
 # Never cache HTML files
 <FilesMatch "\.(html|htm)$">
   Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
@@ -9,26 +33,3 @@
 <FilesMatch "\.(js|css|png|jpg|jpeg|svg|woff|woff2|webmanifest)$">
   Header set Cache-Control "public, max-age=31536000, immutable"
 </FilesMatch>
-
-# Force correct MIME types
-AddType application/javascript .js
-AddType text/css .css
-AddType application/json .webmanifest
-
-# Enable rewrite engine
-RewriteEngine On
-
-# API proxy - proxy /api requests to Node.js backend
-RewriteCond %{REQUEST_URI} ^/api
-RewriteRule ^(.*)$ http://127.0.0.1:4000/$1 [P,L]
-
-# Exclude assets folder from rewriting (CRITICAL - must be before file check!)
-RewriteCond %{REQUEST_URI} ^/assets/ [OR]
-RewriteCond %{REQUEST_URI} \.(js|css|png|jpg|jpeg|svg|woff|woff2|webmanifest)$ [OR]
-RewriteCond %{REQUEST_FILENAME} -f [OR]
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^ - [L]
-
-# Redirect all other requests to index.html (SPA routing)
-RewriteRule ^ index.html [L]
-
