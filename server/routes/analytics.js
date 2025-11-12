@@ -9,199 +9,124 @@ const router = express.Router();
 router.use(verifyToken, requireAdmin);
 
 /**
- * GET /api/analytics/overview
- * System-wide overview statistics
+ * GET /api/analytics
+ * Get platform analytics
  */
-router.get('/overview', asyncHandler(async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const db = getDatabase();
-  
-  // Total users
-  const [totalUsers] = await db.query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE');
-  
-  // Total playlists
-  const [totalPlaylists] = await db.query('SELECT COUNT(*) as count FROM playlists WHERE is_active = TRUE');
-  
-  // Total displays
-  const [totalDisplays] = await db.query('SELECT COUNT(*) as count FROM displays WHERE is_active = TRUE');
-  
-  // Active displays (heartbeat < 5 minutes)
-  const [activeDisplays] = await db.query(
-    `SELECT COUNT(*) as count FROM displays 
-     WHERE is_active = TRUE 
-     AND last_heartbeat IS NOT NULL
-     AND last_heartbeat > DATE_SUB(NOW(), INTERVAL 5 MINUTE)`
-  );
-  
-  // Total watch time
-  const [totalWatchTime] = await db.query('SELECT SUM(duration_seconds) as total FROM watch_history');
-  
-  // Total watch sessions
-  const [totalSessions] = await db.query('SELECT COUNT(*) as count FROM watch_history');
-  
-  res.json({
-    success: true,
-    overview: {
-      totalUsers: totalUsers[0].count,
-      totalPlaylists: totalPlaylists[0].count,
-      totalDisplays: totalDisplays[0].count,
-      activeDisplays: activeDisplays[0].count,
-      totalWatchTime: totalWatchTime[0].total || 0,
-      totalSessions: totalSessions[0].count
-    }
-  });
-}));
+  const { range = '7d' } = req.query;
 
-/**
- * GET /api/analytics/channels
- * Most watched channels
- */
-router.get('/channels', asyncHandler(async (req, res) => {
-  const db = getDatabase();
-  const { limit = 20, days = 30 } = req.query;
+  // Calculate date range
+  let dateFilter = '';
+  let dateParams = [];
   
-  const [mostWatched] = await db.query(
-    `SELECT 
+  if (range !== 'all') {
+    const now = new Date();
+    let startDate;
+    
+    switch(range) {
+      case '24h':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        startDate = new Date(0);
+    }
+    
+    dateFilter = 'WHERE watched_at >= ?';
+    dateParams = [startDate.toISOString()];
+  }
+
+  // Total users
+  const [totalUsersResult] = await db.query('SELECT COUNT(*) as count FROM users');
+  const totalUsers = totalUsersResult[0].count;
+
+  // Active displays (heartbeat in last 5 minutes)
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const [activeDisplaysResult] = await db.query(
+    'SELECT COUNT(*) as count FROM displays WHERE last_heartbeat >= ?',
+    [fiveMinutesAgo]
+  );
+  const activeDisplays = activeDisplaysResult[0].count;
+
+  // Total playlists
+  const [totalPlaylistsResult] = await db.query('SELECT COUNT(*) as count FROM playlists WHERE is_active = 1');
+  const totalPlaylists = totalPlaylistsResult[0].count;
+
+  // Total watch time
+  const watchTimeQuery = `SELECT SUM(duration_seconds) as total FROM watch_history ${dateFilter}`;
+  const [totalWatchTimeResult] = await db.query(watchTimeQuery, dateParams);
+  const totalWatchTime = totalWatchTimeResult[0].total || 0;
+
+  // Most watched channels
+  const mostWatchedQuery = `
+    SELECT 
       channel_id,
       channel_name,
       COUNT(*) as view_count,
-      SUM(duration_seconds) as total_seconds,
-      AVG(duration_seconds) as avg_seconds
-    FROM watch_history
-    WHERE watched_at > DATE_SUB(NOW(), INTERVAL ? DAY)
-    GROUP BY channel_id
-    ORDER BY view_count DESC
-    LIMIT ?`,
-    [parseInt(days), parseInt(limit)]
-  );
-  
-  res.json({
-    success: true,
-    channels: mostWatched
-  });
-}));
-
-/**
- * GET /api/analytics/users
- * User activity statistics
- */
-router.get('/users', asyncHandler(async (req, res) => {
-  const db = getDatabase();
-  const { days = 30 } = req.query;
-  
-  // User activity (watch sessions per user)
-  const [userActivity] = await db.query(
-    `SELECT 
-      u.id,
-      u.email,
-      u.first_name,
-      u.last_name,
-      COUNT(wh.id) as session_count,
-      SUM(wh.duration_seconds) as total_watch_seconds,
-      MAX(wh.watched_at) as last_watched
-    FROM users u
-    LEFT JOIN watch_history wh ON u.id = wh.user_id
-      AND wh.watched_at > DATE_SUB(NOW(), INTERVAL ? DAY)
-    WHERE u.is_active = TRUE
-    GROUP BY u.id
-    ORDER BY session_count DESC`,
-    [parseInt(days)]
-  );
-  
-  res.json({
-    success: true,
-    userActivity
-  });
-}));
-
-/**
- * GET /api/analytics/displays
- * Display uptime and status metrics
- */
-router.get('/displays', asyncHandler(async (req, res) => {
-  const db = getDatabase();
-  
-  const [displays] = await db.query('SELECT * FROM displays WHERE is_active = TRUE');
-  
-  // Calculate metrics for each display
-  const displayMetrics = displays.map(display => {
-    let status = 'offline';
-    let uptimePercentage = 0;
-    
-    if (display.last_heartbeat) {
-      const now = new Date();
-      const lastHeartbeat = new Date(display.last_heartbeat);
-      const minutesAgo = (now - lastHeartbeat) / 1000 / 60;
-      
-      if (minutesAgo < 5) {
-        status = 'online';
-      }
-      
-      // Calculate uptime (simple: based on creation date and current status)
-      const ageInHours = (now - new Date(display.created_at)) / 1000 / 60 / 60;
-      
-      if (status === 'online' && ageInHours > 0) {
-        uptimePercentage = 99; // Simplified - in real system, track downtime events
-      }
-    }
-    
-    return {
-      id: display.id,
-      name: display.name,
-      location: display.location,
-      status,
-      lastHeartbeat: display.last_heartbeat,
-      currentChannel: display.current_channel_id,
-      uptimePercentage
-    };
-  });
-  
-  res.json({
-    success: true,
-    displays: displayMetrics
-  });
-}));
-
-/**
- * GET /api/analytics/watch-time
- * Watch time breakdown
- */
-router.get('/watch-time', asyncHandler(async (req, res) => {
-  const db = getDatabase();
-  const { days = 30 } = req.query;
-  
-  // Total watch time by playlist
-  const [byPlaylist] = await db.query(
-    `SELECT 
-      p.id,
-      p.name,
-      COUNT(wh.id) as session_count,
-      SUM(wh.duration_seconds) as total_seconds
-    FROM playlists p
-    LEFT JOIN watch_history wh ON p.id = wh.playlist_id
-      AND wh.watched_at > DATE_SUB(NOW(), INTERVAL ? DAY)
-    WHERE p.is_active = TRUE
-    GROUP BY p.id
-    ORDER BY total_seconds DESC`,
-    [parseInt(days)]
-  );
-  
-  // Watch time by day (last N days)
-  const [byDay] = await db.query(
-    `SELECT 
-      DATE(watched_at) as date,
-      COUNT(*) as session_count,
       SUM(duration_seconds) as total_seconds
     FROM watch_history
-    WHERE watched_at > DATE_SUB(NOW(), INTERVAL ? DAY)
-    GROUP BY DATE(watched_at)
-    ORDER BY date ASC`,
-    [parseInt(days)]
-  );
-  
+    ${dateFilter}
+    GROUP BY channel_id, channel_name
+    ORDER BY view_count DESC
+    LIMIT 10
+  `;
+  const [mostWatchedChannels] = await db.query(mostWatchedQuery, dateParams);
+
+  // Recent activity (last 20 records)
+  const recentActivityQuery = `
+    SELECT 
+      wh.id,
+      wh.channel_name,
+      wh.watched_at,
+      wh.duration_seconds,
+      u.email as user_email
+    FROM watch_history wh
+    LEFT JOIN users u ON wh.user_id = u.id
+    ${dateFilter}
+    ORDER BY wh.watched_at DESC
+    LIMIT 20
+  `;
+  const [recentActivity] = await db.query(recentActivityQuery, dateParams);
+
+  // Watch by playlist
+  const watchByPlaylistQuery = `
+    SELECT 
+      p.id,
+      p.name,
+      COUNT(wh.id) as view_count,
+      SUM(wh.duration_seconds) as total_seconds
+    FROM playlists p
+    LEFT JOIN watch_history wh ON p.id = wh.playlist_id ${dateFilter ? 'AND ' + dateFilter.replace('WHERE', '') : ''}
+    GROUP BY p.id, p.name
+    ORDER BY view_count DESC
+  `;
+  const [watchByPlaylist] = await db.query(watchByPlaylistQuery, dateParams);
+
+  // Active users (users who watched in the time range)
+  const activeUsersQuery = `
+    SELECT COUNT(DISTINCT user_id) as count
+    FROM watch_history
+    ${dateFilter}
+  `;
+  const [activeUsersResult] = await db.query(activeUsersQuery, dateParams);
+  const activeUsers = activeUsersResult[0].count;
+
   res.json({
     success: true,
-    byPlaylist,
-    byDay
+    totalUsers,
+    activeDisplays,
+    totalPlaylists,
+    totalWatchTime,
+    activeUsers,
+    mostWatchedChannels,
+    recentActivity,
+    watchByPlaylist
   });
 }));
 

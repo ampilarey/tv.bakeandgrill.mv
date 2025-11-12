@@ -28,11 +28,21 @@ export default function PlayerPage() {
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [videoError, setVideoError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [viewMode, setViewMode] = useState(
+    typeof window !== 'undefined' ? localStorage.getItem('channelViewMode') || 'list' : 'list'
+  );
   
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const navigate = useNavigate();
   const { logout } = useAuth();
+
+  // Save view mode preference
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('channelViewMode', viewMode);
+    }
+  }, [viewMode]);
 
   // Remember last visited playlist for quick access via bottom navigation
   useEffect(() => {
@@ -355,6 +365,51 @@ export default function PlayerPage() {
     }
   };
 
+  // Swipe gestures for mobile
+  useEffect(() => {
+    if (!videoRef.current) return;
+    
+    const videoContainer = videoRef.current.parentElement;
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    const handleTouchStart = (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    };
+
+    const handleTouchEnd = (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    };
+
+    const handleSwipe = () => {
+      const swipeThreshold = 50;
+      const diff = touchStartX - touchEndX;
+
+      if (Math.abs(diff) > swipeThreshold && filteredChannels.length > 0 && currentChannel) {
+        if (diff > 0) {
+          // Swiped left - next channel
+          const currentIndex = filteredChannels.findIndex(ch => ch.id === currentChannel.id);
+          const nextIndex = (currentIndex + 1) % filteredChannels.length;
+          handleChannelClick(filteredChannels[nextIndex]);
+        } else {
+          // Swiped right - previous channel
+          const currentIndex = filteredChannels.findIndex(ch => ch.id === currentChannel.id);
+          const prevIndex = currentIndex === 0 ? filteredChannels.length - 1 : currentIndex - 1;
+          handleChannelClick(filteredChannels[prevIndex]);
+        }
+      }
+    };
+
+    videoContainer.addEventListener('touchstart', handleTouchStart);
+    videoContainer.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      videoContainer.removeEventListener('touchstart', handleTouchStart);
+      videoContainer.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [currentChannel, filteredChannels]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -511,7 +566,7 @@ export default function PlayerPage() {
           />
 
           {/* Filters */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             <Button
               variant={showFavoritesOnly ? 'primary' : 'ghost'}
               size="sm"
@@ -529,6 +584,32 @@ export default function PlayerPage() {
                 <option key={group} value={group}>{group}</option>
               ))}
             </select>
+            
+            {/* View Mode Toggle */}
+            <div className="ml-auto flex border border-slate-600 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1 text-sm ${
+                  viewMode === 'list' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-background-lighter text-text-secondary hover:bg-background'
+                }`}
+                title="List View"
+              >
+                ☰
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1 text-sm border-l border-slate-600 ${
+                  viewMode === 'grid' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-background-lighter text-text-secondary hover:bg-background'
+                }`}
+                title="Grid View"
+              >
+                ⊞
+              </button>
+            </div>
           </div>
         </div>
 
@@ -603,7 +684,9 @@ export default function PlayerPage() {
                   📺 All Channels
                 </h3>
               )}
-              {filteredChannels.map((channel) => (
+              
+              {/* List View */}
+              {viewMode === 'list' && filteredChannels.map((channel) => (
                 <div
                   key={channel.id}
                   onClick={() => handleChannelClick(channel)}
@@ -639,6 +722,60 @@ export default function PlayerPage() {
                   </div>
                 </div>
               ))}
+
+              {/* Grid View */}
+              {viewMode === 'grid' && (
+                <div className="grid grid-cols-2 gap-2">
+                  {filteredChannels.map((channel) => (
+                    <div
+                      key={channel.id}
+                      onClick={() => handleChannelClick(channel)}
+                      className={`
+                        p-3 rounded-lg cursor-pointer transition-all relative
+                        ${currentChannel?.id === channel.id 
+                          ? 'bg-primary/20 border-2 border-primary' 
+                          : 'bg-background hover:bg-background-lighter border-2 border-transparent'
+                        }
+                      `}
+                    >
+                      <div className="text-center">
+                        {channel.logo ? (
+                          <img 
+                            src={channel.logo} 
+                            alt={channel.name}
+                            className="w-16 h-16 mx-auto mb-2 rounded object-cover"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-16 h-16 mx-auto mb-2 bg-slate-700 rounded flex items-center justify-center text-2xl">
+                            📺
+                          </div>
+                        )}
+                        <h3 className="font-medium text-white text-sm truncate mb-1">
+                          {channel.name}
+                        </h3>
+                        {channel.group && (
+                          <p className="text-xs text-text-muted truncate">{channel.group}</p>
+                        )}
+                        {currentChannel?.id === channel.id && (
+                          <Badge color="success" size="sm" className="mt-2">▶️</Badge>
+                        )}
+                        
+                        {/* Favorite button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(channel);
+                          }}
+                          className="absolute top-2 right-2 p-1 bg-background/80 rounded hover:scale-110 transition-transform"
+                        >
+                          {isFavorite(channel.id) ? '⭐' : '☆'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

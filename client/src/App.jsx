@@ -14,6 +14,7 @@ import KioskModePage from './pages/KioskModePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import UserManagement from './pages/admin/UserManagement';
 import DisplayManagement from './pages/admin/DisplayManagement';
+import Analytics from './pages/admin/Analytics';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -121,6 +122,14 @@ function AppRouter() {
           element={
             <AdminRoute>
               <DisplayManagement />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/analytics"
+          element={
+            <AdminRoute>
+              <Analytics />
             </AdminRoute>
           }
         />

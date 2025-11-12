@@ -10,10 +10,13 @@ export default function MobileMenu() {
   
   const menuItems = [
     { path: '/dashboard', icon: '🏠', label: 'Dashboard' },
+    { path: '/history', icon: '🕒', label: 'History' },
+    { path: '/profile', icon: '👤', label: 'Profile' },
     ...(user?.role === 'admin' ? [
       { path: '/admin/dashboard', icon: '⚙️', label: 'Admin Home' },
       { path: '/admin/users', icon: '👥', label: 'Users' },
       { path: '/admin/displays', icon: '🖥️', label: 'Displays' },
+      { path: '/admin/analytics', icon: '📊', label: 'Analytics' },
     ] : []),
   ];
   
