@@ -17,6 +17,7 @@ const schedulesRoutes = require('./routes/schedules');
 const settingsRoutes = require('./routes/settings');
 const analyticsRoutes = require('./routes/analytics');
 const permissionsRoutes = require('./routes/permissions');
+const notificationsRoutes = require('./routes/notifications');
 
 // Initialize database
 console.log('🚀 Starting Bake & Grill TV Server...');
@@ -93,6 +94,7 @@ app.use('/api', schedulesRoutes); // Includes /api/schedules/* routes
 app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/permissions', permissionsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

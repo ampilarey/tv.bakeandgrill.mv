@@ -8,6 +8,7 @@ import Input from '../components/common/Input';
 import Spinner from '../components/common/Spinner';
 import Badge from '../components/common/Badge';
 import SkeletonLoader from '../components/SkeletonLoader';
+import VideoControls from '../components/VideoControls';
 
 export default function PlayerPage() {
   const [searchParams] = useSearchParams();
@@ -39,6 +40,7 @@ export default function PlayerPage() {
     return [];
   });
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const [useCustomControls, setUseCustomControls] = useState(false);
   
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
@@ -861,11 +863,11 @@ export default function PlayerPage() {
         {currentChannel ? (
           <>
             {/* Video Player */}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative group">
               <video
                 ref={videoRef}
                 className="w-full h-full object-contain bg-black"
-                controls
+                controls={!useCustomControls}
                 autoPlay
                 playsInline
                 webkit-playsinline="true"
@@ -874,6 +876,22 @@ export default function PlayerPage() {
                 muted={false}
                 style={{ minHeight: '200px' }}
               />
+
+              {/* Custom Video Controls */}
+              {useCustomControls && (
+                <VideoControls
+                  videoRef={videoRef}
+                  hlsRef={hlsRef}
+                  onPiP={togglePictureInPicture}
+                  onFullscreen={() => {
+                    if (document.fullscreenElement) {
+                      document.exitFullscreen();
+                    } else {
+                      videoRef.current?.requestFullscreen();
+                    }
+                  }}
+                />
+              )}
               
               {/* Error Overlay */}
               {videoError && (
