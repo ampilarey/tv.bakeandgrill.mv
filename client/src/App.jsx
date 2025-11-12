@@ -6,6 +6,7 @@ import Spinner from './components/common/Spinner';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import PlayerPage from './pages/PlayerPage';
+import ProfilePage from './pages/ProfilePage';
 import KioskModePage from './pages/KioskModePage';
 
 // Admin Pages
@@ -77,6 +78,14 @@ function AppRouter() {
           element={
             <ProtectedRoute>
               <PlayerPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
             </ProtectedRoute>
           }
         />

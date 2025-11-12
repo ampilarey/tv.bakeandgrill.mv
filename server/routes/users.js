@@ -7,7 +7,83 @@ const { asyncHandler } = require('../middleware/errorHandler');
 
 const router = express.Router();
 
-// All routes require authentication and admin role
+// Profile routes (any authenticated user)
+router.put('/profile', verifyToken, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const { first_name, last_name, email } = req.body;
+  const userId = req.user.id;
+
+  // Validate email format
+  if (email && !isValidEmail(email)) {
+    return res.status(400).json({ success: false, error: 'Invalid email format' });
+  }
+
+  // Check if email is already taken by another user
+  if (email && email !== req.user.email) {
+    const [existing] = await db.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, userId]);
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, error: 'Email already in use' });
+    }
+  }
+
+  // Update user profile
+  await db.query(
+    'UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?',
+    [first_name, last_name, email, userId]
+  );
+
+  // Fetch updated user
+  const [users] = await db.query(
+    'SELECT id, email, role, first_name, last_name, is_active, created_at FROM users WHERE id = ?',
+    [userId]
+  );
+
+  res.json({
+    success: true,
+    message: 'Profile updated successfully',
+    user: users[0]
+  });
+}));
+
+router.put('/password', verifyToken, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const { current_password, new_password } = req.body;
+  const userId = req.user.id;
+
+  // Validate inputs
+  if (!current_password || !new_password) {
+    return res.status(400).json({ success: false, error: 'Current and new password required' });
+  }
+
+  if (!isValidPassword(new_password)) {
+    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+  }
+
+  // Get current password hash
+  const [users] = await db.query('SELECT password_hash FROM users WHERE id = ?', [userId]);
+  if (users.length === 0) {
+    return res.status(404).json({ success: false, error: 'User not found' });
+  }
+
+  // Verify current password
+  const isValid = await bcrypt.compare(current_password, users[0].password_hash);
+  if (!isValid) {
+    return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+  }
+
+  // Hash new password
+  const newPasswordHash = await bcrypt.hash(new_password, 10);
+
+  // Update password
+  await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newPasswordHash, userId]);
+
+  res.json({
+    success: true,
+    message: 'Password changed successfully'
+  });
+}));
+
+// All routes below require authentication and admin role
 router.use(verifyToken, requireAdmin);
 
 /**

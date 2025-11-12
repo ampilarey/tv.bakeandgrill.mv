@@ -38,9 +38,9 @@ export default function BottomNav() {
   const navItems = [
     { path: '/dashboard', icon: '🏠', label: 'Home' },
     { path: '/player', icon: '▶️', label: 'Watch', requiresPlaylist: true },
+    { path: '/profile', icon: '👤', label: 'Profile' },
     ...(user?.role === 'admin' ? [
       { path: '/admin/users', icon: '👥', label: 'Users' },
-      { path: '/admin/displays', icon: '🖥️', label: 'Displays' },
     ] : []),
   ];
   
