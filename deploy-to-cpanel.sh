@@ -4,22 +4,25 @@
 
 echo "🚀 Starting deployment..."
 
-# Navigate to project directory
+# Navigate to project directory (git repo)
 cd ~/tv.bakeandgrill.mv || exit 1
 
 # Pull latest code
 echo "📥 Pulling latest code..."
 git pull origin main
 
-# Copy built files to web root
-echo "📦 Deploying frontend files..."
+# Define web root path
+WEB_ROOT=~/public_html/tv.bakeandgrill.mv
 
-# Ensure assets directory exists
-mkdir -p assets
+# Copy built files to web root
+echo "📦 Deploying frontend files to $WEB_ROOT..."
+
+# Ensure web root and assets directory exist
+mkdir -p "$WEB_ROOT/assets"
 
 # Copy assets (JS, CSS, etc.)
 if [ -d "client/dist/assets" ]; then
-  cp -v client/dist/assets/* assets/ 2>/dev/null || echo "⚠️  No assets found in client/dist/assets/"
+  cp -v client/dist/assets/* "$WEB_ROOT/assets/" 2>/dev/null || echo "⚠️  No assets found in client/dist/assets/"
 else
   echo "❌ ERROR: client/dist/assets directory not found!"
   echo "   Run 'npm run build' in the client directory first."
@@ -28,19 +31,19 @@ fi
 
 # Copy HTML files
 if [ -f "client/dist/index.html" ]; then
-  cp -v client/dist/*.html .
+  cp -v client/dist/*.html "$WEB_ROOT/"
 else
   echo "❌ ERROR: index.html not found in client/dist/"
   exit 1
 fi
 
 # Copy other files (JS, webmanifest, SW)
-cp -v client/dist/*.js . 2>/dev/null || true
-cp -v client/dist/*.webmanifest . 2>/dev/null || true
+cp -v client/dist/*.js "$WEB_ROOT/" 2>/dev/null || true
+cp -v client/dist/*.webmanifest "$WEB_ROOT/" 2>/dev/null || true
 
 # Update .htaccess with correct rules
 echo "⚙️  Updating .htaccess..."
-cat > .htaccess << 'HTACCESS_EOF'
+cat > "$WEB_ROOT/.htaccess" << 'HTACCESS_EOF'
 # Never cache HTML files
 <FilesMatch "\.(html|htm)$">
   Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
@@ -77,7 +80,7 @@ HTACCESS_EOF
 echo "✅ Frontend deployed successfully!"
 echo ""
 echo "📊 Deployed files:"
-ls -lh index.html assets/*.js 2>/dev/null | tail -5
+ls -lh "$WEB_ROOT/index.html" "$WEB_ROOT/assets/"*.js 2>/dev/null | tail -5
 
 echo ""
 echo "🔄 Next: Restart Node.js app in cPanel"
