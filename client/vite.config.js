@@ -41,8 +41,29 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // Only precache critical assets, NOT JS/HTML to avoid stale cache issues
+        globPatterns: ['**/*.{ico,png,svg,woff,woff2}'],
+        // Exclude JS and HTML from precaching - they're handled by .htaccess
+        globIgnores: ['**/*.js', '**/*.html'],
         runtimeCaching: [
+          {
+            // JS and CSS - Network first (always get fresh files)
+            urlPattern: /\.(?:js|css)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'js-css-cache',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 // 1 day
+              },
+              networkTimeoutSeconds: 5
+            }
+          },
+          {
+            // HTML - Network only (never cache to avoid stale pages)
+            urlPattern: /\.html$/i,
+            handler: 'NetworkOnly'
+          },
           {
             // API calls - Network first, fallback to cache
             urlPattern: /^https?:\/\/.*\/api\/.*/i,
