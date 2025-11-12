@@ -193,8 +193,16 @@ export default function PlayerPage() {
 
     const video = videoRef.current;
     const isHLS = currentChannel.url.endsWith('.m3u8');
+    
+    // Check if browser has native HLS support (Safari/iOS)
+    const hasNativeHLS = video.canPlayType('application/vnd.apple.mpegurl') !== '';
 
-    if (isHLS && Hls.isSupported()) {
+    if (isHLS && hasNativeHLS) {
+      // Use native HLS (Safari/iOS)
+      console.log('Using native HLS playback');
+      video.src = currentChannel.url;
+      video.play().catch(err => console.error('Play error:', err));
+    } else if (isHLS && Hls.isSupported()) {
       // HLS.js playback
       if (hlsRef.current) {
         hlsRef.current.destroy();
@@ -202,17 +210,17 @@ export default function PlayerPage() {
 
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: false, // Better compatibility
-        // Balanced buffer settings for all devices
+        lowLatencyMode: false,
+        // Balanced buffer settings
         maxBufferLength: 30,
         maxMaxBufferLength: 600,
-        maxBufferSize: 60 * 1000 * 1000, // 60MB
+        maxBufferSize: 60 * 1000 * 1000,
         maxBufferHole: 0.5,
         backBufferLength: 90,
-        // CORS setup without credentials
-        xhrSetup: function(xhr, url) {
-          // Don't set withCredentials - let browser decide based on CORS headers
-        }
+        // iOS/Android compatibility
+        forceKeyFrameOnDiscontinuity: true,
+        startFragPrefetch: true,
+        testBandwidth: false
       });
 
       hlsRef.current = hls;
@@ -493,7 +501,9 @@ export default function PlayerPage() {
                 controls
                 autoPlay
                 playsInline
+                webkit-playsinline="true"
                 preload="auto"
+                muted={false}
               />
             </div>
 
