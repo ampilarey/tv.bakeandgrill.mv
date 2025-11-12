@@ -15,26 +15,56 @@ export default function DisplayPairingPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    generatePinCode();
+    requestPinFromServer();
     fetchLocations();
     checkAutoPairing();
   }, []);
 
   // Auto-refresh PIN every 5 minutes
   useEffect(() => {
-    if (pairingMethod === 'pin') {
+    if (pairingMethod === 'pin' && pinCode) {
       const interval = setInterval(() => {
-        generatePinCode();
+        requestPinFromServer();
       }, 5 * 60 * 1000);
 
-      return () => clearInterval(interval);
-    }
-  }, [pairingMethod]);
+      // Also poll to check if admin has paired this PIN
+      const checkInterval = setInterval(() => {
+        checkIfPinPaired();
+      }, 3000); // Check every 3 seconds
 
-  const generatePinCode = () => {
-    const pin = Math.floor(100000 + Math.random() * 900000).toString();
-    setPinCode(pin);
-    setLoading(false);
+      return () => {
+        clearInterval(interval);
+        clearInterval(checkInterval);
+      };
+    }
+  }, [pairingMethod, pinCode]);
+
+  const requestPinFromServer = async () => {
+    setLoading(true);
+    try {
+      const response = await api.post('/pairing/request-pin');
+      setPinCode(response.data.pin);
+    } catch (error) {
+      console.error('Error requesting PIN:', error);
+      // Fallback to client-side generation
+      const pin = Math.floor(100000 + Math.random() * 900000).toString();
+      setPinCode(pin);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkIfPinPaired = async () => {
+    if (!pinCode) return;
+
+    try {
+      const response = await api.post('/pairing/check-pin', { pin: pinCode });
+      if (response.data.paired && response.data.display) {
+        handlePairingSuccess(response.data.display);
+      }
+    } catch (error) {
+      // Not paired yet, keep waiting
+    }
   };
 
   const fetchLocations = async () => {
@@ -62,25 +92,6 @@ export default function DisplayPairingPage() {
     }
   };
 
-  const handlePinPairing = async () => {
-    if (!pinCode) return;
-    
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await api.post('/pairing/check-pin', { pin: pinCode });
-      if (response.data.success && response.data.paired && response.data.display) {
-        handlePairingSuccess(response.data.display);
-      } else {
-        setError('PIN not paired yet. Please wait for admin to complete pairing.');
-      }
-    } catch (error) {
-      setError(error.response?.data?.error || 'Pairing failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLocationPairing = async () => {
     if (!selectedLocation || !locationPin) {
@@ -207,16 +218,29 @@ export default function DisplayPairingPage() {
             <h2 className="text-2xl font-bold text-white text-center mb-4">
               Enter this PIN in Admin Panel
             </h2>
-            <div className="bg-background rounded-lg p-8 mb-6">
+            <div className="bg-background rounded-lg p-8 mb-6 relative">
               <div className="text-7xl font-bold text-primary text-center tracking-widest font-mono">
                 {loading ? '------' : pinCode}
               </div>
+              <div className="absolute top-2 right-2">
+                <div className="flex items-center gap-2 text-sm text-text-muted">
+                  <span className="animate-pulse">●</span>
+                  <span>Waiting for pairing...</span>
+                </div>
+              </div>
             </div>
-            <p className="text-text-secondary text-center text-sm">
-              1. Go to Admin Panel → Displays → "Pair New Display"<br/>
-              2. Enter this PIN code<br/>
-              3. This display will connect automatically
-            </p>
+            <div className="space-y-3 text-center">
+              <p className="text-text-secondary text-sm">
+                1. Go to Admin Panel → Displays → "Pair Display"<br/>
+                2. Enter this PIN code<br/>
+                3. This display will connect automatically
+              </p>
+              <div className="bg-primary/10 border border-primary/30 rounded-lg p-3">
+                <p className="text-primary text-sm font-medium">
+                  ⏱️ Checking for pairing every 3 seconds...
+                </p>
+              </div>
+            </div>
             <p className="text-text-muted text-center text-xs mt-4">
               PIN refreshes every 5 minutes
             </p>
