@@ -242,18 +242,72 @@ export default function KioskModePage() {
     const video = videoRef.current;
     const isHLS = currentChannel.url.endsWith('.m3u8');
     
-    // Detect iOS - always use native HLS on iOS to avoid CORS issues
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    // Detect iOS - MORE ROBUST DETECTION
+    const userAgent = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad on iOS 13+
     const hasNativeHLS = video.canPlayType('application/vnd.apple.mpegurl') !== '' ||
                          video.canPlayType('application/x-mpegURL') !== '';
     
+    // Log detection for debugging
+    console.log('🔍 Kiosk Device Detection:', {
+      userAgent: userAgent,
+      isIOS: isIOS,
+      isHLS: isHLS,
+      hasNativeHLS: hasNativeHLS,
+      HlsSupported: Hls.isSupported(),
+      url: currentChannel.url
+    });
+    
     let retryCount = 0;
     const maxRetries = 3;
+    let errorHandler = null;
 
     const setupPlayer = () => {
-      // On iOS: ALWAYS use native HLS (avoids CORS issues)
+      // CRITICAL: On iOS - ALWAYS use native HLS (NEVER HLS.js - avoids CORS issues)
       // On other platforms: Use HLS.js if supported, otherwise native
-      if (isHLS && Hls.isSupported() && !isIOS) {
+      if (isHLS && isIOS) {
+        // iOS: FORCE native HLS - this is the ONLY path for iOS
+        console.log('✅ Kiosk iOS DETECTED - FORCING native HLS playback (no HLS.js)');
+        video.src = '';
+        video.load();
+        video.controls = true;
+        video.muted = false;
+        video.src = currentChannel.url;
+        video.play().catch(err => {
+          console.log('Auto-play with sound blocked, trying muted...');
+          video.muted = true;
+          setIsMuted(true);
+          video.play().catch(e => console.error('Muted play error:', e));
+        });
+
+        // Auto-retry on error
+        errorHandler = () => {
+          if (retryCount < maxRetries) {
+            console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
+            retryCount++;
+            setTimeout(() => {
+              video.load();
+              video.play();
+            }, 5000);
+          }
+        };
+        video.addEventListener('error', errorHandler);
+        
+      } else if (isHLS && !isIOS && Hls.isSupported()) {
+        // HLS.js playback (Android, Chrome, Firefox, etc.) - NOT iOS
+        // DOUBLE CHECK: If somehow iOS reaches here, abort and use native
+        if (isIOS) {
+          console.error('❌ ERROR: iOS detected in Kiosk HLS.js path - ABORTING');
+          video.src = '';
+          video.load();
+          video.controls = true;
+          video.src = currentChannel.url;
+          video.play().catch(err => console.error('Play error:', err));
+          return;
+        }
+        
+        console.log('⚠️ Kiosk Using HLS.js playback (NOT iOS)');
         // Clean up existing instance
         if (hlsRef.current) {
           hlsRef.current.destroy();
@@ -299,8 +353,37 @@ export default function KioskModePage() {
           }
         });
 
+      } else if (isHLS && !isIOS && !Hls.isSupported() && hasNativeHLS) {
+        // HLS stream on non-iOS device without HLS.js support but with native HLS
+        console.log('📺 Kiosk Using native HLS playback (non-iOS, no HLS.js support)');
+        video.src = '';
+        video.load();
+        video.controls = true;
+        video.muted = false;
+        video.src = currentChannel.url;
+        video.play().catch(err => {
+          console.log('Auto-play with sound blocked, trying muted...');
+          video.muted = true;
+          setIsMuted(true);
+          video.play().catch(e => console.error('Muted play error:', e));
+        });
+
+        // Auto-retry on error
+        errorHandler = () => {
+          if (retryCount < maxRetries) {
+            console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
+            retryCount++;
+            setTimeout(() => {
+              video.load();
+              video.play();
+            }, 5000);
+          }
+        };
+        video.addEventListener('error', errorHandler);
+        
       } else {
-        // Native playback (iOS or non-HLS streams)
+        // Native playback (non-HLS streams)
+        console.log('🎬 Kiosk Using native video playback (non-HLS)');
         video.src = currentChannel.url;
         video.muted = false;
         video.play().catch(err => {
@@ -311,7 +394,7 @@ export default function KioskModePage() {
         });
 
         // Auto-retry on error
-        video.addEventListener('error', () => {
+        errorHandler = () => {
           if (retryCount < maxRetries) {
             console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
             retryCount++;
@@ -320,7 +403,8 @@ export default function KioskModePage() {
               video.play();
             }, 5000);
           }
-        });
+        };
+        video.addEventListener('error', errorHandler);
       }
     };
 
@@ -330,6 +414,9 @@ export default function KioskModePage() {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
+      }
+      if (errorHandler && video) {
+        video.removeEventListener('error', errorHandler);
       }
     };
   }, [currentChannel]);

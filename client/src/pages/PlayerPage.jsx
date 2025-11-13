@@ -219,14 +219,28 @@ export default function PlayerPage() {
     const video = videoRef.current;
     const isHLS = currentChannel.url.endsWith('.m3u8');
     
-    // Detect iOS/Safari and Android
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isAndroid = /Android/.test(navigator.userAgent);
+    // Detect iOS/Safari and Android - MORE ROBUST DETECTION
+    const userAgent = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad on iOS 13+
+    const isAndroid = /Android/.test(userAgent);
     const isMobile = isIOS || isAndroid;
     
     // Check if browser has native HLS support (Safari/iOS)
     const hasNativeHLS = video.canPlayType('application/vnd.apple.mpegurl') !== '' ||
                          video.canPlayType('application/x-mpegURL') !== '';
+    
+    // CRITICAL: Log all detection values BEFORE making decision
+    console.log('🔍 Device Detection:', {
+      userAgent: userAgent,
+      isIOS: isIOS,
+      isAndroid: isAndroid,
+      isMobile: isMobile,
+      isHLS: isHLS,
+      hasNativeHLS: hasNativeHLS,
+      HlsSupported: Hls.isSupported(),
+      url: currentChannel.url
+    });
     
     // Clean up previous HLS instance
     if (hlsRef.current) {
@@ -239,16 +253,19 @@ export default function PlayerPage() {
     setRetryCount(0);
     setVideoLoading(true);
 
-    // On iOS/Safari: ALWAYS use native HLS (avoids CORS issues, more reliable)
+    // CRITICAL: On iOS - ALWAYS use native HLS (NEVER HLS.js - avoids CORS issues)
     // On Android/other browsers: Use HLS.js if supported, otherwise native
-    if (isHLS && (isIOS || (!Hls.isSupported() && hasNativeHLS))) {
-      // Native HLS playback (iOS Safari, or other browsers with native support)
-      console.log('Using native HLS playback', { 
+    if (isHLS && isIOS) {
+      // iOS: FORCE native HLS - this is the ONLY path for iOS
+      console.log('✅ iOS DETECTED - FORCING native HLS playback (no HLS.js)');
+      // Native HLS playback (iOS Safari - FORCED)
+      console.log('📱 Using NATIVE HLS playback on iOS', { 
         isIOS, 
         isMobile, 
         url: currentChannel.url,
         hasNativeHLS,
-        videoElement: { readyState: video.readyState }
+        videoElement: { readyState: video.readyState },
+        userAgent: navigator.userAgent
       });
       
       // Clear previous source first
@@ -434,10 +451,31 @@ export default function PlayerPage() {
         video.src = '';
       };
       
-    } else if (isHLS && Hls.isSupported() && !isIOS) {
+    } else if (isHLS && !isIOS && Hls.isSupported()) {
       // HLS.js playback (Android, Chrome, Firefox, etc.)
-      // NOTE: iOS should NEVER use HLS.js - it has native HLS support and avoids CORS issues
-      console.log('Using HLS.js playback', { isMobile, isAndroid, isIOS });
+      // CRITICAL: iOS should NEVER reach here - it's blocked by the condition above
+      console.log('⚠️ Using HLS.js playback (NOT iOS)', { 
+        isMobile, 
+        isAndroid, 
+        isIOS,
+        userAgent: navigator.userAgent,
+        HlsSupported: Hls.isSupported()
+      });
+      
+      // DOUBLE CHECK: If somehow iOS reaches here, abort and use native
+      if (isIOS) {
+        console.error('❌ ERROR: iOS detected in HLS.js path - ABORTING and using native HLS');
+        // Fall back to native HLS
+        video.src = '';
+        video.load();
+        video.controls = true;
+        video.src = currentChannel.url;
+        video.play().catch(err => {
+          console.warn('Autoplay failed:', err);
+          setVideoLoading(false);
+        });
+        return;
+      }
       
       const hls = new Hls({
         enableWorker: !isMobile, // Disable worker on mobile to reduce memory usage
@@ -603,10 +641,23 @@ export default function PlayerPage() {
         }
       });
 
+    } else if (isHLS && !isIOS && !Hls.isSupported() && hasNativeHLS) {
+      // HLS stream on non-iOS device without HLS.js support but with native HLS
+      console.log('📺 Using native HLS playback (non-iOS, no HLS.js support)');
+      video.src = '';
+      video.load();
+      video.controls = true;
+      video.src = currentChannel.url;
+      video.play().catch(err => {
+        console.warn('Autoplay failed:', err);
+        setVideoLoading(false);
+      });
+      
     } else {
       // Non-HLS playback (MP4, WebM, etc.)
-      console.log('Using native video playback (non-HLS)');
+      console.log('🎬 Using native video playback (non-HLS)');
       video.src = currentChannel.url;
+      video.controls = true;
       video.play().catch(err => {
         console.warn('Play error:', err);
       });
