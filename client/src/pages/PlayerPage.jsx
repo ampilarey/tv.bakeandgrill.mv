@@ -272,39 +272,83 @@ export default function PlayerPage() {
       video.src = '';
       video.load();
       
-      // Ensure controls are visible on iOS for manual play
+      // CRITICAL: Set iOS-specific attributes BEFORE setting source
       video.controls = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.setAttribute('x-webkit-airplay', 'allow');
+      video.preload = 'auto';
+      video.autoplay = true;
       
       // Set new source - iOS native HLS handles redirects and CORS automatically
       video.src = currentChannel.url;
       
-      console.log('Video source set:', video.src);
-      console.log('Video element attributes:', {
+      console.log('📱 iOS Native HLS Setup:', {
+        src: video.src,
+        currentSrc: video.currentSrc,
         controls: video.controls,
         playsInline: video.playsInline,
         webkitPlaysInline: video.webkitPlaysInline,
         preload: video.preload,
-        autoplay: video.autoplay
+        autoplay: video.autoplay,
+        readyState: video.readyState,
+        networkState: video.networkState
       });
       
-      // iOS requires user interaction for autoplay, but we'll try anyway
-      // If it fails, the user can tap to play
-      const playPromise = video.play();
+      // iOS-specific event handlers (will be added alongside general handlers)
+      let iosCanPlayHandler = null;
+      let iosMetadataHandler = null;
+      let iosDataHandler = null;
       
+      // Wait for video to be ready before trying to play
+      iosCanPlayHandler = () => {
+        console.log('✅ iOS Video can play - readyState:', video.readyState);
+        setVideoLoading(false);
+        
+        // Try to play - iOS requires user interaction, but we'll try anyway
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('✅ iOS Video playing successfully');
+            })
+            .catch(err => {
+              console.warn('⚠️ iOS Autoplay blocked (this is normal) - user must tap play:', err.message);
+              // Ensure controls are visible so user can manually play
+              video.controls = true;
+            });
+        }
+      };
+      
+      iosMetadataHandler = () => {
+        console.log('✅ iOS Video metadata loaded:', {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          duration: video.duration,
+          readyState: video.readyState
+        });
+      };
+      
+      iosDataHandler = () => {
+        console.log('✅ iOS Video data loaded - readyState:', video.readyState);
+      };
+      
+      video.addEventListener('canplay', iosCanPlayHandler);
+      video.addEventListener('loadedmetadata', iosMetadataHandler);
+      video.addEventListener('loadeddata', iosDataHandler);
+      
+      // Also try immediate play (might work on some iOS versions)
+      const playPromise = video.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            console.log('Video playing successfully');
+            console.log('✅ iOS Video playing immediately');
             setVideoLoading(false);
           })
           .catch(err => {
-            console.warn('Autoplay failed, user interaction required:', err);
-            setVideoLoading(false);
-            // Ensure controls are visible so user can manually play
-            video.controls = true;
-            // Don't show error - user can tap to play
-            // On iOS, autoplay is often blocked by browser policy
-            // Controls will be visible so user can tap play button
+            console.log('⏳ iOS Autoplay blocked, waiting for canplay event:', err.message);
+            // Will be handled by canplay event listener
           });
       }
       
@@ -448,6 +492,10 @@ export default function PlayerPage() {
         video.removeEventListener('suspend', handleSuspend);
         video.removeEventListener('click', handleVideoClick);
         video.removeEventListener('tap', handleVideoClick);
+        // Clean up iOS-specific handlers
+        if (iosCanPlayHandler) video.removeEventListener('canplay', iosCanPlayHandler);
+        if (iosMetadataHandler) video.removeEventListener('loadedmetadata', iosMetadataHandler);
+        if (iosDataHandler) video.removeEventListener('loadeddata', iosDataHandler);
         video.src = '';
       };
       

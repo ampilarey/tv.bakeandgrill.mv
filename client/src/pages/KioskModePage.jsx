@@ -271,9 +271,26 @@ export default function KioskModePage() {
         console.log('✅ Kiosk iOS DETECTED - FORCING native HLS playback (no HLS.js)');
         video.src = '';
         video.load();
+        
+        // CRITICAL: Set iOS-specific attributes BEFORE setting source
         video.controls = true;
+        video.playsInline = true;
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+        video.setAttribute('x-webkit-airplay', 'allow');
+        video.preload = 'auto';
         video.muted = false;
+        
+        // Set new source
         video.src = currentChannel.url;
+        
+        console.log('📱 Kiosk iOS Native HLS Setup:', {
+          src: video.src,
+          currentSrc: video.currentSrc,
+          controls: video.controls,
+          playsInline: video.playsInline,
+          readyState: video.readyState
+        });
         video.play().catch(err => {
           console.log('Auto-play with sound blocked, trying muted...');
           video.muted = true;
