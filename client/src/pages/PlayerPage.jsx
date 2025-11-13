@@ -258,13 +258,14 @@ export default function PlayerPage() {
     
     // CRITICAL: Log all detection values BEFORE making decision
     console.log('🔍 Device Detection:', {
-      userAgent: userAgent,
+      userAgent: currentUserAgent,
       isIOS: isIOS,
+      checkIOS: checkIOS,
       isAndroid: isAndroid,
       isMobile: isMobile,
       isHLS: isHLS,
       hasNativeHLS: hasNativeHLS,
-      HlsSupported: Hls.isSupported(),
+      HlsSupported: typeof Hls !== 'undefined' ? Hls.isSupported() : false,
       url: currentChannel.url
     });
     
