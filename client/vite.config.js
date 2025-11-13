@@ -7,13 +7,13 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
-      includeAssets: ['pwa-192x192.png', 'pwa-512x512.png'],
+      registerType: 'autoUpdate',
+      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable.png'],
       manifest: {
-        name: 'Bake and Grill TV',
+        name: 'Bake & Grill TV',
         short_name: 'B&G TV',
         description: 'IPTV streaming platform for Bake and Grill',
-        start_url: '/',
+        start_url: '/?source=pwa',
         display: 'standalone',
         background_color: '#0F172A',
         theme_color: '#F59E0B',
@@ -24,11 +24,23 @@ export default defineConfig({
         scope: '/',
         icons: [
           {
-            src: '/pwa-192x192.png',
+            src: '/icons/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
           },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/icon-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
+          }
         ],
         screenshots: [
           {
@@ -45,8 +57,24 @@ export default defineConfig({
         // Only precache critical assets, NOT JS/HTML to avoid stale cache issues
         globPatterns: ['**/*.{ico,png,svg,woff,woff2}'],
         // Exclude JS and HTML from precaching - they're handled by .htaccess
-        globIgnores: ['**/*.js', '**/*.html'],
+        globIgnores: ['**/*.js', '**/*.html', '**/*.m3u8', '**/*.ts'],
         runtimeCaching: [
+          {
+            // 🚨 CRITICAL: HLS Streams - NEVER CACHE
+            urlPattern: /\.m3u8(\?.*)?$/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'hls-bypass-m3u8'
+            }
+          },
+          {
+            // 🚨 CRITICAL: HLS Segments - NEVER CACHE
+            urlPattern: /\.ts(\?.*)?$/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'hls-bypass-ts'
+            }
+          },
           {
             // JS and CSS - Network first (always get fresh files)
             urlPattern: /\.(?:js|css)$/i,

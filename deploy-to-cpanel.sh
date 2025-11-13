@@ -53,6 +53,10 @@ AddType application/javascript .js
 AddType text/css .css
 AddType application/json .webmanifest
 
+# HLS Streaming MIME types (CRITICAL for mobile playback)
+AddType application/vnd.apple.mpegurl .m3u8
+AddType video/MP2T .ts
+
 # Enable rewrite engine
 RewriteEngine On
 
@@ -82,6 +86,13 @@ RewriteRule ^ index.html [L]
 # Cache assets forever (they have hash in name)
 <FilesMatch "\.(js|css|png|jpg|jpeg|svg|woff|woff2|webmanifest)$">
   Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+
+# NEVER cache HLS streams (m3u8 playlists and ts segments)
+<FilesMatch "\.(m3u8|ts)$">
+  Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+  Header set Pragma "no-cache"
+  Header set Expires "0"
 </FilesMatch>
 HTACCESS_EOF
 
