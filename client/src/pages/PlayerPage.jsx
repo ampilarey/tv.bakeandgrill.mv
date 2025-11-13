@@ -255,10 +255,20 @@ export default function PlayerPage() {
       video.src = '';
       video.load();
       
-      // Set new source
+      // Ensure controls are visible on iOS for manual play
+      video.controls = true;
+      
+      // Set new source - iOS native HLS handles redirects and CORS automatically
       video.src = currentChannel.url;
       
       console.log('Video source set:', video.src);
+      console.log('Video element attributes:', {
+        controls: video.controls,
+        playsInline: video.playsInline,
+        webkitPlaysInline: video.webkitPlaysInline,
+        preload: video.preload,
+        autoplay: video.autoplay
+      });
       
       // iOS requires user interaction for autoplay, but we'll try anyway
       // If it fails, the user can tap to play
@@ -273,36 +283,52 @@ export default function PlayerPage() {
           .catch(err => {
             console.warn('Autoplay failed, user interaction required:', err);
             setVideoLoading(false);
+            // Ensure controls are visible so user can manually play
+            video.controls = true;
             // Don't show error - user can tap to play
-            // On mobile, autoplay is often blocked by browser policy
-            // We'll show the video controls so user can tap play
+            // On iOS, autoplay is often blocked by browser policy
+            // Controls will be visible so user can tap play button
           });
       }
       
       // Handle video errors
       const handleError = (e) => {
         console.error('Video error:', e);
+        console.error('Video error details:', {
+          error: video.error,
+          networkState: video.networkState,
+          readyState: video.readyState,
+          src: video.src,
+          currentSrc: video.currentSrc,
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight
+        });
+        
         if (video.error) {
           const errorCode = video.error.code;
           const errorMessage = video.error.message || 'Unknown error';
           console.error(`Video error code: ${errorCode}, message: ${errorMessage}`);
           
+          // Ensure controls are visible for manual play
+          video.controls = true;
+          
           switch(errorCode) {
             case video.error.MEDIA_ERR_ABORTED:
-              setVideoError('Playback aborted. Please try again.');
+              setVideoError('Playback aborted. Tap the play button to try again.');
               break;
             case video.error.MEDIA_ERR_NETWORK:
-              setVideoError('Network error. Please check your connection.');
+              setVideoError('Network error. Please check your connection and tap play to retry.');
               break;
             case video.error.MEDIA_ERR_DECODE:
               setVideoError('Decode error. This stream may not be compatible with your device.');
               break;
             case video.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-              setVideoError('Stream format not supported. The channel may be offline.');
+              setVideoError('Stream format not supported. The channel may be offline. Tap play to retry.');
               break;
             default:
-              setVideoError('Unable to play this channel. The stream may be offline or incompatible.');
+              setVideoError('Unable to play this channel. The stream may be offline. Tap play to retry.');
           }
+          setVideoLoading(false);
         }
       };
       
@@ -1145,7 +1171,7 @@ export default function PlayerPage() {
               <video
                 ref={videoRef}
                 className="w-full h-full object-contain bg-black"
-                controls={!useCustomControls}
+                controls={true}
                 autoPlay
                 playsInline
                 webkit-playsinline="true"
@@ -1159,6 +1185,14 @@ export default function PlayerPage() {
                   objectFit: 'contain',
                   WebkitPlaysInline: true,
                   playsInline: true
+                }}
+                onTouchStart={(e) => {
+                  // On iOS, tap the video to play if paused
+                  if (videoRef.current && videoRef.current.paused) {
+                    videoRef.current.play().catch(err => {
+                      console.log('Play on touch failed:', err);
+                    });
+                  }
                 }}
               />
 
