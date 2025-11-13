@@ -8,6 +8,11 @@
     <meta name="theme-color" content="#F59E0B" />
     <link rel="manifest" href="/manifest.webmanifest" />
     
+    <!-- 🚨 CRITICAL: Prevent caching to ensure fresh code loads -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    
     <!-- iOS PWA Support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -19,6 +24,57 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- 🚨 CRITICAL: Check for old cached script BEFORE loading main script -->
+    <script>
+      // Run IMMEDIATELY before any other scripts
+      (function() {
+        console.log('🔍 Checking for cached scripts...');
+        
+        // Check if we're loading from a cached HTML that references old JS
+        const scripts = document.getElementsByTagName('script');
+        for (let script of scripts) {
+          if (script.src) {
+            console.log('📜 Found script:', script.src);
+            // If this is the old cached script, force reload IMMEDIATELY
+            if (script.src.includes('CM0JPdys') || script.src.includes('BrB98PUB')) {
+              console.error('❌ OLD CACHED SCRIPT DETECTED:', script.src);
+              console.error('🔄 FORCING HARD RELOAD TO BYPASS CACHE...');
+              
+              // Clear all storage
+              try {
+                localStorage.clear();
+                sessionStorage.clear();
+              } catch (e) {}
+              
+              // Clear all service workers
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  for(let registration of registrations) {
+                    registration.unregister();
+                  }
+                });
+              }
+              
+              // Clear all caches
+              if ('caches' in window) {
+                caches.keys().then(function(names) {
+                  for (let name of names) {
+                    caches.delete(name);
+                  }
+                });
+              }
+              
+              // Force reload with cache bypass
+              window.location.replace(window.location.href + '?nocache=' + Date.now());
+              return; // Stop execution
+            }
+          }
+        }
+        
+        // If we got here, we're loading fresh code
+        console.log('✅ Fresh code detected - proceeding...');
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

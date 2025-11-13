@@ -4,76 +4,98 @@ import { ThemeProvider } from './context/ThemeContext.jsx';
 import App from './App.jsx';
 import './index.css';
 
-// 🚨 CRITICAL: Force service worker update and cache clear
-// Version: 2025-01-15-ios-native-hls-fix
-const APP_VERSION = '2025-01-15-ios-native-hls-fix';
+// 🚨 CRITICAL: Force service worker update and cache clear - RUN IMMEDIATELY
+// Version: 2025-01-15-ios-native-hls-fix-v2
+const APP_VERSION = '2025-01-15-ios-native-hls-fix-v2';
 
-// Unregister all old service workers and clear cache
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', async () => {
+// Store version for debugging IMMEDIATELY
+if (typeof window !== 'undefined') {
+  window.APP_VERSION = APP_VERSION;
+  console.log('📱 App Version:', APP_VERSION);
+  
+  // CRITICAL: Clear caches IMMEDIATELY before anything else loads
+  (async () => {
     try {
-      // Unregister all service workers first
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      for (let registration of registrations) {
-        await registration.unregister();
-        console.log('✅ Unregistered old service worker');
+      // 1. Unregister ALL service workers FIRST
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (let registration of registrations) {
+          await registration.unregister();
+          console.log('✅ Unregistered service worker:', registration.scope);
+        }
       }
       
-      // Clear all caches
+      // 2. Delete ALL caches
       if ('caches' in window) {
         const cacheNames = await caches.keys();
-        await Promise.all(
-          cacheNames.map(cacheName => {
-            console.log('🗑️ Deleting cache:', cacheName);
-            return caches.delete(cacheName);
-          })
-        );
+        for (const cacheName of cacheNames) {
+          await caches.delete(cacheName);
+          console.log('🗑️ Deleted cache:', cacheName);
+        }
         console.log('✅ All caches cleared');
       }
       
-      // Wait a bit before registering new service worker
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Register new service worker
-      const registration = await navigator.serviceWorker.register('/sw.js', {
-        scope: '/'
-      });
-      
-      console.log('✅ New service worker registered:', registration);
-      
-      // Force immediate update
-      registration.update();
-      
-      // If there's an update, skip waiting and claim clients
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New service worker available, skip waiting
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-              window.location.reload();
-            }
-          });
+      // 3. Force reload if old version detected
+      const currentScript = document.currentScript || Array.from(document.scripts).pop();
+      if (currentScript) {
+        const scriptSrc = currentScript.src;
+        console.log('📜 Current script:', scriptSrc);
+        
+        // If we're loading the old cached script, force reload
+        if (scriptSrc.includes('CM0JPdys') || scriptSrc.includes('BrB98PUB')) {
+          console.warn('⚠️ OLD CACHED SCRIPT DETECTED - FORCING RELOAD');
+          // Clear all storage
+          if (typeof Storage !== 'undefined') {
+            try {
+              localStorage.clear();
+              sessionStorage.clear();
+            } catch (e) {}
+          }
+          // Force reload with cache bypass
+          window.location.reload(true);
+          return;
         }
-      });
+      }
       
-      // Listen for controller change (new service worker activated)
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('✅ Service worker controller changed - reloading...');
-        window.location.reload();
-      });
+      // 4. Re-register service worker AFTER cache clear
+      if ('serviceWorker' in navigator) {
+        // Wait a moment before re-registering
+        setTimeout(async () => {
+          try {
+            const registration = await navigator.serviceWorker.register('/sw.js', {
+              scope: '/',
+              updateViaCache: 'none' // Don't cache the service worker itself
+            });
+            
+            console.log('✅ Service worker registered:', registration);
+            
+            // Check for updates immediately
+            await registration.update();
+            
+            // Listen for updates
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('🔄 New service worker installed - reloading...');
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    setTimeout(() => window.location.reload(), 100);
+                  }
+                });
+              }
+            });
+            
+          } catch (error) {
+            console.error('❌ Service worker registration error:', error);
+          }
+        }, 1000);
+      }
       
     } catch (error) {
-      console.error('❌ Service worker registration error:', error);
+      console.error('❌ Cache clearing error:', error);
     }
-  });
-  
-  // Store version for debugging
-  if (typeof window !== 'undefined') {
-    window.APP_VERSION = APP_VERSION;
-    console.log('📱 App Version:', APP_VERSION);
-  }
+  })();
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
