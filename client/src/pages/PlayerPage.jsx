@@ -243,9 +243,22 @@ export default function PlayerPage() {
     // On Android/other browsers: Use HLS.js if supported, otherwise native
     if (isHLS && ((isIOS && hasNativeHLS) || (!Hls.isSupported() && hasNativeHLS))) {
       // Native HLS playback (iOS Safari, or other browsers with native support)
-      console.log('Using native HLS playback');
+      console.log('Using native HLS playback', { 
+        isIOS, 
+        isMobile, 
+        url: currentChannel.url,
+        hasNativeHLS,
+        videoElement: { readyState: video.readyState }
+      });
       
+      // Clear previous source first
+      video.src = '';
+      video.load();
+      
+      // Set new source
       video.src = currentChannel.url;
+      
+      console.log('Video source set:', video.src);
       
       // iOS requires user interaction for autoplay, but we'll try anyway
       // If it fails, the user can tap to play
@@ -255,11 +268,14 @@ export default function PlayerPage() {
         playPromise
           .then(() => {
             console.log('Video playing successfully');
+            setVideoLoading(false);
           })
           .catch(err => {
             console.warn('Autoplay failed, user interaction required:', err);
+            setVideoLoading(false);
             // Don't show error - user can tap to play
             // On mobile, autoplay is often blocked by browser policy
+            // We'll show the video controls so user can tap play
           });
       }
       
@@ -290,46 +306,105 @@ export default function PlayerPage() {
         }
       };
       
+      const handleLoadStart = () => {
+        console.log('Video load started', { readyState: video.readyState, networkState: video.networkState });
+        setVideoLoading(true);
+      };
+      
       const handleLoadedMetadata = () => {
         console.log('Video metadata loaded:', {
           videoWidth: video.videoWidth,
           videoHeight: video.videoHeight,
           duration: video.duration,
-          readyState: video.readyState
+          readyState: video.readyState,
+          networkState: video.networkState,
+          src: video.src
         });
         
         // Check if video has actual video tracks (not just audio)
         if (video.videoWidth === 0 && video.videoHeight === 0) {
           console.warn('⚠️ Video appears to be audio-only or has no video tracks');
           // Don't set error yet - some streams load video after metadata
+        } else {
+          console.log('✅ Video has video tracks:', { width: video.videoWidth, height: video.videoHeight });
         }
+      };
+      
+      const handleLoadedData = () => {
+        console.log('Video data loaded', { readyState: video.readyState });
       };
       
       const handleCanPlay = () => {
         console.log('Video can play - readyState:', video.readyState);
         setVideoLoading(false);
+        // Try to play again if not already playing
+        if (video.paused && !video.ended) {
+          video.play().catch(err => {
+            console.log('Auto-play still blocked, waiting for user interaction:', err.message);
+          });
+        }
+      };
+      
+      const handleCanPlayThrough = () => {
+        console.log('Video can play through - readyState:', video.readyState);
+        setVideoLoading(false);
       };
       
       const handleWaiting = () => {
+        console.log('Video waiting for data');
         setVideoLoading(true);
       };
       
       const handlePlaying = () => {
+        console.log('Video playing');
         setVideoLoading(false);
       };
       
+      const handleStalled = () => {
+        console.warn('Video stalled');
+        setVideoLoading(true);
+      };
+      
+      const handleSuspend = () => {
+        console.log('Video suspended');
+      };
+      
+      video.addEventListener('loadstart', handleLoadStart);
       video.addEventListener('error', handleError);
       video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      video.addEventListener('loadeddata', handleLoadedData);
       video.addEventListener('canplay', handleCanPlay);
+      video.addEventListener('canplaythrough', handleCanPlayThrough);
       video.addEventListener('waiting', handleWaiting);
       video.addEventListener('playing', handlePlaying);
+      video.addEventListener('stalled', handleStalled);
+      video.addEventListener('suspend', handleSuspend);
+      
+      // Also handle click/tap for manual play on mobile
+      const handleVideoClick = () => {
+        if (video.paused) {
+          console.log('Video clicked/tapped, attempting to play');
+          video.play().catch(err => {
+            console.error('Play failed on click:', err);
+          });
+        }
+      };
+      video.addEventListener('click', handleVideoClick);
+      video.addEventListener('tap', handleVideoClick);
       
       return () => {
+        video.removeEventListener('loadstart', handleLoadStart);
         video.removeEventListener('error', handleError);
         video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        video.removeEventListener('loadeddata', handleLoadedData);
         video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('canplaythrough', handleCanPlayThrough);
         video.removeEventListener('waiting', handleWaiting);
         video.removeEventListener('playing', handlePlaying);
+        video.removeEventListener('stalled', handleStalled);
+        video.removeEventListener('suspend', handleSuspend);
+        video.removeEventListener('click', handleVideoClick);
+        video.removeEventListener('tap', handleVideoClick);
         video.src = '';
       };
       
@@ -1076,11 +1151,14 @@ export default function PlayerPage() {
                 x-webkit-airplay="allow"
                 preload="auto"
                 muted={false}
+                crossOrigin="anonymous"
                 style={{ 
                   minHeight: '200px',
                   width: '100%',
                   height: '100%',
-                  objectFit: 'contain'
+                  objectFit: 'contain',
+                  WebkitPlaysInline: true,
+                  playsInline: true
                 }}
               />
 
