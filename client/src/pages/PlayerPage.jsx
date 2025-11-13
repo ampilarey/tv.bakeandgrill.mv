@@ -1151,7 +1151,6 @@ export default function PlayerPage() {
                 x-webkit-airplay="allow"
                 preload="auto"
                 muted={false}
-                crossOrigin="anonymous"
                 style={{ 
                   minHeight: '200px',
                   width: '100%',
