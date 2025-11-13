@@ -335,39 +335,54 @@ export default function PlayerPage() {
       
     } else if (isHLS && Hls.isSupported()) {
       // HLS.js playback (Android, Chrome, Firefox, etc.)
-      console.log('Using HLS.js playback');
+      console.log('Using HLS.js playback', { isMobile, isAndroid, isIOS });
       
       const hls = new Hls({
-        enableWorker: true,
+        enableWorker: !isMobile, // Disable worker on mobile to reduce memory usage
         lowLatencyMode: false,
-        // Buffer settings
-        maxBufferLength: isMobile ? 20 : 30,
-        maxMaxBufferLength: isMobile ? 300 : 600,
-        maxBufferSize: isMobile ? 30 * 1000 * 1000 : 60 * 1000 * 1000,
+        // Buffer settings - reduced for mobile
+        maxBufferLength: isMobile ? 15 : 30,
+        maxMaxBufferLength: isMobile ? 200 : 600,
+        maxBufferSize: isMobile ? 20 * 1000 * 1000 : 60 * 1000 * 1000, // 20MB on mobile
         maxBufferHole: 0.5,
         backBufferLength: isMobile ? 30 : 90,
         // Mobile compatibility
         forceKeyFrameOnDiscontinuity: true,
         startFragPrefetch: true,
-        testBandwidth: !isMobile, // Disable on mobile for better performance
+        testBandwidth: false, // Disable bandwidth testing on mobile
         // Force video to decode properly on mobile
         autoStartLoad: true,
         startPosition: -1,
         debug: false,
         // Prevent audio-only issues
         capLevelToPlayerSize: false,
-        // Better video quality selection
-        abrEwmaDefaultEstimate: isMobile ? 1000000 : 500000,
+        // Better video quality selection for mobile
+        abrEwmaDefaultEstimate: isMobile ? 2000000 : 500000, // Higher default for mobile (better connection)
         abrBandWidthFactor: 0.95,
         abrBandWidthUpFactor: 0.7,
         // Mobile-specific optimizations
-        fragLoadingTimeOut: isMobile ? 10000 : 20000,
-        manifestLoadingTimeOut: isMobile ? 10000 : 20000
+        fragLoadingTimeOut: isMobile ? 15000 : 20000,
+        manifestLoadingTimeOut: isMobile ? 15000 : 20000,
+        // Reduce loading for mobile
+        maxLoadingDelay: isMobile ? 2 : 4,
+        maxStarvationDelay: isMobile ? 4 : 8
       });
 
       hlsRef.current = hls;
-      hls.loadSource(currentChannel.url);
-      hls.attachMedia(video);
+      
+      console.log('Loading HLS source:', currentChannel.url);
+      console.log('Video element:', { readyState: video.readyState, networkState: video.networkState });
+      
+      try {
+        hls.loadSource(currentChannel.url);
+        hls.attachMedia(video);
+        console.log('HLS source loaded and attached');
+      } catch (error) {
+        console.error('Error loading HLS source:', error);
+        setVideoError('Failed to load video stream. Please try again.');
+        setVideoLoading(false);
+        return;
+      }
 
       hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
         console.log('HLS manifest parsed:', {
@@ -427,11 +442,25 @@ export default function PlayerPage() {
       });
 
       hls.on(Hls.Events.FRAG_LOADED, () => {
+        console.log('HLS fragment loaded');
         setVideoLoading(false);
       });
       
+      hls.on(Hls.Events.FRAG_PARSED, () => {
+        console.log('HLS fragment parsed');
+      });
+      
       hls.on(Hls.Events.ERROR, (event, data) => {
-        console.error('HLS Error:', data);
+        console.error('HLS Error:', {
+          type: data.type,
+          details: data.details,
+          fatal: data.fatal,
+          error: data.error,
+          url: data.url,
+          isMobile,
+          isAndroid,
+          isIOS
+        });
         setVideoLoading(false);
         
         // Try to recover from errors
