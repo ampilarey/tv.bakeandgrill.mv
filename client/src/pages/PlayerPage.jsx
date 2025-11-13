@@ -29,6 +29,7 @@ export default function PlayerPage() {
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [videoError, setVideoError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [videoLoading, setVideoLoading] = useState(false);
   const [viewMode, setViewMode] = useState(
     typeof window !== 'undefined' ? localStorage.getItem('channelViewMode') || 'list' : 'list'
   );
@@ -218,30 +219,137 @@ export default function PlayerPage() {
     const video = videoRef.current;
     const isHLS = currentChannel.url.endsWith('.m3u8');
     
+    // Detect iOS/Safari and Android
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isAndroid = /Android/.test(navigator.userAgent);
+    const isMobile = isIOS || isAndroid;
+    
     // Check if browser has native HLS support (Safari/iOS)
-    const hasNativeHLS = video.canPlayType('application/vnd.apple.mpegurl') !== '';
+    const hasNativeHLS = video.canPlayType('application/vnd.apple.mpegurl') !== '' ||
+                         video.canPlayType('application/x-mpegURL') !== '';
+    
+    // Clean up previous HLS instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+    
+    // Clear previous errors and set loading state
+    setVideoError(null);
+    setRetryCount(0);
+    setVideoLoading(true);
 
-    // Always use HLS.js for better codec compatibility, even on iOS
-    // iOS Safari can't handle all HLS codecs natively
-    if (isHLS && Hls.isSupported()) {
-      // HLS.js playback
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
+    // On iOS/Safari: Use native HLS (more reliable than HLS.js)
+    // On Android/other browsers: Use HLS.js if supported, otherwise native
+    if (isHLS && ((isIOS && hasNativeHLS) || (!Hls.isSupported() && hasNativeHLS))) {
+      // Native HLS playback (iOS Safari, or other browsers with native support)
+      console.log('Using native HLS playback');
+      
+      video.src = currentChannel.url;
+      
+      // iOS requires user interaction for autoplay, but we'll try anyway
+      // If it fails, the user can tap to play
+      const playPromise = video.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('Video playing successfully');
+          })
+          .catch(err => {
+            console.warn('Autoplay failed, user interaction required:', err);
+            // Don't show error - user can tap to play
+            // On mobile, autoplay is often blocked by browser policy
+          });
       }
-
+      
+      // Handle video errors
+      const handleError = (e) => {
+        console.error('Video error:', e);
+        if (video.error) {
+          const errorCode = video.error.code;
+          const errorMessage = video.error.message || 'Unknown error';
+          console.error(`Video error code: ${errorCode}, message: ${errorMessage}`);
+          
+          switch(errorCode) {
+            case video.error.MEDIA_ERR_ABORTED:
+              setVideoError('Playback aborted. Please try again.');
+              break;
+            case video.error.MEDIA_ERR_NETWORK:
+              setVideoError('Network error. Please check your connection.');
+              break;
+            case video.error.MEDIA_ERR_DECODE:
+              setVideoError('Decode error. This stream may not be compatible with your device.');
+              break;
+            case video.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+              setVideoError('Stream format not supported. The channel may be offline.');
+              break;
+            default:
+              setVideoError('Unable to play this channel. The stream may be offline or incompatible.');
+          }
+        }
+      };
+      
+      const handleLoadedMetadata = () => {
+        console.log('Video metadata loaded:', {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          duration: video.duration,
+          readyState: video.readyState
+        });
+        
+        // Check if video has actual video tracks (not just audio)
+        if (video.videoWidth === 0 && video.videoHeight === 0) {
+          console.warn('⚠️ Video appears to be audio-only or has no video tracks');
+          // Don't set error yet - some streams load video after metadata
+        }
+      };
+      
+      const handleCanPlay = () => {
+        console.log('Video can play - readyState:', video.readyState);
+        setVideoLoading(false);
+      };
+      
+      const handleWaiting = () => {
+        setVideoLoading(true);
+      };
+      
+      const handlePlaying = () => {
+        setVideoLoading(false);
+      };
+      
+      video.addEventListener('error', handleError);
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      video.addEventListener('canplay', handleCanPlay);
+      video.addEventListener('waiting', handleWaiting);
+      video.addEventListener('playing', handlePlaying);
+      
+      return () => {
+        video.removeEventListener('error', handleError);
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('waiting', handleWaiting);
+        video.removeEventListener('playing', handlePlaying);
+        video.src = '';
+      };
+      
+    } else if (isHLS && Hls.isSupported()) {
+      // HLS.js playback (Android, Chrome, Firefox, etc.)
+      console.log('Using HLS.js playback');
+      
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
         // Buffer settings
-        maxBufferLength: 30,
-        maxMaxBufferLength: 600,
-        maxBufferSize: 60 * 1000 * 1000,
+        maxBufferLength: isMobile ? 20 : 30,
+        maxMaxBufferLength: isMobile ? 300 : 600,
+        maxBufferSize: isMobile ? 30 * 1000 * 1000 : 60 * 1000 * 1000,
         maxBufferHole: 0.5,
-        backBufferLength: 90,
+        backBufferLength: isMobile ? 30 : 90,
         // Mobile compatibility
         forceKeyFrameOnDiscontinuity: true,
         startFragPrefetch: true,
-        testBandwidth: false,
+        testBandwidth: !isMobile, // Disable on mobile for better performance
         // Force video to decode properly on mobile
         autoStartLoad: true,
         startPosition: -1,
@@ -249,9 +357,12 @@ export default function PlayerPage() {
         // Prevent audio-only issues
         capLevelToPlayerSize: false,
         // Better video quality selection
-        abrEwmaDefaultEstimate: 500000,
+        abrEwmaDefaultEstimate: isMobile ? 1000000 : 500000,
         abrBandWidthFactor: 0.95,
-        abrBandWidthUpFactor: 0.7
+        abrBandWidthUpFactor: 0.7,
+        // Mobile-specific optimizations
+        fragLoadingTimeOut: isMobile ? 10000 : 20000,
+        manifestLoadingTimeOut: isMobile ? 10000 : 20000
       });
 
       hlsRef.current = hls;
@@ -286,6 +397,9 @@ export default function PlayerPage() {
               if (level.videoCodec.toLowerCase().includes('hev') || 
                   level.videoCodec.toLowerCase().includes('h265')) {
                 console.warn('⚠️ H.265/HEVC codec detected - may not work on all devices');
+                if (isMobile) {
+                  setVideoError('H.265 codec detected - may not work on this device');
+                }
               }
             }
           });
@@ -293,15 +407,32 @@ export default function PlayerPage() {
           if (!hasVideoTrack) {
             console.error('❌ No video tracks found in stream - this is audio-only!');
             setVideoError('This stream appears to be audio-only or using an incompatible format.');
+            setVideoLoading(false);
+          } else {
+            // Clear any previous errors
+            setVideoError(null);
           }
         }
         
         // Auto-play once manifest is ready
-        video.play().catch(err => console.error('Play error:', err));
+        video.play()
+          .then(() => {
+            setVideoLoading(false);
+          })
+          .catch(err => {
+            console.warn('Play error (user interaction may be required):', err);
+            setVideoLoading(false);
+            // On mobile, autoplay is often blocked - this is normal
+          });
       });
 
+      hls.on(Hls.Events.FRAG_LOADED, () => {
+        setVideoLoading(false);
+      });
+      
       hls.on(Hls.Events.ERROR, (event, data) => {
         console.error('HLS Error:', data);
+        setVideoLoading(false);
         
         // Try to recover from errors
         if (data.fatal) {
@@ -342,9 +473,12 @@ export default function PlayerPage() {
       });
 
     } else {
-      // Native playback
+      // Non-HLS playback (MP4, WebM, etc.)
+      console.log('Using native video playback (non-HLS)');
       video.src = currentChannel.url;
-      video.play().catch(err => console.error('Play error:', err));
+      video.play().catch(err => {
+        console.warn('Play error:', err);
+      });
     }
 
     // Log watch history
@@ -895,6 +1029,14 @@ export default function PlayerPage() {
           <>
             {/* Video Player */}
             <div className="flex-1 relative group">
+              {videoLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+                  <div className="text-center">
+                    <Spinner size="xl" />
+                    <p className="text-white mt-4 text-sm">Loading stream...</p>
+                  </div>
+                </div>
+              )}
               <video
                 ref={videoRef}
                 className="w-full h-full object-contain bg-black"
@@ -905,7 +1047,12 @@ export default function PlayerPage() {
                 x-webkit-airplay="allow"
                 preload="auto"
                 muted={false}
-                style={{ minHeight: '200px' }}
+                style={{ 
+                  minHeight: '200px',
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain'
+                }}
               />
 
               {/* Custom Video Controls */}
