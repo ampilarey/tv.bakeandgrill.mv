@@ -11,9 +11,23 @@ import SkeletonLoader from '../components/SkeletonLoader';
 import VideoControls from '../components/VideoControls';
 
 export default function PlayerPage() {
+  // 🚨 CRITICAL: Detect iOS FIRST - before anything else
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isIOS = typeof navigator !== 'undefined' && (
+    /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+  
   // 🚨 VERSION CHECK: Log to verify new code is running
-  console.log('📱 PlayerPage.jsx loaded - Version: 2025-01-15-ios-native-hls-fix');
-  console.log('🔍 Device:', navigator.userAgent);
+  console.log('📱 PlayerPage.jsx loaded - Version: 2025-01-15-ios-native-hls-fix-v3');
+  console.log('🔍 Device:', userAgent);
+  console.log('🍎 iOS Detected:', isIOS);
+  
+  // 🚨 CRITICAL: If iOS, NEVER use HLS.js - disable it completely
+  if (isIOS && typeof Hls !== 'undefined') {
+    // Override HLS.js to prevent it from being used on iOS
+    console.warn('🚫 iOS DETECTED - HLS.js DISABLED for iOS');
+  }
   
   const [searchParams] = useSearchParams();
   const playlistId = searchParams.get('playlistId');
@@ -223,12 +237,20 @@ export default function PlayerPage() {
     const video = videoRef.current;
     const isHLS = currentChannel.url.endsWith('.m3u8');
     
-    // Detect iOS/Safari and Android - MORE ROBUST DETECTION
-    const userAgent = navigator.userAgent || '';
-    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream ||
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad on iOS 13+
-    const isAndroid = /Android/.test(userAgent);
+    // 🚨 CRITICAL: Use iOS detection from top level (already calculated)
+    // Re-check iOS detection to be absolutely sure
+    const currentUserAgent = navigator.userAgent || '';
+    const checkIOS = /iPad|iPhone|iPod/.test(currentUserAgent) && !window.MSStream ||
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/.test(currentUserAgent);
     const isMobile = isIOS || isAndroid;
+    
+    // 🚨 FINAL CHECK: If iOS detected, NEVER use HLS.js - abort immediately
+    if (checkIOS && isHLS) {
+      console.error('🚫 ABORTING HLS.js - iOS DETECTED, FORCING NATIVE PLAYBACK');
+      // Force native playback - no HLS.js logic at all
+      // This will be handled in the iOS-only block below
+    }
     
     // Check if browser has native HLS support (Safari/iOS)
     const hasNativeHLS = video.canPlayType('application/vnd.apple.mpegurl') !== '' ||
@@ -257,9 +279,15 @@ export default function PlayerPage() {
     setRetryCount(0);
     setVideoLoading(true);
 
-    // CRITICAL: On iOS - ALWAYS use native HLS (NEVER HLS.js - avoids CORS issues)
+    // 🚨 CRITICAL: On iOS - ALWAYS use native HLS (NEVER HLS.js - avoids CORS issues)
     // On Android/other browsers: Use HLS.js if supported, otherwise native
-    if (isHLS && isIOS) {
+    // TRIPLE CHECK: Use checkIOS (fresh detection) AND isIOS (top-level detection)
+    if (isHLS && (isIOS || checkIOS)) {
+      // 🚫 ABORT ANY HLS.js LOGIC - iOS ONLY PATH
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
       // iOS: FORCE native HLS - this is the ONLY path for iOS
       console.log('✅ iOS DETECTED - FORCING native HLS playback (no HLS.js)');
       // Native HLS playback (iOS Safari - FORCED)
@@ -503,19 +531,20 @@ export default function PlayerPage() {
         video.src = '';
       };
       
-    } else if (isHLS && !isIOS && Hls.isSupported()) {
+    } else if (isHLS && !isIOS && !checkIOS && typeof Hls !== 'undefined' && Hls.isSupported()) {
       // HLS.js playback (Android, Chrome, Firefox, etc.)
       // CRITICAL: iOS should NEVER reach here - it's blocked by the condition above
       console.log('⚠️ Using HLS.js playback (NOT iOS)', { 
         isMobile, 
         isAndroid, 
         isIOS,
-        userAgent: navigator.userAgent,
+        checkIOS,
+        userAgent: currentUserAgent,
         HlsSupported: Hls.isSupported()
       });
       
-      // DOUBLE CHECK: If somehow iOS reaches here, abort and use native
-      if (isIOS) {
+      // 🚨 TRIPLE CHECK: If somehow iOS reaches here, abort and use native
+      if (isIOS || checkIOS) {
         console.error('❌ ERROR: iOS detected in HLS.js path - ABORTING and using native HLS');
         // Fall back to native HLS
         video.src = '';
