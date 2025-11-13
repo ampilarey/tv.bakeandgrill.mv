@@ -241,11 +241,19 @@ export default function KioskModePage() {
 
     const video = videoRef.current;
     const isHLS = currentChannel.url.endsWith('.m3u8');
+    
+    // Detect iOS - always use native HLS on iOS to avoid CORS issues
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const hasNativeHLS = video.canPlayType('application/vnd.apple.mpegurl') !== '' ||
+                         video.canPlayType('application/x-mpegURL') !== '';
+    
     let retryCount = 0;
     const maxRetries = 3;
 
     const setupPlayer = () => {
-      if (isHLS && Hls.isSupported()) {
+      // On iOS: ALWAYS use native HLS (avoids CORS issues)
+      // On other platforms: Use HLS.js if supported, otherwise native
+      if (isHLS && Hls.isSupported() && !isIOS) {
         // Clean up existing instance
         if (hlsRef.current) {
           hlsRef.current.destroy();
@@ -292,7 +300,7 @@ export default function KioskModePage() {
         });
 
       } else {
-        // Native playback
+        // Native playback (iOS or non-HLS streams)
         video.src = currentChannel.url;
         video.muted = false;
         video.play().catch(err => {
