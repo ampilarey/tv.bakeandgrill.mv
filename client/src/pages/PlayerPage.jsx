@@ -11,6 +11,10 @@ import SkeletonLoader from '../components/SkeletonLoader';
 import VideoControls from '../components/VideoControls';
 
 export default function PlayerPage() {
+  // 🚨 VERSION CHECK: Log to verify new code is running
+  console.log('📱 PlayerPage.jsx loaded - Version: 2025-01-15-ios-native-hls-fix');
+  console.log('🔍 Device:', navigator.userAgent);
+  
   const [searchParams] = useSearchParams();
   const playlistId = searchParams.get('playlistId');
   

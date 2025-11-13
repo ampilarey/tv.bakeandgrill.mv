@@ -54,6 +54,8 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
+        // Disable cache for JS/CSS during development
+        cleanupOutdatedCaches: true,
         // Only precache critical assets, NOT JS/HTML to avoid stale cache issues
         globPatterns: ['**/*.{ico,png,svg,woff,woff2}'],
         // Exclude JS and HTML from precaching - they're handled by .htaccess
