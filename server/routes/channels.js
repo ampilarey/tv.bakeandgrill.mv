@@ -1,5 +1,5 @@
 const express = require('express');
-const axios = require('axios');
+const { fetch } = require('../utils/httpClient');
 const { getDatabase } = require('../database/init');
 const { verifyToken } = require('../middleware/auth');
 const { parseM3U, extractGroups, searchChannels, filterByGroup, sortChannels } = require('../utils/m3uParser');
@@ -42,8 +42,8 @@ router.get('/', asyncHandler(async (req, res) => {
   const playlist = playlists[0];
   
   try {
-    // Fetch M3U file
-    const response = await axios.get(playlist.m3u_url, {
+    // Fetch M3U file using lightweight HTTP client (no WebAssembly)
+    const response = await fetch(playlist.m3u_url, {
       timeout: 10000,
       headers: {
         'User-Agent': 'BakeGrillTV/1.0'

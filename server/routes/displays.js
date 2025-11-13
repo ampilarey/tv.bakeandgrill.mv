@@ -5,7 +5,7 @@ const { verifyToken, requireAdmin, verifyDisplayToken } = require('../middleware
 const { validateDisplayCreate } = require('../middleware/validation');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { checkPermission, checkResourceLimit } = require('../middleware/permissions');
-const axios = require('axios');
+const { fetch } = require('../utils/httpClient');
 const { parseM3U } = require('../utils/m3uParser');
 
 const router = express.Router();
@@ -17,8 +17,6 @@ const router = express.Router();
 router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
   const { token } = req.body;
   const db = getDatabase();
-  const axios = require('axios');
-  const { parseM3U } = require('../utils/m3uParser');
   
   const [displays] = await db.query('SELECT * FROM displays WHERE token = ? AND is_active = TRUE', [token]);
   
@@ -43,7 +41,7 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
     // Fetch and parse M3U for display (so display doesn't need JWT)
     if (playlist && playlist.m3u_url) {
       try {
-        const m3uResponse = await axios.get(playlist.m3u_url, {
+        const m3uResponse = await fetch(playlist.m3u_url, {
           timeout: 10000,
           headers: { 'User-Agent': 'BakeGrillTV/1.0' }
         });
