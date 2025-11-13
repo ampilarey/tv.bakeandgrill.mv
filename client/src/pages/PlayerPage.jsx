@@ -239,9 +239,9 @@ export default function PlayerPage() {
     setRetryCount(0);
     setVideoLoading(true);
 
-    // On iOS/Safari: Use native HLS (more reliable than HLS.js)
+    // On iOS/Safari: ALWAYS use native HLS (avoids CORS issues, more reliable)
     // On Android/other browsers: Use HLS.js if supported, otherwise native
-    if (isHLS && ((isIOS && hasNativeHLS) || (!Hls.isSupported() && hasNativeHLS))) {
+    if (isHLS && (isIOS || (!Hls.isSupported() && hasNativeHLS))) {
       // Native HLS playback (iOS Safari, or other browsers with native support)
       console.log('Using native HLS playback', { 
         isIOS, 
@@ -408,8 +408,9 @@ export default function PlayerPage() {
         video.src = '';
       };
       
-    } else if (isHLS && Hls.isSupported()) {
+    } else if (isHLS && Hls.isSupported() && !isIOS) {
       // HLS.js playback (Android, Chrome, Firefox, etc.)
+      // NOTE: iOS should NEVER use HLS.js - it has native HLS support and avoids CORS issues
       console.log('Using HLS.js playback', { isMobile, isAndroid, isIOS });
       
       const hls = new Hls({
