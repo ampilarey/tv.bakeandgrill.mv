@@ -4,6 +4,29 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: '/', // Ensure correct base path for production
+  // Optimize build for lower memory usage
+  build: {
+    // Reduce chunk size to avoid memory issues
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        // Manual chunks to split large dependencies
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'hls-vendor': ['hls.js']
+        }
+      }
+    },
+    // Use fewer workers to reduce memory usage
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false // Keep console for debugging
+      }
+    },
+    // Reduce sourcemap size
+    sourcemap: false
+  },
   plugins: [
     react(),
     VitePWA({
