@@ -707,10 +707,11 @@ export default function PlayerPage() {
           subtitles: data.subtitles?.length || 0
         });
         
-        // Check for video codec compatibility
+        // Check for video codec compatibility - but don't block if metadata is missing
         let hasVideoTrack = false;
+        let hasVideoMetadata = false;
         
-        if (data.levels) {
+        if (data.levels && data.levels.length > 0) {
           data.levels.forEach((level, i) => {
             console.log(`Level ${i}:`, {
               width: level.width,
@@ -720,33 +721,37 @@ export default function PlayerPage() {
               audioCodec: level.audioCodec
             });
             
-            // Check if this level has video
-            if (level.width > 0 && level.height > 0 && level.videoCodec) {
+            // Track if we have any metadata at all
+            if (level.width || level.height || level.videoCodec) {
+              hasVideoMetadata = true;
+            }
+            
+            // Check if this level has video (require width/height OR videoCodec)
+            if ((level.width > 0 && level.height > 0) || level.videoCodec) {
               hasVideoTrack = true;
               
-              // Warn about potentially unsupported codecs
-              if (level.videoCodec.toLowerCase().includes('hev') || 
-                  level.videoCodec.toLowerCase().includes('h265')) {
+              // Warn about potentially unsupported codecs (but don't block)
+              if (level.videoCodec && (level.videoCodec.toLowerCase().includes('hev') || 
+                  level.videoCodec.toLowerCase().includes('h265'))) {
                 console.warn('⚠️ H.265/HEVC codec detected - may not work on all devices');
-                if (isMobile) {
-                  clearPlaybackTimeout();
-                  setVideoError('H.265 codec detected - may not work on this device');
-                  setVideoLoading(false);
-                }
+                // Don't set error immediately - let it try to play first
               }
             }
           });
           
-          if (!hasVideoTrack) {
-            console.error('❌ No video tracks found in stream - this is audio-only!');
-            clearPlaybackTimeout();
-            setVideoError('This stream appears to be audio-only or using an incompatible format.');
-            setVideoLoading(false);
-          } else {
-            // Clear any previous errors
-            setVideoError(null);
+          // Only warn if we have metadata and no video tracks found
+          // If no metadata, assume video exists and let playback attempt
+          if (hasVideoMetadata && !hasVideoTrack) {
+            console.warn('⚠️ No video tracks found in manifest metadata - may be audio-only');
+            // Don't set error immediately - let playback attempt first
           }
+        } else {
+          console.warn('⚠️ No levels found in manifest - stream may be incompatible');
+          // Don't block - let it try to play
         }
+        
+        // Clear previous errors when manifest is parsed successfully
+        setVideoError(null);
         
         // Auto-play once manifest is ready
         video.play()
@@ -754,12 +759,32 @@ export default function PlayerPage() {
             hasStartedPlaying = true;
             clearPlaybackTimeout();
             setVideoLoading(false);
+            // Clear error if playback starts successfully
+            setVideoError(null);
           })
           .catch(err => {
             console.warn('Play error (user interaction may be required):', err);
             setVideoLoading(false);
             // On mobile, autoplay is often blocked - this is normal
             // Don't clear timeout - user may need to interact
+            // Only set error if it's not an autoplay policy error
+            if (!err.message.includes('play() request') && !err.name.includes('NotAllowedError')) {
+              // Check if video has dimensions after metadata loads
+              const checkVideoDimensions = () => {
+                setTimeout(() => {
+                  if (video.videoWidth === 0 && video.videoHeight === 0) {
+                    // Double-check by looking at actual video element state
+                    if (video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+                      console.warn('⚠️ Video has no dimensions after metadata loaded - may be audio-only');
+                      if (hasVideoMetadata && !hasVideoTrack) {
+                        setVideoError('This stream appears to be audio-only or using an incompatible format.');
+                      }
+                    }
+                  }
+                }, 3000); // Wait 3 seconds for metadata to load
+              };
+              checkVideoDimensions();
+            }
           });
       });
       
