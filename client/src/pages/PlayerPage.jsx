@@ -538,15 +538,45 @@ export default function PlayerPage() {
         
         // Double-check video dimensions when playing starts
         if (video.videoWidth === 0 && video.videoHeight === 0) {
-          console.error('❌ iOS: Video is playing but has no dimensions - audio-only stream');
-          // Check again after a moment (stream might still be loading video track)
-          setTimeout(() => {
-            if (video.videoWidth === 0 && video.videoHeight === 0 && video.readyState >= 2) {
-              console.error('❌ iOS: Confirmed - video has no dimensions after playing');
-              setVideoError('This stream appears to be audio-only. No video is available. The video codec may not be supported by your device.');
-              setVideoLoading(false);
+          console.error('❌ iOS: Video is playing but has no dimensions - checking if audio-only...');
+          
+          // For HLS live streams, dimensions might not be available immediately
+          // Check multiple times with increasing delays
+          const checkVideoDimensions = (attempt = 1, maxAttempts = 5) => {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+              console.log('✅ iOS: Video dimensions appeared after', attempt, 'checks:', {
+                width: video.videoWidth,
+                height: video.videoHeight
+              });
+              setVideoError(null);
+              return;
             }
-          }, 3000); // Wait 3 seconds for video track to appear
+            
+            if (attempt < maxAttempts) {
+              setTimeout(() => {
+                checkVideoDimensions(attempt + 1, maxAttempts);
+              }, 2000); // Check every 2 seconds
+            } else {
+              // After 10 seconds (5 attempts * 2 seconds), confirm it's audio-only
+              if (video.videoWidth === 0 && video.videoHeight === 0 && video.readyState >= 2) {
+                console.error('❌ iOS: Confirmed after', maxAttempts, 'checks - no video dimensions');
+                console.error('Video state:', {
+                  videoWidth: video.videoWidth,
+                  videoHeight: video.videoHeight,
+                  readyState: video.readyState,
+                  duration: video.duration,
+                  src: video.currentSrc,
+                  paused: video.paused,
+                  muted: video.muted
+                });
+                setVideoError('This stream appears to be audio-only or uses an unsupported video codec. No video is available on your device.');
+                setVideoLoading(false);
+              }
+            }
+          };
+          
+          // Start checking dimensions
+          checkVideoDimensions();
         } else {
           console.log('✅ iOS: Video track confirmed:', {
             width: video.videoWidth,
