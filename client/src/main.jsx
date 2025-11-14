@@ -5,8 +5,8 @@ import App from './App.jsx';
 import './index.css';
 
 // 🚨 CRITICAL: Force service worker update and cache clear - RUN IMMEDIATELY
-// Version: 2025-01-15-ios-native-hls-fix-v2
-const APP_VERSION = '2025-01-15-ios-native-hls-fix-v2';
+// Version: 2025-11-15-cache-bust-v1
+const APP_VERSION = '2025-11-15-cache-bust-v1';
 
 // Store version for debugging IMMEDIATELY
 if (typeof window !== 'undefined') {

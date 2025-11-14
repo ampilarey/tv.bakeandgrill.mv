@@ -1,0 +1,12 @@
+# On your server, run these commands:
+
+cd ~/tv.bakeandgrill.mv/server
+
+# Kill existing server process
+kill $(ps aux | grep "[n]ode.*server.js" | awk '{print $2}') 2>/dev/null
+
+# Wait a moment
+sleep 2
+
+# Restart with latest code
+NODE_ENV=production npm start &
