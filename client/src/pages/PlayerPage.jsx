@@ -356,19 +356,28 @@ export default function PlayerPage() {
       video.autoplay = true;
       
       // Set new source - iOS native HLS handles redirects and CORS automatically
-      video.src = currentChannel.url;
+      // CRITICAL: Use removeAttribute and setAttribute for better iOS compatibility
+      video.removeAttribute('src');
+      video.load();
       
-      console.log('📱 iOS Native HLS Setup:', {
-        src: video.src,
-        currentSrc: video.currentSrc,
-        controls: video.controls,
-        playsInline: video.playsInline,
-        webkitPlaysInline: video.webkitPlaysInline,
-        preload: video.preload,
-        autoplay: video.autoplay,
-        readyState: video.readyState,
-        networkState: video.networkState
-      });
+      // Small delay to ensure previous source is cleared
+      setTimeout(() => {
+        video.src = currentChannel.url;
+        video.load(); // Force reload with new source
+        
+        console.log('📱 iOS Native HLS Setup:', {
+          src: video.src,
+          currentSrc: video.currentSrc,
+          controls: video.controls,
+          playsInline: video.playsInline,
+          webkitPlaysInline: video.webkitPlaysInline,
+          preload: video.preload,
+          autoplay: video.autoplay,
+          readyState: video.readyState,
+          networkState: video.networkState,
+          url: currentChannel.url
+        });
+      }, 100);
       
       // 🚨 CRITICAL: Start timeout guard immediately
       startPlaybackTimeout();
@@ -497,7 +506,24 @@ export default function PlayerPage() {
       };
       
       iosDataHandler = () => {
-        console.log('✅ iOS Video data loaded - readyState:', video.readyState);
+        console.log('✅ iOS Video data loaded - readyState:', video.readyState, {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          duration: video.duration,
+          networkState: video.networkState,
+          src: video.currentSrc
+        });
+        
+        // Check dimensions when data loads
+        if (video.videoWidth === 0 && video.videoHeight === 0 && video.readyState >= 2) {
+          // Give it a moment more for live streams
+          if (video.duration === Infinity) {
+            console.warn('⚠️ iOS: Live stream - checking dimensions again...');
+          } else {
+            console.error('❌ iOS: No video dimensions at loadeddata - likely audio-only');
+            // Set error but don't block - let metadata handler deal with it
+          }
+        }
       };
       
       // Track when video actually starts playing
