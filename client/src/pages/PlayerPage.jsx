@@ -421,7 +421,35 @@ export default function PlayerPage() {
       
       // Wait for video to be ready before trying to play
       iosCanPlayHandler = () => {
-        console.log('✅ iOS Video can play - readyState:', video.readyState);
+        console.log('✅ iOS Video can play - readyState:', video.readyState, {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          duration: video.duration,
+          src: video.currentSrc
+        });
+        
+        // Check video dimensions before attempting to play
+        // For live streams (duration = Infinity), video dimensions might not be available yet
+        if (video.videoWidth === 0 && video.videoHeight === 0) {
+          if (video.duration === Infinity) {
+            // Live stream - might still be loading video track
+            console.warn('⚠️ iOS: Live stream - video dimensions not yet available, will check when playing');
+          } else {
+            // Not a live stream but no dimensions - likely audio-only
+            console.error('❌ iOS: No video dimensions at canplay - audio-only stream');
+            setVideoError('This stream is audio-only. No video is available.');
+            setVideoLoading(false);
+            clearPlaybackTimeout();
+            video.controls = true; // Show controls so user can listen to audio
+            // Don't return - let it try to play audio anyway
+          }
+        } else {
+          console.log('✅ iOS: Video dimensions confirmed at canplay:', {
+            width: video.videoWidth,
+            height: video.videoHeight
+          });
+        }
+        
         setVideoLoading(false);
         
         // Try to play - iOS requires user interaction, but we'll try anyway
