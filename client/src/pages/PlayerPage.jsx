@@ -1589,6 +1589,8 @@ export default function PlayerPage() {
                 x-webkit-airplay="allow"
                 preload="auto"
                 muted={false}
+                src={currentChannel?.url || ''}
+                key={currentChannel?.id || 'no-channel'}
                 style={{ 
                   minHeight: '200px',
                   width: '100%',
