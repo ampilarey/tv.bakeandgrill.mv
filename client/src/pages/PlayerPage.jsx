@@ -987,6 +987,13 @@ export default function PlayerPage() {
     return () => {
       clearPlaybackTimeout();
       clearTimeout(timer);
+      // Remove event listeners (if they exist)
+      if (video && typeof handlePlaying === 'function') {
+        video.removeEventListener('playing', handlePlaying);
+      }
+      if (video && typeof handleMetadata === 'function') {
+        video.removeEventListener('loadedmetadata', handleMetadata);
+      }
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
