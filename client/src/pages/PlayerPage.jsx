@@ -474,7 +474,34 @@ export default function PlayerPage() {
       
       // Track when video actually starts playing
       iosPlayingHandler = () => {
-        console.log('✅ iOS Video playing event fired');
+        console.log('✅ iOS Video playing event fired', {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          paused: video.paused,
+          muted: video.muted,
+          readyState: video.readyState
+        });
+        
+        // Double-check video dimensions when playing starts
+        if (video.videoWidth === 0 && video.videoHeight === 0) {
+          console.error('❌ iOS: Video is playing but has no dimensions - audio-only stream');
+          // Check again after a moment (stream might still be loading video track)
+          setTimeout(() => {
+            if (video.videoWidth === 0 && video.videoHeight === 0 && video.readyState >= 2) {
+              console.error('❌ iOS: Confirmed - video has no dimensions after playing');
+              setVideoError('This stream appears to be audio-only. No video is available. The video codec may not be supported by your device.');
+              setVideoLoading(false);
+            }
+          }, 3000); // Wait 3 seconds for video track to appear
+        } else {
+          console.log('✅ iOS: Video track confirmed:', {
+            width: video.videoWidth,
+            height: video.videoHeight
+          });
+          // Clear any previous audio-only errors
+          setVideoError(null);
+        }
+        
         hasStartedPlaying = true;
         clearPlaybackTimeout();
         setVideoLoading(false);
