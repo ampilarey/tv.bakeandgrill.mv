@@ -6,26 +6,31 @@ export default defineConfig({
   base: '/', // Ensure correct base path for production
   // Optimize build for lower memory usage
   build: {
+    outDir: 'dist',
     // Reduce chunk size to avoid memory issues
     chunkSizeWarningLimit: 1000,
+    // Disable sourcemaps to save memory
+    sourcemap: false,
     rollupOptions: {
       output: {
-        // Manual chunks to split large dependencies
+        // Add timestamp to filenames for cache busting
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+        // Manual chunks to split large dependencies and reduce memory usage
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'hls-vendor': ['hls.js']
         }
       }
     },
-    // Use fewer workers to reduce memory usage
+    // Use terser for better memory efficiency
     minify: 'terser',
     terserOptions: {
       compress: {
         drop_console: false // Keep console for debugging
       }
-    },
-    // Reduce sourcemap size
-    sourcemap: false
+    }
   },
   plugins: [
     react(),
@@ -173,22 +178,6 @@ export default defineConfig({
       '/uploads': {
         target: 'http://localhost:4000',
         changeOrigin: true
-      }
-    }
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: false,
-    rollupOptions: {
-      output: {
-        // Add timestamp to filenames for cache busting
-        entryFileNames: 'assets/[name]-[hash].js',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]',
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'hls': ['hls.js']
-        }
       }
     }
   }
