@@ -770,13 +770,16 @@ export default function PlayerPage() {
             // Only set error if it's not an autoplay policy error
             if (!err.message.includes('play() request') && !err.name.includes('NotAllowedError')) {
               // Check if video has dimensions after metadata loads
+              // Capture values from outer scope
+              const metadataCheck = hasVideoMetadata;
+              const trackCheck = hasVideoTrack;
               const checkVideoDimensions = () => {
                 setTimeout(() => {
                   if (video.videoWidth === 0 && video.videoHeight === 0) {
                     // Double-check by looking at actual video element state
                     if (video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
                       console.warn('⚠️ Video has no dimensions after metadata loaded - may be audio-only');
-                      if (hasVideoMetadata && !hasVideoTrack) {
+                      if (metadataCheck && !trackCheck) {
                         setVideoError('This stream appears to be audio-only or using an incompatible format.');
                       }
                     }
@@ -789,11 +792,23 @@ export default function PlayerPage() {
       });
       
       // Track when HLS.js actually starts playing
-      video.addEventListener('playing', () => {
+      const handlePlaying = () => {
         hasStartedPlaying = true;
         clearPlaybackTimeout();
         setVideoLoading(false);
-      });
+        // Clear error when video actually plays
+        setVideoError(null);
+      };
+      video.addEventListener('playing', handlePlaying);
+      
+      // Check video dimensions when metadata loads (to detect audio-only streams)
+      const handleMetadata = () => {
+        if (video.readyState >= 2 && video.videoWidth === 0 && video.videoHeight === 0) {
+          console.warn('⚠️ Video metadata loaded but no dimensions - may be audio-only');
+          // Don't show error immediately - let it try to play first
+        }
+      };
+      video.addEventListener('loadedmetadata', handleMetadata);
 
       hls.on(Hls.Events.FRAG_LOADED, () => {
         console.log('HLS fragment loaded');
