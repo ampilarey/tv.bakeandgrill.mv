@@ -142,10 +142,53 @@ if (process.env.NODE_ENV === 'production') {
   
   console.log(`📦 Serving static frontend from: ${clientDistPath}`);
   
-  app.use(express.static(clientDistPath));
+  // Add cache-busting headers for service worker and HTML files
+  app.use('/sw.js', (req, res, next) => {
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    next();
+  });
+  
+  app.use('/registerSW.js', (req, res, next) => {
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    next();
+  });
+  
+  app.use(express.static(clientDistPath, {
+    setHeaders: (res, filePath) => {
+      // Don't cache HTML files - always fetch fresh
+      if (filePath.endsWith('.html') || filePath.endsWith('/index.html')) {
+        res.set({
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        });
+      }
+      // Service worker files should never be cached
+      if (filePath.endsWith('sw.js') || filePath.endsWith('registerSW.js')) {
+        res.set({
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        });
+      }
+    }
+  }));
   
   // SPA fallback - serve index.html for all non-API routes
   app.get('*', (req, res) => {
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 } else {
