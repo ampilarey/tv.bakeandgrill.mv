@@ -179,6 +179,14 @@ if (process.env.NODE_ENV === 'production') {
           'Expires': '0'
         });
       }
+      // JS and CSS files - never cache to ensure fresh updates
+      if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+        res.set({
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        });
+      }
     }
   }));
   
