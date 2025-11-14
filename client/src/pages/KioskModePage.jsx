@@ -262,6 +262,47 @@ export default function KioskModePage() {
     let retryCount = 0;
     const maxRetries = 3;
     let errorHandler = null;
+    
+    // 🚨 CRITICAL: Timeout guard to prevent infinite loading in kiosk mode
+    let playbackStartTimeout = null;
+    let hasStartedPlaying = false;
+    let timeoutCleared = false;
+    
+    const clearPlaybackTimeout = () => {
+      if (playbackStartTimeout && !timeoutCleared) {
+        clearTimeout(playbackStartTimeout);
+        timeoutCleared = true;
+      }
+    };
+    
+    const startPlaybackTimeout = () => {
+      clearPlaybackTimeout();
+      playbackStartTimeout = setTimeout(() => {
+        if (!hasStartedPlaying && video.readyState < 3) {
+          console.error('⏱️ KIOSK TIMEOUT: Video did not start playing within 15 seconds');
+          console.error('Video state:', {
+            readyState: video.readyState,
+            networkState: video.networkState,
+            paused: video.paused,
+            currentTime: video.currentTime
+          });
+          // In kiosk mode, we should retry automatically
+          if (retryCount < maxRetries) {
+            console.log('🔄 Kiosk: Retrying due to timeout...');
+            retryCount++;
+            setTimeout(() => {
+              video.src = '';
+              video.load();
+              video.src = currentChannel.url;
+              video.play().catch(() => {
+                video.muted = true;
+                video.play();
+              });
+            }, 2000);
+          }
+        }
+      }, 15000); // 15 second timeout for kiosk mode (longer since it's unattended)
+    };
 
     const setupPlayer = () => {
       // CRITICAL: On iOS - ALWAYS use native HLS (NEVER HLS.js - avoids CORS issues)
@@ -291,21 +332,48 @@ export default function KioskModePage() {
           playsInline: video.playsInline,
           readyState: video.readyState
         });
-        video.play().catch(err => {
+        
+        // Start timeout guard
+        startPlaybackTimeout();
+        
+        // Track playing event
+        const handlePlaying = () => {
+          hasStartedPlaying = true;
+          clearPlaybackTimeout();
+        };
+        video.addEventListener('playing', handlePlaying);
+        
+        video.play().then(() => {
+          hasStartedPlaying = true;
+          clearPlaybackTimeout();
+        }).catch(err => {
           console.log('Auto-play with sound blocked, trying muted...');
           video.muted = true;
           setIsMuted(true);
-          video.play().catch(e => console.error('Muted play error:', e));
+          video.play().then(() => {
+            hasStartedPlaying = true;
+            clearPlaybackTimeout();
+          }).catch(e => console.error('Muted play error:', e));
         });
 
         // Auto-retry on error
         errorHandler = () => {
+          clearPlaybackTimeout(); // Clear timeout on error
           if (retryCount < maxRetries) {
             console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
             retryCount++;
             setTimeout(() => {
               video.load();
-              video.play();
+              video.play().then(() => {
+                hasStartedPlaying = true;
+              }).catch(() => {
+                video.muted = true;
+                video.play().then(() => {
+                  hasStartedPlaying = true;
+                });
+              });
+              // Restart timeout after retry
+              startPlaybackTimeout();
             }, 5000);
           }
         };
@@ -341,28 +409,44 @@ export default function KioskModePage() {
         hls.loadSource(currentChannel.url);
         hls.attachMedia(video);
 
+        // Start timeout guard for HLS.js path
+        startPlaybackTimeout();
+        
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           // Try playing with sound first
           video.muted = false;
-          video.play().catch(err => {
+          video.play().then(() => {
+            hasStartedPlaying = true;
+            clearPlaybackTimeout();
+          }).catch(err => {
             console.log('Auto-play with sound blocked, trying muted...');
             // If blocked, play muted (browsers require muted for auto-play)
             video.muted = true;
             setIsMuted(true);
-            video.play().catch(e => console.error('Muted play error:', e));
+            video.play().then(() => {
+              hasStartedPlaying = true;
+              clearPlaybackTimeout();
+            }).catch(e => console.error('Muted play error:', e));
           });
+        });
+        
+        // Track playing event
+        video.addEventListener('playing', () => {
+          hasStartedPlaying = true;
+          clearPlaybackTimeout();
         });
 
         hls.on(Hls.Events.ERROR, (event, data) => {
           console.error('HLS Error:', data);
           
           if (data.fatal) {
+            clearPlaybackTimeout(); // Clear timeout on fatal error
             if (retryCount < maxRetries) {
               console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
               retryCount++;
               setTimeout(() => {
                 hls.destroy();
-                setupPlayer();
+                setupPlayer(); // This will restart the timeout
               }, 5000);
             } else {
               console.error('Max retries reached');
@@ -373,26 +457,54 @@ export default function KioskModePage() {
       } else if (isHLS && !isIOS && !Hls.isSupported() && hasNativeHLS) {
         // HLS stream on non-iOS device without HLS.js support but with native HLS
         console.log('📺 Kiosk Using native HLS playback (non-iOS, no HLS.js support)');
+        
+        // Start timeout guard
+        startPlaybackTimeout();
+        
         video.src = '';
         video.load();
         video.controls = true;
+        video.playsInline = true;
         video.muted = false;
         video.src = currentChannel.url;
-        video.play().catch(err => {
+        
+        const handleNativePlaying = () => {
+          hasStartedPlaying = true;
+          clearPlaybackTimeout();
+        };
+        video.addEventListener('playing', handleNativePlaying);
+        
+        video.play().then(() => {
+          hasStartedPlaying = true;
+          clearPlaybackTimeout();
+        }).catch(err => {
           console.log('Auto-play with sound blocked, trying muted...');
           video.muted = true;
           setIsMuted(true);
-          video.play().catch(e => console.error('Muted play error:', e));
+          video.play().then(() => {
+            hasStartedPlaying = true;
+            clearPlaybackTimeout();
+          }).catch(e => console.error('Muted play error:', e));
         });
 
         // Auto-retry on error
         errorHandler = () => {
+          clearPlaybackTimeout(); // Clear timeout on error
           if (retryCount < maxRetries) {
             console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
             retryCount++;
             setTimeout(() => {
               video.load();
-              video.play();
+              video.play().then(() => {
+                hasStartedPlaying = true;
+              }).catch(() => {
+                video.muted = true;
+                video.play().then(() => {
+                  hasStartedPlaying = true;
+                });
+              });
+              // Restart timeout after retry
+              startPlaybackTimeout();
             }, 5000);
           }
         };
@@ -401,23 +513,51 @@ export default function KioskModePage() {
       } else {
         // Native playback (non-HLS streams)
         console.log('🎬 Kiosk Using native video playback (non-HLS)');
+        
+        // Start timeout guard
+        startPlaybackTimeout();
+        
         video.src = currentChannel.url;
+        video.playsInline = true;
         video.muted = false;
-        video.play().catch(err => {
+        
+        const handleNativePlaying = () => {
+          hasStartedPlaying = true;
+          clearPlaybackTimeout();
+        };
+        video.addEventListener('playing', handleNativePlaying);
+        
+        video.play().then(() => {
+          hasStartedPlaying = true;
+          clearPlaybackTimeout();
+        }).catch(err => {
           console.log('Auto-play with sound blocked, trying muted...');
           video.muted = true;
           setIsMuted(true);
-          video.play().catch(e => console.error('Muted play error:', e));
+          video.play().then(() => {
+            hasStartedPlaying = true;
+            clearPlaybackTimeout();
+          }).catch(e => console.error('Muted play error:', e));
         });
 
         // Auto-retry on error
         errorHandler = () => {
+          clearPlaybackTimeout(); // Clear timeout on error
           if (retryCount < maxRetries) {
             console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
             retryCount++;
             setTimeout(() => {
               video.load();
-              video.play();
+              video.play().then(() => {
+                hasStartedPlaying = true;
+              }).catch(() => {
+                video.muted = true;
+                video.play().then(() => {
+                  hasStartedPlaying = true;
+                });
+              });
+              // Restart timeout after retry
+              startPlaybackTimeout();
             }, 5000);
           }
         };
@@ -428,6 +568,7 @@ export default function KioskModePage() {
     setupPlayer();
 
     return () => {
+      clearPlaybackTimeout(); // Clear timeout on cleanup
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -435,6 +576,9 @@ export default function KioskModePage() {
       if (errorHandler && video) {
         video.removeEventListener('error', errorHandler);
       }
+      // Remove playing event listener
+      const handlePlayingCleanup = () => {}; // Dummy function for cleanup
+      video.removeEventListener('playing', handlePlayingCleanup);
     };
   }, [currentChannel]);
 

@@ -279,6 +279,47 @@ export default function PlayerPage() {
     setVideoError(null);
     setRetryCount(0);
     setVideoLoading(true);
+    
+    // 🚨 CRITICAL: Timeout guard to prevent infinite loading
+    // If video doesn't start playing within 12 seconds, show error
+    let playbackStartTimeout = null;
+    let hasStartedPlaying = false;
+    let timeoutCleared = false;
+    
+    const clearPlaybackTimeout = () => {
+      if (playbackStartTimeout && !timeoutCleared) {
+        clearTimeout(playbackStartTimeout);
+        timeoutCleared = true;
+      }
+    };
+    
+    const startPlaybackTimeout = () => {
+      clearPlaybackTimeout();
+      playbackStartTimeout = setTimeout(() => {
+        if (!hasStartedPlaying && video.readyState < 3) {
+          console.error('⏱️ TIMEOUT: Video did not start playing within 12 seconds');
+          console.error('Video state:', {
+            readyState: video.readyState,
+            networkState: video.networkState,
+            paused: video.paused,
+            ended: video.ended,
+            currentTime: video.currentTime,
+            src: video.src,
+            currentSrc: video.currentSrc,
+            error: video.error
+          });
+          
+          setVideoLoading(false);
+          setVideoError(
+            'This stream is not responding on your device. The channel may be offline or experiencing issues. ' +
+            'Please try another channel or tap the play button to retry.'
+          );
+          
+          // Ensure controls are visible for manual retry
+          video.controls = true;
+        }
+      }, 12000); // 12 second timeout
+    };
 
     // 🚨 CRITICAL: On iOS - ALWAYS use native HLS (NEVER HLS.js - avoids CORS issues)
     // On Android/other browsers: Use HLS.js if supported, otherwise native
@@ -329,10 +370,54 @@ export default function PlayerPage() {
         networkState: video.networkState
       });
       
+      // 🚨 CRITICAL: Start timeout guard immediately
+      startPlaybackTimeout();
+      
+      // Enhanced play function with fallback
+      const tryPlayWithFallback = async () => {
+        try {
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            await playPromise;
+            console.log('✅ iOS Video playing successfully');
+            hasStartedPlaying = true;
+            clearPlaybackTimeout();
+            setVideoLoading(false);
+          }
+        } catch (err) {
+          console.log('⏳ iOS Autoplay blocked, trying muted fallback:', err.message);
+          
+          // Try muted playback as fallback (iOS may allow this)
+          try {
+            video.muted = true;
+            const mutedPromise = video.play();
+            if (mutedPromise !== undefined) {
+              await mutedPromise;
+              console.log('✅ iOS Video playing muted');
+              hasStartedPlaying = true;
+              clearPlaybackTimeout();
+              setVideoLoading(false);
+              
+              // Show message that user can unmute
+              setTimeout(() => {
+                video.controls = true; // Ensure controls visible
+              }, 500);
+            }
+          } catch (mutedErr) {
+            console.log('⚠️ iOS Autoplay blocked even when muted - user interaction required');
+            clearPlaybackTimeout(); // Clear timeout since we know it needs user interaction
+            setVideoLoading(false);
+            video.controls = true; // Ensure controls visible for manual play
+            // Don't set error - this is normal behavior for iOS
+          }
+        }
+      };
+      
       // iOS-specific event handlers (will be added alongside general handlers)
       let iosCanPlayHandler = null;
       let iosMetadataHandler = null;
       let iosDataHandler = null;
+      let iosPlayingHandler = null;
       
       // Wait for video to be ready before trying to play
       iosCanPlayHandler = () => {
@@ -340,18 +425,7 @@ export default function PlayerPage() {
         setVideoLoading(false);
         
         // Try to play - iOS requires user interaction, but we'll try anyway
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              console.log('✅ iOS Video playing successfully');
-            })
-            .catch(err => {
-              console.warn('⚠️ iOS Autoplay blocked (this is normal) - user must tap play:', err.message);
-              // Ensure controls are visible so user can manually play
-              video.controls = true;
-            });
-        }
+        tryPlayWithFallback();
       };
       
       iosMetadataHandler = () => {
@@ -361,29 +435,32 @@ export default function PlayerPage() {
           duration: video.duration,
           readyState: video.readyState
         });
+        
+        // Check if we have valid video dimensions (not just audio)
+        if (video.videoWidth === 0 && video.videoHeight === 0 && video.duration === Infinity) {
+          console.warn('⚠️ iOS: Stream may be live/HLS - waiting for canplay...');
+        }
       };
       
       iosDataHandler = () => {
         console.log('✅ iOS Video data loaded - readyState:', video.readyState);
       };
       
+      // Track when video actually starts playing
+      iosPlayingHandler = () => {
+        console.log('✅ iOS Video playing event fired');
+        hasStartedPlaying = true;
+        clearPlaybackTimeout();
+        setVideoLoading(false);
+      };
+      
       video.addEventListener('canplay', iosCanPlayHandler);
       video.addEventListener('loadedmetadata', iosMetadataHandler);
       video.addEventListener('loadeddata', iosDataHandler);
+      video.addEventListener('playing', iosPlayingHandler);
       
-      // Also try immediate play (might work on some iOS versions)
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log('✅ iOS Video playing immediately');
-            setVideoLoading(false);
-          })
-          .catch(err => {
-            console.log('⏳ iOS Autoplay blocked, waiting for canplay event:', err.message);
-            // Will be handled by canplay event listener
-          });
-      }
+      // Also try immediate play (might work on some iOS versions/situations)
+      tryPlayWithFallback();
       
       // Handle video errors
       const handleError = (e) => {
@@ -397,6 +474,9 @@ export default function PlayerPage() {
           videoWidth: video.videoWidth,
           videoHeight: video.videoHeight
         });
+        
+        // Clear timeout on error - we know what happened
+        clearPlaybackTimeout();
         
         if (video.error) {
           const errorCode = video.error.code;
@@ -459,8 +539,12 @@ export default function PlayerPage() {
         setVideoLoading(false);
         // Try to play again if not already playing
         if (video.paused && !video.ended) {
-          video.play().catch(err => {
+          video.play().then(() => {
+            hasStartedPlaying = true;
+            clearPlaybackTimeout();
+          }).catch(err => {
             console.log('Auto-play still blocked, waiting for user interaction:', err.message);
+            // Don't clear timeout - user may need to interact
           });
         }
       };
@@ -477,6 +561,8 @@ export default function PlayerPage() {
       
       const handlePlaying = () => {
         console.log('Video playing');
+        hasStartedPlaying = true;
+        clearPlaybackTimeout();
         setVideoLoading(false);
       };
       
@@ -513,6 +599,9 @@ export default function PlayerPage() {
       video.addEventListener('tap', handleVideoClick);
       
       return () => {
+        // Clear timeout on cleanup
+        clearPlaybackTimeout();
+        
         video.removeEventListener('loadstart', handleLoadStart);
         video.removeEventListener('error', handleError);
         video.removeEventListener('loadedmetadata', handleLoadedMetadata);
@@ -529,6 +618,7 @@ export default function PlayerPage() {
         if (iosCanPlayHandler) video.removeEventListener('canplay', iosCanPlayHandler);
         if (iosMetadataHandler) video.removeEventListener('loadedmetadata', iosMetadataHandler);
         if (iosDataHandler) video.removeEventListener('loadeddata', iosDataHandler);
+        if (iosPlayingHandler) video.removeEventListener('playing', iosPlayingHandler);
         video.src = '';
       };
       
@@ -558,6 +648,9 @@ export default function PlayerPage() {
         });
         return;
       }
+      
+      // 🚨 CRITICAL: Start timeout guard for HLS.js path
+      startPlaybackTimeout();
       
       const hls = new Hls({
         enableWorker: !isMobile, // Disable worker on mobile to reduce memory usage
@@ -601,6 +694,7 @@ export default function PlayerPage() {
         console.log('HLS source loaded and attached');
       } catch (error) {
         console.error('Error loading HLS source:', error);
+        clearPlaybackTimeout();
         setVideoError('Failed to load video stream. Please try again.');
         setVideoLoading(false);
         return;
@@ -635,7 +729,9 @@ export default function PlayerPage() {
                   level.videoCodec.toLowerCase().includes('h265')) {
                 console.warn('⚠️ H.265/HEVC codec detected - may not work on all devices');
                 if (isMobile) {
+                  clearPlaybackTimeout();
                   setVideoError('H.265 codec detected - may not work on this device');
+                  setVideoLoading(false);
                 }
               }
             }
@@ -643,6 +739,7 @@ export default function PlayerPage() {
           
           if (!hasVideoTrack) {
             console.error('❌ No video tracks found in stream - this is audio-only!');
+            clearPlaybackTimeout();
             setVideoError('This stream appears to be audio-only or using an incompatible format.');
             setVideoLoading(false);
           } else {
@@ -654,13 +751,23 @@ export default function PlayerPage() {
         // Auto-play once manifest is ready
         video.play()
           .then(() => {
+            hasStartedPlaying = true;
+            clearPlaybackTimeout();
             setVideoLoading(false);
           })
           .catch(err => {
             console.warn('Play error (user interaction may be required):', err);
             setVideoLoading(false);
             // On mobile, autoplay is often blocked - this is normal
+            // Don't clear timeout - user may need to interact
           });
+      });
+      
+      // Track when HLS.js actually starts playing
+      video.addEventListener('playing', () => {
+        hasStartedPlaying = true;
+        clearPlaybackTimeout();
+        setVideoLoading(false);
       });
 
       hls.on(Hls.Events.FRAG_LOADED, () => {
@@ -687,6 +794,8 @@ export default function PlayerPage() {
         
         // Try to recover from errors
         if (data.fatal) {
+          clearPlaybackTimeout(); // Clear timeout on fatal errors
+          
           switch(data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               console.log('Network error, trying to recover...');
@@ -696,6 +805,8 @@ export default function PlayerPage() {
                 setTimeout(() => {
                   hls.startLoad();
                   setVideoError(null);
+                  // Restart timeout after retry
+                  startPlaybackTimeout();
                 }, 1000);
               } else {
                 setVideoError('Network error. Unable to load stream after 3 attempts.');
@@ -709,6 +820,8 @@ export default function PlayerPage() {
                 setTimeout(() => {
                   hls.recoverMediaError();
                   setVideoError(null);
+                  // Restart timeout after retry
+                  startPlaybackTimeout();
                 }, 1000);
               } else {
                 setVideoError('Media error. This stream may not be compatible.');
@@ -722,31 +835,99 @@ export default function PlayerPage() {
           }
         }
       });
+      
+      // Cleanup function for HLS.js path
+      return () => {
+        clearPlaybackTimeout();
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+      };
 
     } else if (isHLS && !isIOS && !Hls.isSupported() && hasNativeHLS) {
       // HLS stream on non-iOS device without HLS.js support but with native HLS
       console.log('📺 Using native HLS playback (non-iOS, no HLS.js support)');
+      
+      // Start timeout guard
+      startPlaybackTimeout();
+      
       video.src = '';
       video.load();
       video.controls = true;
+      video.playsInline = true;
       video.src = currentChannel.url;
-      video.play().catch(err => {
-        console.warn('Autoplay failed:', err);
+      
+      const handleNativePlaying = () => {
+        hasStartedPlaying = true;
+        clearPlaybackTimeout();
+        setVideoLoading(false);
+      };
+      
+      video.addEventListener('playing', handleNativePlaying);
+      video.addEventListener('error', () => {
+        clearPlaybackTimeout();
         setVideoLoading(false);
       });
+      
+      video.play().then(() => {
+        hasStartedPlaying = true;
+        clearPlaybackTimeout();
+        setVideoLoading(false);
+      }).catch(err => {
+        console.warn('Autoplay failed:', err);
+        setVideoLoading(false);
+        // Don't clear timeout - user may need to interact
+      });
+      
+      return () => {
+        clearPlaybackTimeout();
+        video.removeEventListener('playing', handleNativePlaying);
+      };
       
     } else {
       // Non-HLS playback (MP4, WebM, etc.)
       console.log('🎬 Using native video playback (non-HLS)');
+      
+      // Start timeout guard
+      startPlaybackTimeout();
+      
       video.src = currentChannel.url;
       video.controls = true;
-      video.play().catch(err => {
-        console.warn('Play error:', err);
+      video.playsInline = true;
+      
+      const handleNativePlaying = () => {
+        hasStartedPlaying = true;
+        clearPlaybackTimeout();
+        setVideoLoading(false);
+      };
+      
+      video.addEventListener('playing', handleNativePlaying);
+      video.addEventListener('error', () => {
+        clearPlaybackTimeout();
+        setVideoLoading(false);
       });
+      
+      video.play().then(() => {
+        hasStartedPlaying = true;
+        clearPlaybackTimeout();
+        setVideoLoading(false);
+      }).catch(err => {
+        console.warn('Play error:', err);
+        setVideoLoading(false);
+        // Don't clear timeout - user may need to interact
+      });
+      
+      return () => {
+        clearPlaybackTimeout();
+        video.removeEventListener('playing', handleNativePlaying);
+      };
     }
 
-    // Log watch history
+    // Log watch history (only if video started playing)
     const logHistory = async () => {
+      if (!hasStartedPlaying) return; // Don't log if video never started
+      
       try {
         await api.post('/history', {
           playlist_id: parseInt(playlistId),
@@ -759,10 +940,12 @@ export default function PlayerPage() {
       }
     };
 
-    // Log on channel change (after 5 seconds)
+    // Log on channel change (after 5 seconds, only if playing)
     const timer = setTimeout(logHistory, 5000);
 
+    // Final cleanup - this runs when the effect is cleaned up or dependencies change
     return () => {
+      clearPlaybackTimeout();
       clearTimeout(timer);
       if (hlsRef.current) {
         hlsRef.current.destroy();
