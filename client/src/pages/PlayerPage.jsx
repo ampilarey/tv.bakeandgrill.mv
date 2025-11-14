@@ -1467,7 +1467,14 @@ export default function PlayerPage() {
         </div>
 
         {/* Channel List */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div 
+          className="flex-1 overflow-y-auto custom-scrollbar"
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-y',
+            overscrollBehavior: 'contain'
+          }}
+        >
           {/* Recently Watched Section */}
           {recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
             <div className="p-2 border-b border-slate-700">
