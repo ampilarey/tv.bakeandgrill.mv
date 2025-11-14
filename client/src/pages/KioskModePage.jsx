@@ -4,9 +4,24 @@ import axios from 'axios';
 import Hls from 'hls.js';
 import Spinner from '../components/common/Spinner';
 
+// Detect if we're on mobile/network access and need to use IP address
+const getDisplayApiBaseURL = () => {
+  // In development, check if we're accessing via IP (not localhost)
+  if (import.meta.env.DEV) {
+    const hostname = window.location.hostname;
+    // If accessing via IP address (not localhost/127.0.0.1), use direct API URL
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      // Use the same hostname but port 4000 for API
+      return `http://${hostname}:4000/api`;
+    }
+  }
+  // Default: use relative path (works with Vite proxy or same origin)
+  return '/api';
+};
+
 // Create a separate API client without auth headers for display mode
 const displayApi = axios.create({
-  baseURL: '/api',
+  baseURL: getDisplayApiBaseURL(),
   headers: {
     'Content-Type': 'application/json'
   }
