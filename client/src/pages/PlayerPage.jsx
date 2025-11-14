@@ -1531,6 +1531,54 @@ export default function PlayerPage() {
                   </div>
                 </div>
               )}
+              
+              {/* Tap to Play Button (Mobile) - Show when video is paused and needs user interaction */}
+              {!videoLoading && videoRef.current && videoRef.current.paused && (isIOS || isMobile) && !videoError && (
+                <div 
+                  className="absolute inset-0 flex items-center justify-center bg-black/60 z-20 cursor-pointer"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (videoRef.current) {
+                      try {
+                        console.log('📱 Tap to Play button clicked');
+                        await videoRef.current.play();
+                        setVideoLoading(false);
+                        setVideoError(null);
+                      } catch (err) {
+                        console.error('❌ Play failed:', err);
+                        setVideoError('Unable to play. Please try another channel.');
+                      }
+                    }
+                  }}
+                  onTouchStart={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (videoRef.current) {
+                      try {
+                        console.log('📱 Tap to Play button touched');
+                        await videoRef.current.play();
+                        setVideoLoading(false);
+                        setVideoError(null);
+                      } catch (err) {
+                        console.error('❌ Play failed:', err);
+                        setVideoError('Unable to play. Please try another channel.');
+                      }
+                    }
+                  }}
+                >
+                  <div className="text-center p-8">
+                    <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-primary/90 flex items-center justify-center">
+                      <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                    </div>
+                    <p className="text-white text-xl font-semibold mb-2">Tap to Play</p>
+                    <p className="text-white/80 text-sm">Video requires user interaction</p>
+                  </div>
+                </div>
+              )}
+              
               <video
                 ref={videoRef}
                 className="w-full h-full object-contain bg-black"
@@ -1549,12 +1597,32 @@ export default function PlayerPage() {
                   WebkitPlaysInline: true,
                   playsInline: true
                 }}
-                onTouchStart={(e) => {
+                onClick={async (e) => {
+                  // On mobile, click video to play if paused
+                  if (videoRef.current) {
+                    if (videoRef.current.paused) {
+                      try {
+                        console.log('📱 Video clicked - attempting to play');
+                        await videoRef.current.play();
+                        setVideoLoading(false);
+                        setVideoError(null);
+                      } catch (err) {
+                        console.error('❌ Play on click failed:', err);
+                      }
+                    }
+                  }
+                }}
+                onTouchStart={async (e) => {
                   // On iOS, tap the video to play if paused
                   if (videoRef.current && videoRef.current.paused) {
-                    videoRef.current.play().catch(err => {
+                    try {
+                      console.log('📱 Video touched - attempting to play');
+                      await videoRef.current.play();
+                      setVideoLoading(false);
+                      setVideoError(null);
+                    } catch (err) {
                       console.log('Play on touch failed:', err);
-                    });
+                    }
                   }
                 }}
               />
