@@ -40,8 +40,10 @@ fi
 
 # Check index.html
 echo "3. Checking index.html references:"
-if grep -q "index-0UrAJhdh.js" "$SERVER_DIR/index.html" 2>/dev/null; then
-    echo "   ✅ index.html references index-0UrAJhdh.js (CORRECT)"
+if grep -q "index-C3OLTmHE.js" "$SERVER_DIR/index.html" 2>/dev/null; then
+    echo "   ✅ index.html references index-C3OLTmHE.js (NEW - CORRECT)"
+elif grep -q "index-0UrAJhdh.js" "$SERVER_DIR/index.html" 2>/dev/null; then
+    echo "   ⚠️  index.html references index-0UrAJhdh.js (OLD)"
 else
     echo "   ❌ index.html references wrong JS file"
 fi
@@ -55,10 +57,12 @@ fi
 # Check asset files exist
 echo "4. Checking asset files:"
 ASSETS="$SERVER_DIR/assets"
-if [ -f "$ASSETS/index-0UrAJhdh.js" ]; then
-    echo "   ✅ assets/index-0UrAJhdh.js exists"
+if [ -f "$ASSETS/index-C3OLTmHE.js" ]; then
+    echo "   ✅ assets/index-C3OLTmHE.js exists (NEW)"
+elif [ -f "$ASSETS/index-0UrAJhdh.js" ]; then
+    echo "   ⚠️  assets/index-0UrAJhdh.js exists (OLD)"
 else
-    echo "   ❌ assets/index-0UrAJhdh.js missing"
+    echo "   ❌ No index JS file found!"
 fi
 
 if [ -f "$ASSETS/react-vendor-DY6H39Bc.js" ]; then
