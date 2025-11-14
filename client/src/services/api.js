@@ -5,9 +5,13 @@ const getApiBaseURL = () => {
   // In development, check if we're accessing via IP (not localhost)
   if (import.meta.env.DEV) {
     const hostname = window.location.hostname;
-    // If accessing via IP address (not localhost/127.0.0.1), use the IP for API calls
-    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1' && !hostname.includes('.')) {
-      // This is an IP address - use it for API calls
+    // If accessing via IP address (not localhost/127.0.0.1), use direct API URL
+    // IP addresses contain dots, so check if it's NOT localhost
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      // This is an IP address or domain - use it for API calls
+      // For mobile devices accessing via IP, we need to connect directly to backend
+      const port = window.location.port || '5173';
+      // Use the same hostname but port 4000 for API
       return `http://${hostname}:4000/api`;
     }
   }
