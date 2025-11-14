@@ -433,12 +433,38 @@ export default function PlayerPage() {
           videoWidth: video.videoWidth,
           videoHeight: video.videoHeight,
           duration: video.duration,
-          readyState: video.readyState
+          readyState: video.readyState,
+          networkState: video.networkState,
+          src: video.src
         });
         
         // Check if we have valid video dimensions (not just audio)
-        if (video.videoWidth === 0 && video.videoHeight === 0 && video.duration === Infinity) {
-          console.warn('⚠️ iOS: Stream may be live/HLS - waiting for canplay...');
+        if (video.videoWidth === 0 && video.videoHeight === 0) {
+          // Wait a bit more for live streams
+          if (video.duration === Infinity) {
+            console.warn('⚠️ iOS: Stream may be live/HLS - waiting for canplay...');
+            // Check again after a short delay
+            setTimeout(() => {
+              if (video.videoWidth === 0 && video.videoHeight === 0 && video.readyState >= 2) {
+                console.error('❌ iOS: No video dimensions detected - audio-only or unsupported codec');
+                setVideoError('This stream appears to be audio-only or uses an unsupported video codec. The video track may not be compatible with your device.');
+                setVideoLoading(false);
+                clearPlaybackTimeout();
+              }
+            }, 3000); // Wait 3 seconds for metadata
+          } else {
+            // Not a live stream but no dimensions - likely audio-only
+            console.error('❌ iOS: No video dimensions - this appears to be audio-only');
+            setVideoError('This stream is audio-only. No video is available.');
+            setVideoLoading(false);
+            clearPlaybackTimeout();
+          }
+        } else {
+          // Video dimensions are available
+          console.log('✅ iOS: Video dimensions detected:', {
+            width: video.videoWidth,
+            height: video.videoHeight
+          });
         }
       };
       
