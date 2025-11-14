@@ -25,15 +25,25 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      console.log('🔐 Attempting login:', { email });
       const result = await login(email, password);
+      console.log('🔐 Login result:', result);
       
       if (result.success) {
+        console.log('✅ Login successful, redirecting to dashboard');
         navigate('/dashboard');
       } else {
+        console.error('❌ Login failed:', result.error);
         setError(result.error || 'Login failed');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      console.error('❌ Login error:', err);
+      console.error('Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      setError(err.response?.data?.error || err.message || 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
