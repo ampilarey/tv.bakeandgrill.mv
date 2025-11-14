@@ -1533,7 +1533,7 @@ export default function PlayerPage() {
               )}
               
               {/* Tap to Play Button (Mobile) - Show when video is paused and needs user interaction */}
-              {!videoLoading && videoRef.current && videoRef.current.paused && (isIOS || isMobile) && !videoError && (
+              {!videoLoading && videoRef.current && videoRef.current.paused && (isIOS || (typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || /Android/.test(navigator.userAgent)))) && !videoError && (
                 <div 
                   className="absolute inset-0 flex items-center justify-center bg-black/60 z-20 cursor-pointer"
                   onClick={async (e) => {
