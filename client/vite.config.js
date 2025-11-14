@@ -106,16 +106,11 @@ export default defineConfig({
             }
           },
           {
-            // JS and CSS - Network first (always get fresh files)
+            // JS and CSS - Network only (never cache to force fresh updates)
             urlPattern: /\.(?:js|css)$/i,
-            handler: 'NetworkFirst',
+            handler: 'NetworkOnly',
             options: {
-              cacheName: 'js-css-cache',
-              expiration: {
-                maxEntries: 30,
-                maxAgeSeconds: 60 * 60 * 24 // 1 day
-              },
-              networkTimeoutSeconds: 5
+              cacheName: 'js-css-network-only-v2'
             }
           },
           {
