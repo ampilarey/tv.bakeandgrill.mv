@@ -60,11 +60,51 @@ export default function PlayerPage() {
   });
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [useCustomControls, setUseCustomControls] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 1024;
+  });
+  const [isChannelDrawerOpen, setIsChannelDrawerOpen] = useState(false);
   
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const navigate = useNavigate();
   const { logout } = useAuth();
+
+  const currentChannelIsHLS = currentChannel?.url?.toLowerCase().endsWith('.m3u8') || false;
+  const videoElementSrc = currentChannel && (!currentChannelIsHLS || isIOS) ? currentChannel.url : undefined;
+
+  // Track viewport width for responsive/mobile layouts
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      setIsMobileView(window.innerWidth < 1024);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Close channel drawer automatically when leaving mobile view
+  useEffect(() => {
+    if (!isMobileView && isChannelDrawerOpen) {
+      setIsChannelDrawerOpen(false);
+    }
+  }, [isMobileView, isChannelDrawerOpen]);
+
+  // Prevent body scrolling when the drawer is open on mobile
+  useEffect(() => {
+    if (!isMobileView || !isChannelDrawerOpen || typeof document === 'undefined') return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileView, isChannelDrawerOpen]);
 
   // Save view mode preference
   useEffect(() => {
@@ -356,28 +396,23 @@ export default function PlayerPage() {
       video.autoplay = true;
       
       // Set new source - iOS native HLS handles redirects and CORS automatically
-      // CRITICAL: Use removeAttribute and setAttribute for better iOS compatibility
       video.removeAttribute('src');
       video.load();
+      video.src = currentChannel.url;
+      video.load(); // Force reload with new source
       
-      // Small delay to ensure previous source is cleared
-      setTimeout(() => {
-        video.src = currentChannel.url;
-        video.load(); // Force reload with new source
-        
-        console.log('📱 iOS Native HLS Setup:', {
-          src: video.src,
-          currentSrc: video.currentSrc,
-          controls: video.controls,
-          playsInline: video.playsInline,
-          webkitPlaysInline: video.webkitPlaysInline,
-          preload: video.preload,
-          autoplay: video.autoplay,
-          readyState: video.readyState,
-          networkState: video.networkState,
-          url: currentChannel.url
-        });
-      }, 100);
+      console.log('📱 iOS Native HLS Setup:', {
+        src: video.src,
+        currentSrc: video.currentSrc,
+        controls: video.controls,
+        playsInline: video.playsInline,
+        webkitPlaysInline: video.webkitPlaysInline,
+        preload: video.preload,
+        autoplay: video.autoplay,
+        readyState: video.readyState,
+        networkState: video.networkState,
+        url: currentChannel.url
+      });
       
       // 🚨 CRITICAL: Start timeout guard immediately
       startPlaybackTimeout();
@@ -1143,6 +1178,332 @@ export default function PlayerPage() {
     setIsAutoPlay(false); // Mark as user-initiated
     setVideoError(null); // Clear any previous errors
     setRetryCount(0); // Reset retry counter
+
+    if (isMobileView) {
+      setIsChannelDrawerOpen(false);
+      // Gently scroll video into view once the drawer closes
+      setTimeout(() => {
+        videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  };
+
+  const renderSidebarContent = (variant = 'desktop') => {
+    const headerClasses =
+      variant === 'mobile'
+        ? 'p-4 pb-3 border-b border-slate-700 bg-background-light sticky top-0 z-20 shadow-[0_-12px_32px_rgba(0,0,0,0.65)]'
+        : 'p-4 border-b border-slate-700';
+
+    const listWrapperClasses =
+      variant === 'mobile'
+        ? 'flex-1 overflow-y-auto custom-scrollbar p-2 pb-32'
+        : 'flex-1 overflow-y-auto custom-scrollbar';
+
+    const footerClasses =
+      variant === 'mobile'
+        ? 'p-3 border-t border-slate-800 text-xs text-text-muted text-center bg-background-light/95 sticky bottom-0'
+        : 'p-3 border-t border-slate-700 text-sm text-text-muted text-center';
+
+    return (
+      <>
+        <div className={headerClasses}>
+          <div className="flex items-center justify-between mb-4">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => {
+                if (currentChannel) {
+                  // If video is playing, just stop it and show channel list
+                  setCurrentChannel(null);
+                } else {
+                  // If no video playing, go back to dashboard
+                  navigate('/dashboard');
+                }
+              }}
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              {currentChannel ? 'Stop' : 'Back'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={logout}>
+              Logout
+            </Button>
+          </div>
+
+          {/* Search with Autocomplete */}
+          <div className="relative mb-3">
+            <Input
+              placeholder="Search channels..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              onFocus={() => setShowSearchSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 200)}
+            />
+            
+            {/* Search History Dropdown */}
+            {showSearchSuggestions && searchHistory.length > 0 && !searchQuery && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background-light border border-slate-600 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+                <div className="flex items-center justify-between p-2 border-b border-slate-700">
+                  <span className="text-xs text-text-secondary font-medium">Recent Searches</span>
+                  <button
+                    onClick={clearSearchHistory}
+                    className="text-xs text-red-400 hover:text-red-300"
+                  >
+                    Clear
+                  </button>
+                </div>
+                {searchHistory.map((term, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setSearchQuery(term);
+                      setShowSearchSuggestions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-background-lighter text-white text-sm transition-colors flex items-center gap-2"
+                  >
+                    <span>🔍</span>
+                    <span>{term}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <Button
+              variant={showFavoritesOnly ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+            >
+              ⭐ Favorites
+            </Button>
+            <select
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              className="px-3 py-1 text-sm rounded-lg bg-background-lighter text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">All Groups</option>
+              {groups.map(group => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+            </select>
+            
+            {/* View Mode Toggle */}
+            <div className="ml-auto flex border border-slate-600 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1 text-sm ${
+                  viewMode === 'list' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-background-lighter text-text-secondary hover:bg-background'
+                }`}
+                title="List View"
+              >
+                ☰
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1 text-sm border-l border-slate-600 ${
+                  viewMode === 'grid' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-background-lighter text-text-secondary hover:bg-background'
+                }`}
+                title="Grid View"
+              >
+                ⊞
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className={listWrapperClasses}>
+          {/* Recently Watched Section */}
+          {recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
+            <div className="p-2 border-b border-slate-700">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
+                  🕒 Recently Watched
+                </h3>
+                {recentlyWatched.length > 5 && (
+                  <button
+                    onClick={() => setShowAllRecent(!showAllRecent)}
+                    className="text-xs text-primary hover:text-primary-light transition-colors"
+                  >
+                    {showAllRecent ? 'Show Less' : `Show All (${recentlyWatched.length})`}
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1">
+                {(showAllRecent ? recentlyWatched : recentlyWatched.slice(0, 5)).map((channel) => (
+                  <div
+                    key={`recent-${channel.id}`}
+                    onClick={() => handleChannelClick(channel)}
+                    className={`
+                      p-3 rounded-lg cursor-pointer transition-all
+                      ${currentChannel?.id === channel.id 
+                        ? 'bg-primary/20 border border-primary' 
+                        : 'bg-background-lighter/50 hover:bg-background-lighter border border-transparent'
+                      }
+                    `}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-medium text-white truncate text-sm">{channel.name}</h3>
+                          {currentChannel?.id === channel.id && (
+                            <Badge color="success" size="sm">Playing</Badge>
+                          )}
+                        </div>
+                        {channel.group && (
+                          <p className="text-xs text-text-muted">{channel.group}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(channel);
+                        }}
+                        className="ml-2 p-1 hover:scale-110 transition-transform"
+                      >
+                        {isFavorite(channel.id) ? '⭐' : '☆'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* All Channels Section */}
+          {filteredChannels.length === 0 ? (
+            <div className="p-8 text-center text-text-muted">
+              <p>No channels found</p>
+            </div>
+          ) : (
+            <div className="p-2">
+              {recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
+                <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-2 px-1">
+                  📺 All Channels
+                </h3>
+              )}
+              
+              {/* List View */}
+              {viewMode === 'list' && filteredChannels.slice(0, displayedChannels).map((channel) => (
+                <div
+                  key={channel.id}
+                  onClick={() => handleChannelClick(channel)}
+                  className={`
+                    p-3 mb-2 rounded-lg cursor-pointer transition-all
+                    ${currentChannel?.id === channel.id 
+                      ? 'bg-primary/20 border border-primary' 
+                      : 'bg-background hover:bg-background-lighter border border-transparent'
+                    }
+                  `}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-medium text-white truncate">{channel.name}</h3>
+                        {currentChannel?.id === channel.id && (
+                          <Badge color="success" size="sm">Playing</Badge>
+                        )}
+                      </div>
+                      {channel.group && (
+                        <p className="text-xs text-text-muted">{channel.group}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(channel);
+                      }}
+                      className="ml-2 p-1 hover:scale-110 transition-transform"
+                    >
+                      {isFavorite(channel.id) ? '⭐' : '☆'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Grid View */}
+              {viewMode === 'grid' && (
+                <div className="grid grid-cols-2 gap-2">
+                  {filteredChannels.slice(0, displayedChannels).map((channel) => (
+                    <div
+                      key={channel.id}
+                      onClick={() => handleChannelClick(channel)}
+                      className={`
+                        p-3 rounded-lg cursor-pointer transition-all relative
+                        ${currentChannel?.id === channel.id 
+                          ? 'bg-primary/20 border-2 border-primary' 
+                          : 'bg-background hover:bg-background-lighter border-2 border-transparent'
+                        }
+                      `}
+                    >
+                      <div className="text-center">
+                        {channel.logo ? (
+                          <img 
+                            src={channel.logo} 
+                            alt={channel.name}
+                            loading="lazy"
+                            className="w-16 h-16 mx-auto mb-2 rounded object-cover"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-16 h-16 mx-auto mb-2 bg-slate-700 rounded flex items-center justify-center text-2xl">
+                            📺
+                          </div>
+                        )}
+                        <h3 className="font-medium text-white text-sm truncate mb-1">
+                          {channel.name}
+                        </h3>
+                        {channel.group && (
+                          <p className="text-xs text-text-muted truncate">{channel.group}</p>
+                        )}
+                        {currentChannel?.id === channel.id && (
+                          <Badge color="success" size="sm" className="mt-2">▶️</Badge>
+                        )}
+                        
+                        {/* Favorite button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(channel);
+                          }}
+                          className="absolute top-2 right-2 p-1 bg-background/80 rounded hover:scale-110 transition-transform"
+                        >
+                          {isFavorite(channel.id) ? '⭐' : '☆'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Load More Button */}
+              {filteredChannels.length > displayedChannels && (
+                <div className="mt-4 text-center">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setDisplayedChannels(prev => prev + 50)}
+                    className="w-full"
+                  >
+                    Load More ({filteredChannels.length - displayedChannels} remaining)
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className={footerClasses}>
+          Showing {Math.min(displayedChannels, filteredChannels.length)} of {filteredChannels.length} channels
+          {filteredChannels.length !== channels.length && ` (${channels.length} total)`}
+        </div>
+      </>
+    );
   };
 
   const handleSearch = (value) => {
@@ -1350,319 +1711,35 @@ export default function PlayerPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col md:flex-row bg-background overflow-hidden">
-      {/* Sidebar - Channel List */}
-      <div className="w-full md:w-96 bg-background-light border-r border-slate-700 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => {
-                if (currentChannel) {
-                  // If video is playing, just stop it and show channel list
-                  setCurrentChannel(null);
-                } else {
-                  // If no video playing, go back to dashboard
-                  navigate('/dashboard');
-                }
-              }}
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              {currentChannel ? 'Stop' : 'Back'}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={logout}>
-              Logout
-            </Button>
-          </div>
-
-          {/* Search with Autocomplete */}
-          <div className="relative mb-3">
-            <Input
-              placeholder="Search channels..."
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              onFocus={() => setShowSearchSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 200)}
-            />
-            
-            {/* Search History Dropdown */}
-            {showSearchSuggestions && searchHistory.length > 0 && !searchQuery && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-background-light border border-slate-600 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-                <div className="flex items-center justify-between p-2 border-b border-slate-700">
-                  <span className="text-xs text-text-secondary font-medium">Recent Searches</span>
-                  <button
-                    onClick={clearSearchHistory}
-                    className="text-xs text-red-400 hover:text-red-300"
-                  >
-                    Clear
-                  </button>
-                </div>
-                {searchHistory.map((term, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      setSearchQuery(term);
-                      setShowSearchSuggestions(false);
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-background-lighter text-white text-sm transition-colors flex items-center gap-2"
-                  >
-                    <span>🔍</span>
-                    <span>{term}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <Button
-              variant={showFavoritesOnly ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-            >
-              ⭐ Favorites
-            </Button>
-            <select
-              value={selectedGroup}
-              onChange={(e) => setSelectedGroup(e.target.value)}
-              className="px-3 py-1 text-sm rounded-lg bg-background-lighter text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="">All Groups</option>
-              {groups.map(group => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
-            
-            {/* View Mode Toggle */}
-            <div className="ml-auto flex border border-slate-600 rounded-lg overflow-hidden">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1 text-sm ${
-                  viewMode === 'list' 
-                    ? 'bg-primary text-white' 
-                    : 'bg-background-lighter text-text-secondary hover:bg-background'
-                }`}
-                title="List View"
-              >
-                ☰
-              </button>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`px-3 py-1 text-sm border-l border-slate-600 ${
-                  viewMode === 'grid' 
-                    ? 'bg-primary text-white' 
-                    : 'bg-background-lighter text-text-secondary hover:bg-background'
-                }`}
-                title="Grid View"
-              >
-                ⊞
-              </button>
-            </div>
-          </div>
+    <div className="relative h-screen bg-background overflow-hidden">
+      <div className="h-full flex flex-col md:flex-row bg-background">
+        {/* Sidebar - Desktop Only */}
+        <div className="hidden md:flex md:w-96 bg-background-light border-r border-slate-700 flex-col">
+          {renderSidebarContent('desktop')}
         </div>
 
-        {/* Channel List */}
-        <div 
-          className="flex-1 overflow-y-auto custom-scrollbar"
-          style={{
-            WebkitOverflowScrolling: 'touch',
-            touchAction: 'pan-y',
-            overscrollBehavior: 'contain'
-          }}
-        >
-          {/* Recently Watched Section */}
-          {recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
-            <div className="p-2 border-b border-slate-700">
-              <div className="flex items-center justify-between mb-2 px-1">
-                <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
-                  🕒 Recently Watched
-                </h3>
-                {recentlyWatched.length > 5 && (
-                  <button
-                    onClick={() => setShowAllRecent(!showAllRecent)}
-                    className="text-xs text-primary hover:text-primary-light transition-colors"
-                  >
-                    {showAllRecent ? 'Show Less' : `Show All (${recentlyWatched.length})`}
-                  </button>
+        {/* Main Player Area */}
+        <div className="flex-1 flex flex-col bg-black relative">
+          {isMobileView && (
+            <div className="md:hidden px-4 py-3 border-b border-slate-800 bg-background-light flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs uppercase text-text-muted tracking-wide mb-1">Now Playing</p>
+                <p className="text-white font-semibold truncate">
+                  {currentChannel?.name || 'Select a channel'}
+                </p>
+                {currentChannel?.group && (
+                  <p className="text-text-secondary text-xs truncate">{currentChannel.group}</p>
                 )}
               </div>
-              <div className="space-y-1">
-                {(showAllRecent ? recentlyWatched : recentlyWatched.slice(0, 5)).map((channel) => (
-                  <div
-                    key={`recent-${channel.id}`}
-                    onClick={() => handleChannelClick(channel)}
-                    className={`
-                      p-3 rounded-lg cursor-pointer transition-all
-                      ${currentChannel?.id === channel.id 
-                        ? 'bg-primary/20 border border-primary' 
-                        : 'bg-background-lighter/50 hover:bg-background-lighter border border-transparent'
-                      }
-                    `}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-medium text-white truncate text-sm">{channel.name}</h3>
-                          {currentChannel?.id === channel.id && (
-                            <Badge color="success" size="sm">Playing</Badge>
-                          )}
-                        </div>
-                        {channel.group && (
-                          <p className="text-xs text-text-muted">{channel.group}</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(channel);
-                        }}
-                        className="ml-2 p-1 hover:scale-110 transition-transform"
-                      >
-                        {isFavorite(channel.id) ? '⭐' : '☆'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => setIsChannelDrawerOpen(true)}
+              >
+                Channels ({filteredChannels.length})
+              </Button>
             </div>
           )}
-
-          {/* All Channels Section */}
-          {filteredChannels.length === 0 ? (
-            <div className="p-8 text-center text-text-muted">
-              <p>No channels found</p>
-            </div>
-          ) : (
-            <div className="p-2">
-              {recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
-                <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-2 px-1">
-                  📺 All Channels
-                </h3>
-              )}
-              
-              {/* List View */}
-              {viewMode === 'list' && filteredChannels.slice(0, displayedChannels).map((channel) => (
-                <div
-                  key={channel.id}
-                  onClick={() => handleChannelClick(channel)}
-                  className={`
-                    p-3 mb-2 rounded-lg cursor-pointer transition-all
-                    ${currentChannel?.id === channel.id 
-                      ? 'bg-primary/20 border border-primary' 
-                      : 'bg-background hover:bg-background-lighter border border-transparent'
-                    }
-                  `}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium text-white truncate">{channel.name}</h3>
-                        {currentChannel?.id === channel.id && (
-                          <Badge color="success" size="sm">Playing</Badge>
-                        )}
-                      </div>
-                      {channel.group && (
-                        <p className="text-xs text-text-muted">{channel.group}</p>
-                      )}
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(channel);
-                      }}
-                      className="ml-2 p-1 hover:scale-110 transition-transform"
-                    >
-                      {isFavorite(channel.id) ? '⭐' : '☆'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {/* Grid View */}
-              {viewMode === 'grid' && (
-                <div className="grid grid-cols-2 gap-2">
-                  {filteredChannels.slice(0, displayedChannels).map((channel) => (
-                    <div
-                      key={channel.id}
-                      onClick={() => handleChannelClick(channel)}
-                      className={`
-                        p-3 rounded-lg cursor-pointer transition-all relative
-                        ${currentChannel?.id === channel.id 
-                          ? 'bg-primary/20 border-2 border-primary' 
-                          : 'bg-background hover:bg-background-lighter border-2 border-transparent'
-                        }
-                      `}
-                    >
-                      <div className="text-center">
-                        {channel.logo ? (
-                          <img 
-                            src={channel.logo} 
-                            alt={channel.name}
-                            loading="lazy"
-                            className="w-16 h-16 mx-auto mb-2 rounded object-cover"
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
-                        ) : (
-                          <div className="w-16 h-16 mx-auto mb-2 bg-slate-700 rounded flex items-center justify-center text-2xl">
-                            📺
-                          </div>
-                        )}
-                        <h3 className="font-medium text-white text-sm truncate mb-1">
-                          {channel.name}
-                        </h3>
-                        {channel.group && (
-                          <p className="text-xs text-text-muted truncate">{channel.group}</p>
-                        )}
-                        {currentChannel?.id === channel.id && (
-                          <Badge color="success" size="sm" className="mt-2">▶️</Badge>
-                        )}
-                        
-                        {/* Favorite button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(channel);
-                          }}
-                          className="absolute top-2 right-2 p-1 bg-background/80 rounded hover:scale-110 transition-transform"
-                        >
-                          {isFavorite(channel.id) ? '⭐' : '☆'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Load More Button */}
-              {filteredChannels.length > displayedChannels && (
-                <div className="mt-4 text-center">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setDisplayedChannels(prev => prev + 50)}
-                    className="w-full"
-                  >
-                    Load More ({filteredChannels.length - displayedChannels} remaining)
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Channel Count */}
-        <div className="p-3 border-t border-slate-700 text-sm text-text-muted text-center">
-          Showing {Math.min(displayedChannels, filteredChannels.length)} of {filteredChannels.length} channels
-          {filteredChannels.length !== channels.length && ` (${channels.length} total)`}
-        </div>
-      </div>
-
-      {/* Main Player Area */}
-      <div className="flex-1 flex flex-col bg-black">
         {currentChannel ? (
           <>
             {/* Video Player */}
@@ -1733,7 +1810,7 @@ export default function PlayerPage() {
                 x-webkit-airplay="allow"
                 preload="auto"
                 muted={false}
-                src={currentChannel?.url || ''}
+                src={videoElementSrc ?? undefined}
                 key={currentChannel?.id || 'no-channel'}
                 style={{ 
                   minHeight: '200px',
@@ -1869,6 +1946,48 @@ export default function PlayerPage() {
           </div>
         )}
       </div>
+
+      {/* Close the flex wrapper before rendering overlays */}
+      </div>
+      
+      {/* Mobile overlays live outside the flex container to avoid clipping */}
+
+      {isMobileView && isChannelDrawerOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-30"
+          onClick={() => setIsChannelDrawerOpen(false)}
+        />
+      )}
+
+      {isMobileView && (
+        <div
+          className={`md:hidden fixed inset-x-0 bottom-0 z-40 transition-transform duration-300 ${isChannelDrawerOpen ? 'translate-y-0' : 'translate-y-[calc(100%-72px)]'}`}
+        >
+          <div className="bg-background-light border-t border-slate-700 rounded-t-3xl shadow-2xl flex flex-col h-[75vh] max-h-[80vh] safe-area-bottom">
+            <button
+              className="flex items-center justify-between px-4 py-3 text-left"
+              onClick={() => setIsChannelDrawerOpen(prev => !prev)}
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white truncate">
+                  Channels ({filteredChannels.length})
+                </p>
+                <p className="text-xs text-text-muted truncate">
+                  {currentChannel ? `Now playing: ${currentChannel.name}` : 'Select a channel to start watching'}
+                </p>
+              </div>
+              <span className="text-primary font-semibold text-sm">
+                {isChannelDrawerOpen ? 'Hide' : 'Show'}
+              </span>
+            </button>
+            <div className="border-t border-slate-800 flex-1 overflow-hidden">
+              <div className="h-full flex flex-col">
+                {renderSidebarContent('mobile')}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Keyboard Shortcuts Help Modal */}
       {showKeyboardHelp && (
