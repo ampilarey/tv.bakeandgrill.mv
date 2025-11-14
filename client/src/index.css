@@ -66,6 +66,15 @@
 
 @layer components {
   /* Scrollbar styling */
+  .custom-scrollbar {
+    /* iOS smooth scrolling */
+    -webkit-overflow-scrolling: touch;
+    /* Allow vertical scrolling only */
+    touch-action: pan-y;
+    /* Prevent scroll chaining */
+    overscroll-behavior: contain;
+  }
+  
   .custom-scrollbar::-webkit-scrollbar {
     @apply w-2;
   }
