@@ -1,8 +1,23 @@
 import axios from 'axios';
 
+// Detect if we're on mobile/network access and need to use IP address
+const getApiBaseURL = () => {
+  // In development, check if we're accessing via IP (not localhost)
+  if (import.meta.env.DEV) {
+    const hostname = window.location.hostname;
+    // If accessing via IP address (not localhost/127.0.0.1), use the IP for API calls
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1' && !hostname.includes('.')) {
+      // This is an IP address - use it for API calls
+      return `http://${hostname}:4000/api`;
+    }
+  }
+  // Default: use relative path (works with Vite proxy or same origin)
+  return '/api';
+};
+
 // Create axios instance
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getApiBaseURL(),
   headers: {
     'Content-Type': 'application/json'
   }
