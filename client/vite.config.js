@@ -110,7 +110,7 @@ export default defineConfig({
             urlPattern: /\.(?:js|css)$/i,
             handler: 'NetworkOnly',
             options: {
-              cacheName: 'js-css-network-only-v2'
+              cacheName: 'js-css-network-only-v3' // Changed to force service worker update
             }
           },
           {

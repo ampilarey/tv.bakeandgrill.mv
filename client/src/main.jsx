@@ -5,8 +5,8 @@ import App from './App.jsx';
 import './index.css';
 
 // 🚨 CRITICAL: Force service worker update and cache clear - RUN IMMEDIATELY
-// Version: 2025-11-15-cache-bust-v1
-const APP_VERSION = '2025-11-15-cache-bust-v1';
+// Version: 2025-11-15-cache-bust-v2 (changed to force service worker update)
+const APP_VERSION = '2025-11-15-cache-bust-v2';
 
 // Store version for debugging IMMEDIATELY
 if (typeof window !== 'undefined') {
@@ -42,7 +42,7 @@ if (typeof window !== 'undefined') {
         console.log('📜 Current script:', scriptSrc);
         
         // If we're loading the old cached script, force reload
-        if (scriptSrc.includes('CM0JPdys') || scriptSrc.includes('BrB98PUB')) {
+        if (scriptSrc.includes('CM0JPdys') || scriptSrc.includes('BrB98PUB') || scriptSrc.includes('C3OLTmHE')) {
           console.warn('⚠️ OLD CACHED SCRIPT DETECTED - FORCING RELOAD');
           // Clear all storage
           if (typeof Storage !== 'undefined') {
