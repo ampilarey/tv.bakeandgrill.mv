@@ -245,6 +245,45 @@ export default function DisplayManagement() {
 
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto flex-1 pb-24 md:pb-6 w-full">
+        {/* Guide Section */}
+        <Card className="mb-6 border-2 border-tv-accent/30 bg-tv-accent/5">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-lg bg-tv-accent/20 flex items-center justify-center">
+              <svg className="w-6 h-6 md:w-7 md:h-7 text-tv-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-tv-text mb-2">📺 Display Management Guide</h3>
+              <div className="space-y-3 text-sm text-tv-textSecondary">
+                <div>
+                  <p className="font-semibold text-tv-text mb-1">Two Ways to Add Displays:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li><strong>Pair Display:</strong> Generate a unique pairing code. Open the display URL on your TV/device, enter the code, and it will automatically connect.</li>
+                    <li><strong>Manual:</strong> Create a display manually and copy the display URL to open in your TV's browser.</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-semibold text-tv-text mb-1">Managing Displays:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li><strong>Remote Control:</strong> Change channels, adjust volume, and control playback remotely.</li>
+                    <li><strong>Assign Playlist:</strong> Each display needs a playlist assigned before it can show channels.</li>
+                    <li><strong>Status:</strong> Green badge means online, red means offline. Status updates every 10 seconds.</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-semibold text-tv-text mb-1">Quick Tips:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li>Keep the display URL bookmarked or saved on the TV for easy access.</li>
+                    <li>Displays will enter kiosk mode automatically (fullscreen, no controls).</li>
+                    <li>Use the "View Display URL" button to see the direct link for each display.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-tv-text">Displays ({displays.length})</h2>
           <div className="flex gap-2">
