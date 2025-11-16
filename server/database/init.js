@@ -55,6 +55,9 @@ async function initDatabase() {
     
     console.log('✅ Database schema created');
     
+    // Run migrations
+    await runMigrations(connection);
+    
     // Insert default data
     await insertDefaultData(connection);
     
@@ -64,6 +67,52 @@ async function initDatabase() {
   } catch (error) {
     console.error('❌ Database initialization failed:', error.message);
     throw error;
+  }
+}
+
+/**
+ * Run database migrations
+ */
+async function runMigrations(connection) {
+  try {
+    const migrationsDir = path.join(__dirname, 'migrations');
+    if (!fs.existsSync(migrationsDir)) {
+      fs.mkdirSync(migrationsDir, { recursive: true });
+      return;
+    }
+    
+    const migrationFiles = fs.readdirSync(migrationsDir)
+      .filter(file => file.endsWith('.sql'))
+      .sort();
+    
+    for (const file of migrationFiles) {
+      const migrationPath = path.join(migrationsDir, file);
+      const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+      
+      // Split by semicolons and execute each statement
+      const statements = migrationSQL
+        .split(';')
+        .map(s => s.trim())
+        .filter(s => s.length > 0 && !s.startsWith('--'));
+      
+      for (const statement of statements) {
+        try {
+          await connection.query(statement);
+        } catch (error) {
+          // Ignore errors for DROP CHECK IF EXISTS (constraint might not exist)
+          if (error.message.includes('does not exist') || error.message.includes('Unknown constraint')) {
+            console.log(`⚠️  Migration ${file}: Constraint already dropped or doesn't exist, continuing...`);
+          } else {
+            throw error;
+          }
+        }
+      }
+      
+      console.log(`✅ Migration applied: ${file}`);
+    }
+  } catch (error) {
+    console.error('⚠️  Migration error (continuing anyway):', error.message);
+    // Don't fail initialization if migrations fail
   }
 }
 
