@@ -105,7 +105,7 @@ export default function Settings() {
                     onChange={(e) => setSettings({ ...settings, auto_play_enabled: e.target.checked })}
                     className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                   />
-                  <span className="text-white text-sm">
+                  <span className="text-tv-text text-sm">
                     Automatically play first channel when opening player
                   </span>
                 </div>
@@ -115,7 +115,7 @@ export default function Settings() {
 
           {/* Display Settings */}
           <Card>
-            <h2 className="text-xl font-bold text-white mb-4">Display/Kiosk Settings</h2>
+            <h2 className="text-xl font-bold text-tv-text mb-4">Display/Kiosk Settings</h2>
             <div className="space-y-4">
               <Input
                 label="Heartbeat Interval (seconds)"
@@ -141,7 +141,7 @@ export default function Settings() {
 
           {/* Analytics Settings */}
           <Card>
-            <h2 className="text-xl font-bold text-white mb-4">Analytics & Privacy</h2>
+            <h2 className="text-xl font-bold text-tv-text mb-4">Analytics & Privacy</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-tv-textSecondary mb-2">
@@ -154,7 +154,7 @@ export default function Settings() {
                     onChange={(e) => setSettings({ ...settings, enable_analytics: e.target.checked })}
                     className="w-5 h-5 rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
                   />
-                  <span className="text-white text-sm">
+                  <span className="text-tv-text text-sm">
                     Track watch history and generate usage analytics
                   </span>
                 </div>
@@ -164,19 +164,19 @@ export default function Settings() {
 
           {/* System Info */}
           <Card>
-            <h2 className="text-xl font-bold text-white mb-4">System Information</h2>
+            <h2 className="text-xl font-bold text-tv-text mb-4">System Information</h2>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-tv-textSecondary">Platform Version</span>
-                <span className="text-white font-mono">1.0.5</span>
+                <span className="text-tv-text font-mono">1.0.5</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-tv-textSecondary">Database</span>
-                <span className="text-white">MySQL</span>
+                <span className="text-tv-text">MySQL</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-tv-textSecondary">Environment</span>
-                <span className="text-white">Production</span>
+                <span className="text-tv-text">Production</span>
               </div>
             </div>
           </Card>

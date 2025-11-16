@@ -279,7 +279,7 @@ export default function DisplayManagement() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-lg font-semibold text-white">{display.name}</h3>
+                      <h3 className="text-lg font-semibold text-tv-text">{display.name}</h3>
                       <Badge color={display.status === 'online' ? 'success' : 'danger'}>
                         {display.status}
                       </Badge>
@@ -479,7 +479,7 @@ export default function DisplayManagement() {
           {/* Volume Control */}
           {channels.length > 0 && (
             <div className="border-t border-slate-700 pt-4 mt-4">
-              <h3 className="text-sm font-medium text-white mb-3">🔊 Audio Control</h3>
+              <h3 className="text-sm font-medium text-tv-text mb-3">🔊 Audio Control</h3>
               
               <div className="space-y-3">
                 {/* Quick Mute Controls */}

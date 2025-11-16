@@ -211,7 +211,7 @@ export default function HistoryPage() {
           <Card>
             <div className="text-center py-12">
               <div className="text-6xl mb-4">📺</div>
-              <h3 className="text-xl font-bold text-white mb-2">No Watch History</h3>
+              <h3 className="text-xl font-bold text-tv-text mb-2">No Watch History</h3>
               <p className="text-text-secondary mb-4">
                 {searchQuery ? 'No results found for your search.' : 'Start watching channels to see your history here.'}
               </p>
@@ -224,7 +224,7 @@ export default function HistoryPage() {
           <div className="space-y-6">
             {groupHistoryByDate().map(([date, items]) => (
               <div key={date}>
-                <h2 className="text-lg font-bold text-white mb-3 px-2">{date}</h2>
+                <h2 className="text-lg font-bold text-tv-text mb-3 px-2">{date}</h2>
                 <div className="space-y-2">
                   {items.map((item) => (
                     <Card 
@@ -235,7 +235,7 @@ export default function HistoryPage() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-medium text-white truncate">
+                            <h3 className="font-medium text-tv-text truncate">
                               {item.channel_name}
                             </h3>
                             <Badge color="primary" size="sm">
