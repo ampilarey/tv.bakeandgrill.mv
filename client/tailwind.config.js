@@ -7,43 +7,43 @@ export default {
   theme: {
     extend: {
       colors: {
-        // TV UI Color Scheme - Modern Premium Dark Theme
+        // TV UI Color Scheme - Modern Premium Light Theme
         tv: {
-          bg: '#0A0E17',           // Deep navy black (main background)
-          bgElevated: '#141B2B',   // Elevated surfaces (cards, sidebars)
-          bgSoft: '#1E2739',       // Hover states and secondary surfaces
-          bgHover: '#2A3447',      // Active hover state
-          text: '#F8FAFC',         // Primary text (bright, high contrast)
-          textSecondary: '#CBD5E1', // Secondary text (clear but softer)
-          textMuted: '#94A3B8',    // Muted text (labels, hints)
-          borderSubtle: '#334155', // Borders and dividers
-          accent: '#3B82F6',       // Blue 500 - modern, vibrant accent
-          accentHover: '#60A5FA',  // Blue 400 - hover state
-          accentLight: '#DBEAFE',  // Blue 100 - subtle backgrounds
-          success: '#10B981',      // Emerald 500 - success
-          error: '#EF4444',        // Red 500 - errors
-          warning: '#F59E0B',      // Amber 500 - warnings
-          info: '#06B6D4',         // Cyan 500 - info
+          bg: '#F8FAFC',           // Light gray-blue (main background)
+          bgElevated: '#FFFFFF',   // Pure white (cards, sidebars)
+          bgSoft: '#F1F5F9',       // Soft gray (hover states)
+          bgHover: '#E2E8F0',      // Light blue-gray (active hover)
+          text: '#0F172A',         // Dark slate (primary text)
+          textSecondary: '#475569', // Medium gray (secondary text)
+          textMuted: '#64748B',    // Light gray (muted text)
+          borderSubtle: '#CBD5E1', // Light borders
+          accent: '#3B82F6',       // Bright blue - vibrant accent
+          accentHover: '#2563EB',  // Darker blue - hover
+          accentLight: '#DBEAFE',  // Light blue - backgrounds
+          success: '#10B981',      // Emerald - success
+          error: '#EF4444',        // Red - errors
+          warning: '#F59E0B',      // Amber - warnings
+          info: '#06B6D4',         // Cyan - info
         },
-        // Keep legacy colors for backward compatibility - updated to match new theme
+        // Keep legacy colors for backward compatibility - updated to match light theme
         primary: {
-          DEFAULT: '#3B82F6', // Blue - matches tv-accent
-          light: '#60A5FA',   // Blue light
-          dark: '#2563EB',    // Blue dark
+          DEFAULT: '#3B82F6', // Bright blue
+          light: '#60A5FA',   // Light blue
+          dark: '#2563EB',    // Dark blue
         },
         secondary: {
-          DEFAULT: '#1E2739', // Navy
-          dark: '#141B2B',    // Dark navy
+          DEFAULT: '#F1F5F9', // Light gray
+          dark: '#E2E8F0',    // Soft gray
         },
         background: {
-          DEFAULT: '#0A0E17', // Deep navy - matches tv-bg
-          light: '#141B2B',   // Matches tv-bgElevated
-          lighter: '#1E2739', // Matches tv-bgSoft
+          DEFAULT: '#F8FAFC', // Light background
+          light: '#FFFFFF',   // White
+          lighter: '#F1F5F9', // Soft gray
         },
         text: {
-          DEFAULT: '#F8FAFC',      // Bright - matches tv-text
-          secondary: '#CBD5E1',    // Clear secondary - matches tv-textSecondary
-          muted: '#94A3B8',        // Muted - matches tv-textMuted
+          DEFAULT: '#0F172A',      // Dark text
+          secondary: '#475569',    // Medium gray
+          muted: '#64748B',        // Light gray
         }
       },
       fontFamily: {

@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    --tv-bg: #0A0E17;
-    --tv-text: #F8FAFC;
+    --tv-bg: #F8FAFC;
+    --tv-text: #0F172A;
   }
   
   * {
@@ -16,15 +16,15 @@
   
   body {
     @apply antialiased;
-    background-color: #0A0E17;
-    color: #F8FAFC;
+    background-color: #F8FAFC;
+    color: #0F172A;
   }
   
   html,
   body,
   #root {
     @apply h-full w-full m-0 p-0 overflow-hidden;
-    background-color: #0A0E17;
+    background-color: #F8FAFC;
   }
 
   /* Light theme overrides */
