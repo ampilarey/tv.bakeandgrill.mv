@@ -21,10 +21,15 @@
   }
   
   html,
-  body,
-  #root {
+  body {
     @apply h-full w-full m-0 p-0 overflow-hidden;
     background-color: #F8FAFC;
+  }
+  
+  #root {
+    @apply h-full w-full m-0 p-0;
+    background-color: #F8FAFC;
+    /* Allow scrolling on root for admin pages */
   }
 
   /* Light theme overrides */
@@ -177,4 +182,5 @@ video {
     padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
 }
+
 

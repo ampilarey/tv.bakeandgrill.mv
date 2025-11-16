@@ -244,7 +244,7 @@ export default function DisplayManagement() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1 pb-mobile-nav">
+      <div className="p-6 max-w-7xl mx-auto flex-1 pb-24 md:pb-6 w-full">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-white">Displays ({displays.length})</h2>
           <div className="flex gap-2">
