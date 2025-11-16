@@ -160,7 +160,9 @@ router.get('/users', asyncHandler(async (req, res) => {
     SELECT 
       u.id,
       u.email,
-      u.name,
+      u.first_name,
+      u.last_name,
+      CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) as name,
       COALESCE(SUM(wh.duration_seconds), 0) as total_seconds,
       COUNT(wh.id) as total_sessions
     FROM users u
@@ -184,7 +186,7 @@ router.get('/users', asyncHandler(async (req, res) => {
     usersQuery += ' WHERE ' + conditions.join(' AND ');
   }
   
-  usersQuery += ' GROUP BY u.id, u.email, u.name ORDER BY total_seconds DESC';
+  usersQuery += ' GROUP BY u.id, u.email, u.first_name, u.last_name ORDER BY total_seconds DESC';
   
   const [users] = await db.query(usersQuery, userParams);
 
