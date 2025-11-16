@@ -47,7 +47,7 @@ export default function Analytics() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background pb-24 md:pb-6">
+      <div className="min-h-screen bg-tv-bg pb-24 md:pb-6 overflow-y-auto">
         <div className="bg-background-light border-b border-slate-700 p-4">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <h1 className="text-2xl font-bold text-white">Analytics</h1>

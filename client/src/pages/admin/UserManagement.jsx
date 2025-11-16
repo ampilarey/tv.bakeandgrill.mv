@@ -77,7 +77,7 @@ export default function UserManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
       {/* Top Bar */}
       <div className="bg-background-light border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
