@@ -48,7 +48,7 @@ export default function Analytics() {
   if (loading) {
     return (
       <div className="min-h-screen bg-tv-bg pb-24 md:pb-6 overflow-y-auto">
-        <div className="bg-background-light border-b border-slate-700 p-4">
+        <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <h1 className="text-2xl font-bold text-white">Analytics</h1>
             <MobileMenu />
@@ -62,14 +62,14 @@ export default function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24 md:pb-6">
+    <div className="min-h-screen bg-tv-bg pb-24 md:pb-6 overflow-y-auto">
       {/* Header */}
-      <div className="bg-background-light border-b border-slate-700 p-4">
+      <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold text-white">📊 Analytics Dashboard</h1>
-              <p className="text-text-secondary text-sm mt-1">Platform usage and performance metrics</p>
+              <p className="text-white/90 text-sm mt-1">Platform usage and performance metrics</p>
             </div>
             <MobileMenu />
           </div>
@@ -87,8 +87,8 @@ export default function Analytics() {
                 onClick={() => setTimeRange(value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   timeRange === value
-                    ? 'bg-primary text-white'
-                    : 'bg-background text-text-secondary hover:bg-background-lighter'
+                    ? 'bg-tv-accent text-white'
+                    : 'bg-tv-bgSoft text-tv-textSecondary hover:bg-tv-bgHover'
                 }`}
               >
                 {label}
@@ -105,7 +105,7 @@ export default function Analytics() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-secondary text-sm">Total Users</p>
+                <p className="text-tv-textSecondary text-sm">Total Users</p>
                 <p className="text-3xl font-bold text-white">{stats?.totalUsers || 0}</p>
               </div>
               <div className="text-4xl">👥</div>
@@ -116,7 +116,7 @@ export default function Analytics() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-secondary text-sm">Active Displays</p>
+                <p className="text-tv-textSecondary text-sm">Active Displays</p>
                 <p className="text-3xl font-bold text-white">{stats?.activeDisplays || 0}</p>
               </div>
               <div className="text-4xl">🖥️</div>
@@ -127,7 +127,7 @@ export default function Analytics() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-secondary text-sm">Total Playlists</p>
+                <p className="text-tv-textSecondary text-sm">Total Playlists</p>
                 <p className="text-3xl font-bold text-white">{stats?.totalPlaylists || 0}</p>
               </div>
               <div className="text-4xl">📋</div>
@@ -138,7 +138,7 @@ export default function Analytics() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-secondary text-sm">Total Watch Time</p>
+                <p className="text-tv-textSecondary text-sm">Total Watch Time</p>
                 <p className="text-3xl font-bold text-white">
                   {formatDuration(stats?.totalWatchTime || 0)}
                 </p>
@@ -162,7 +162,7 @@ export default function Analytics() {
                     <span className="text-2xl font-bold text-primary">#{index + 1}</span>
                     <div>
                       <p className="font-medium text-white">{channel.channel_name}</p>
-                      <p className="text-sm text-text-secondary">
+                      <p className="text-sm text-tv-textSecondary">
                         {channel.view_count} {channel.view_count === 1 ? 'view' : 'views'}
                       </p>
                     </div>
@@ -174,7 +174,7 @@ export default function Analytics() {
               ))}
             </div>
           ) : (
-            <p className="text-text-secondary text-center py-8">No watch data available</p>
+            <p className="text-tv-textSecondary text-center py-8">No watch data available</p>
           )}
         </Card>
 
@@ -190,18 +190,18 @@ export default function Analytics() {
                 >
                   <div className="flex-1">
                     <p className="text-white font-medium">{activity.user_email}</p>
-                    <p className="text-text-secondary">
+                    <p className="text-tv-textSecondary">
                       Watched <span className="text-primary">{activity.channel_name}</span>
                     </p>
                   </div>
-                  <p className="text-text-muted text-xs">
+                  <p className="text-tv-textMuted text-xs">
                     {new Date(activity.watched_at).toLocaleTimeString()}
                   </p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-text-secondary text-center py-8">No recent activity</p>
+            <p className="text-tv-textSecondary text-center py-8">No recent activity</p>
           )}
         </Card>
       </div>

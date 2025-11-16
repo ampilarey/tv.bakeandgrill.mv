@@ -207,7 +207,7 @@ export default function DisplayPairingPage() {
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-500/20 border border-red-500/50 text-red-400 p-4 rounded-lg mb-6">
+          <div className="bg-tv-error/20 border border-tv-error/50 text-tv-error p-4 rounded-lg mb-6">
             {error}
           </div>
         )}
@@ -257,10 +257,10 @@ export default function DisplayPairingPage() {
               <div className="aspect-square flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-6xl mb-4">📱</div>
-                  <p className="text-slate-900 font-medium">
+                  <p className="text-tv-text font-medium">
                     QR Code will appear here
                   </p>
-                  <p className="text-slate-600 text-sm mt-2">
+                  <p className="text-tv-textSecondary text-sm mt-2">
                     Generate from Admin Panel
                   </p>
                 </div>

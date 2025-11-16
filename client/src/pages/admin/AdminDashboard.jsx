@@ -38,7 +38,7 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="h-screen flex items-center justify-center bg-tv-bg">
         <Spinner size="xl" />
       </div>
     );
@@ -47,13 +47,13 @@ export default function AdminDashboard() {
   return (
     <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
       {/* Top Bar */}
-      <div className="bg-tv-bgElevated border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
+      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <MobileMenu />
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-white">Admin Dashboard</h1>
-              <p className="text-xs md:text-sm text-text-secondary hidden sm:block">Bake and Grill TV Management</p>
+              <p className="text-xs md:text-sm text-white/90 hidden sm:block">Bake and Grill TV Management</p>
             </div>
           </div>
           <div className="hidden md:flex items-center gap-3">
@@ -76,11 +76,11 @@ export default function AdminDashboard() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-muted text-sm mb-1">Total Users</p>
-                <p className="text-3xl font-bold text-white">{stats?.totalUsers || 0}</p>
+                <p className="text-tv-textMuted text-sm mb-1">Total Users</p>
+                <p className="text-3xl font-bold text-tv-text">{stats?.totalUsers || 0}</p>
               </div>
-              <div className="bg-blue-500/20 p-3 rounded-lg">
-                <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-tv-accent/20 p-3 rounded-lg">
+                <svg className="w-8 h-8 text-tv-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </div>
@@ -90,11 +90,11 @@ export default function AdminDashboard() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-muted text-sm mb-1">Playlists</p>
-                <p className="text-3xl font-bold text-white">{stats?.totalPlaylists || 0}</p>
+                <p className="text-tv-textMuted text-sm mb-1">Playlists</p>
+                <p className="text-3xl font-bold text-tv-text">{stats?.totalPlaylists || 0}</p>
               </div>
-              <div className="bg-primary/20 p-3 rounded-lg">
-                <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-tv-accent/20 p-3 rounded-lg">
+                <svg className="w-8 h-8 text-tv-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
               </div>
@@ -104,11 +104,11 @@ export default function AdminDashboard() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-muted text-sm mb-1">Total Displays</p>
-                <p className="text-3xl font-bold text-white">{stats?.totalDisplays || 0}</p>
+                <p className="text-tv-textMuted text-sm mb-1">Total Displays</p>
+                <p className="text-3xl font-bold text-tv-text">{stats?.totalDisplays || 0}</p>
               </div>
-              <div className="bg-purple-500/20 p-3 rounded-lg">
-                <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-tv-gold/20 p-3 rounded-lg">
+                <svg className="w-8 h-8 text-tv-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
@@ -118,11 +118,11 @@ export default function AdminDashboard() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-muted text-sm mb-1">Active Displays</p>
-                <p className="text-3xl font-bold text-green-400">{stats?.activeDisplays || 0}</p>
+                <p className="text-tv-textMuted text-sm mb-1">Active Displays</p>
+                <p className="text-3xl font-bold text-tv-gold">{stats?.activeDisplays || 0}</p>
               </div>
-              <div className="bg-green-500/20 p-3 rounded-lg">
-                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-tv-gold/20 p-3 rounded-lg">
+                <svg className="w-8 h-8 text-tv-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -132,7 +132,7 @@ export default function AdminDashboard() {
 
         {/* Quick Actions */}
         <div className="mb-8">
-          <h2 className="text-xl font-bold text-white mb-4">Quick Actions</h2>
+          <h2 className="text-xl font-bold text-tv-text mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Button variant="primary" size="lg" onClick={() => navigate('/admin/users')} className="justify-start">
               <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -160,17 +160,17 @@ export default function AdminDashboard() {
         {/* Watch Statistics */}
         {stats && (
           <Card>
-            <h3 className="text-lg font-bold text-white mb-4">Watch Statistics</h3>
+            <h3 className="text-lg font-bold text-tv-text mb-4">Watch Statistics</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <p className="text-text-muted text-sm mb-1">Total Watch Time</p>
-                <p className="text-2xl font-bold text-white">
+                <p className="text-tv-textMuted text-sm mb-1">Total Watch Time</p>
+                <p className="text-2xl font-bold text-tv-text">
                   {Math.floor((stats.totalWatchTime || 0) / 3600)} hours
                 </p>
               </div>
               <div>
-                <p className="text-text-muted text-sm mb-1">Total Sessions</p>
-                <p className="text-2xl font-bold text-white">{stats.totalSessions || 0}</p>
+                <p className="text-tv-textMuted text-sm mb-1">Total Sessions</p>
+                <p className="text-2xl font-bold text-tv-text">{stats.totalSessions || 0}</p>
               </div>
             </div>
           </Card>

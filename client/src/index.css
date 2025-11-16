@@ -4,15 +4,19 @@
 
 @layer base {
   :root {
-    /* Fresh Mint + Warm Gold Theme */
-    --tv-bg: #FAF9F6;
-    --tv-text: #3C5F56;
-    --primary-mint: #A8E6CF;
-    --primary-mint-dark: #66CDAA;
-    --accent-gold: #F4C95D;
-    --bg-soft: #FAF9F6;
-    --text-primary: #3C5F56;
-    --text-secondary: #6F8F89;
+    /* Soft Maroon + Gold + Cream Theme */
+    --maroon-soft: #B03A48;
+    --gold-accent: #DDAE5B;
+    --cream-bg: #FFF8EE;
+    --beige-light: #F2E6D0;
+    --text-primary: #4A3F3F;
+    --text-secondary: #6A5A5A;
+    --tv-bg: #FFF8EE;
+    --tv-text: #4A3F3F;
+    --primary-maroon: #B03A48;
+    --primary-maroon-hover: #C64756;
+    --accent-gold: #DDAE5B;
+    --bg-soft: #FFF8EE;
   }
   
   * {
@@ -23,20 +27,20 @@
   
   body {
     @apply antialiased;
-    background-color: #FAF9F6;
-    color: #3C5F56;
+    background-color: #FFF8EE;
+    color: #4A3F3F;
   }
   
   html,
   body {
     @apply h-full w-full m-0 p-0;
-    background-color: #FAF9F6;
+    background-color: #FFF8EE;
     overflow-x: hidden;
   }
   
   #root {
     @apply min-h-full w-full m-0 p-0;
-    background-color: #FAF9F6;
+    background-color: #FFF8EE;
     /* Allow scrolling on root for admin pages */
   }
 

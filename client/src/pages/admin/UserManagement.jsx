@@ -70,7 +70,7 @@ export default function UserManagement() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="h-screen flex items-center justify-center bg-tv-bg">
         <Spinner size="xl" />
       </div>
     );
@@ -79,13 +79,13 @@ export default function UserManagement() {
   return (
     <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
       {/* Top Bar */}
-      <div className="bg-tv-bgElevated border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
+      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <MobileMenu />
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-white">User Management</h1>
-              <p className="text-xs md:text-sm text-text-secondary hidden sm:block">Manage admin and staff accounts</p>
+              <p className="text-xs md:text-sm text-white/90 hidden sm:block">Manage admin and staff accounts</p>
             </div>
           </div>
           <div className="hidden md:flex gap-3">
@@ -100,7 +100,7 @@ export default function UserManagement() {
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto flex-1 pb-24 md:pb-6 w-full">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-white">All Users ({users.length})</h2>
+          <h2 className="text-xl font-semibold text-tv-text">All Users ({users.length})</h2>
           <Button variant="primary" onClick={() => setShowCreateModal(true)}>
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -115,20 +115,20 @@ export default function UserManagement() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Email</th>
-                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Name</th>
-                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Role</th>
-                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Status</th>
-                    <th className="text-left py-3 px-4 text-text-secondary font-medium text-sm">Last Login</th>
-                    <th className="text-right py-3 px-4 text-text-secondary font-medium text-sm">Actions</th>
+                  <tr className="border-b border-tv-borderSubtle">
+                    <th className="text-left py-3 px-4 text-tv-textSecondary font-medium text-sm">Email</th>
+                    <th className="text-left py-3 px-4 text-tv-textSecondary font-medium text-sm">Name</th>
+                    <th className="text-left py-3 px-4 text-tv-textSecondary font-medium text-sm">Role</th>
+                    <th className="text-left py-3 px-4 text-tv-textSecondary font-medium text-sm">Status</th>
+                    <th className="text-left py-3 px-4 text-tv-textSecondary font-medium text-sm">Last Login</th>
+                    <th className="text-right py-3 px-4 text-tv-textSecondary font-medium text-sm">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((user) => (
-                    <tr key={user.id} className="border-b border-slate-800 hover:bg-background-lighter">
-                      <td className="py-3 px-4 text-white">{user.email}</td>
-                      <td className="py-3 px-4 text-white">{user.first_name} {user.last_name}</td>
+                    <tr key={user.id} className="border-b border-tv-borderSubtle hover:bg-tv-bgSoft">
+                      <td className="py-3 px-4 text-tv-text">{user.email}</td>
+                      <td className="py-3 px-4 text-tv-text">{user.first_name} {user.last_name}</td>
                       <td className="py-3 px-4">
                         <Badge color={user.role === 'admin' ? 'primary' : user.role === 'staff' ? 'success' : 'default'}>
                           {user.role}
@@ -139,7 +139,7 @@ export default function UserManagement() {
                           {user.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4 text-text-muted text-sm">
+                      <td className="py-3 px-4 text-tv-textMuted text-sm">
                         {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                       </td>
                       <td className="py-3 px-4">
@@ -181,8 +181,8 @@ export default function UserManagement() {
               <div className="space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white mb-1">{user.first_name} {user.last_name}</h3>
-                    <p className="text-sm text-text-secondary">{user.email}</p>
+                    <h3 className="text-lg font-semibold text-tv-text mb-1">{user.first_name} {user.last_name}</h3>
+                    <p className="text-sm text-tv-textSecondary">{user.email}</p>
                   </div>
                   <div className="flex gap-2">
                     <Badge color={user.role === 'admin' ? 'primary' : user.role === 'staff' ? 'success' : 'default'}>
@@ -194,7 +194,7 @@ export default function UserManagement() {
                   </div>
                 </div>
                 
-                <div className="text-xs text-text-muted">
+                <div className="text-xs text-tv-textMuted">
                   Last login: {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                 </div>
                 
@@ -240,7 +240,7 @@ export default function UserManagement() {
       >
         <form onSubmit={handleCreateUser} className="space-y-4">
           {error && (
-            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+            <div className="bg-tv-error/20 border border-tv-error/30 rounded-lg p-3 text-tv-error text-sm">
               {error}
             </div>
           )}
@@ -264,13 +264,13 @@ export default function UserManagement() {
           />
           
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
+            <label className="block text-sm font-medium text-tv-textSecondary mb-2">
               Role <span className="text-red-500">*</span>
             </label>
             <select
               value={newUser.role}
               onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-              className="w-full px-4 py-2 rounded-lg bg-background-lighter text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-2 rounded-lg bg-tv-bgSoft text-tv-text border-2 border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent"
             >
               <option value="user">User (View Only)</option>
               <option value="staff">Staff (Manage Own Content)</option>

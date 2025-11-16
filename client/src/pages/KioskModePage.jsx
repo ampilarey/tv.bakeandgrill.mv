@@ -623,7 +623,7 @@ export default function KioskModePage() {
   if (error) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-black">
-        <div className="text-center p-8 bg-red-900/20 rounded-lg border border-red-500/30 max-w-md">
+        <div className="text-center p-8 bg-tv-error/20 rounded-lg border border-tv-error/30 max-w-md">
           <svg className="w-16 h-16 mx-auto text-red-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>

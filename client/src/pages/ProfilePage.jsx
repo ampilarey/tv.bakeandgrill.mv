@@ -105,8 +105,8 @@ export default function ProfilePage() {
       {/* Header */}
       <div className="bg-tv-bgElevated border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold text-white">Profile Settings</h1>
-          <p className="text-text-secondary text-sm mt-1">Manage your account information</p>
+          <h1 className="text-2xl font-bold text-tv-text">Profile Settings</h1>
+          <p className="text-tv-textSecondary text-sm mt-1">Manage your account information</p>
         </div>
       </div>
 
@@ -115,8 +115,8 @@ export default function ProfilePage() {
         {message.text && (
           <div className={`p-4 rounded-lg ${
             message.type === 'success' 
-              ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-              : 'bg-red-500/20 text-red-400 border border-red-500/50'
+              ? 'bg-tv-accent/20 text-tv-accent border-2 border-tv-accent/50' 
+              : 'bg-tv-error/20 text-tv-error border-2 border-tv-error/50'
           }`}>
             {message.text}
           </div>
@@ -125,7 +125,7 @@ export default function ProfilePage() {
         {/* Profile Information Card */}
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white">Profile Information</h2>
+            <h2 className="text-xl font-bold text-tv-text">Profile Information</h2>
             {!isEditingProfile && (
               <Button 
                 variant="ghost" 
@@ -144,18 +144,18 @@ export default function ProfilePage() {
           {!isEditingProfile ? (
             <div className="space-y-4">
               <div>
-                <label className="text-sm text-text-secondary">Full Name</label>
-                <p className="text-white font-medium">
+                <label className="text-sm text-tv-textSecondary">Full Name</label>
+                <p className="text-tv-text font-medium">
                   {user?.first_name} {user?.last_name}
                 </p>
               </div>
               <div>
-                <label className="text-sm text-text-secondary">Email</label>
-                <p className="text-white font-medium">{user?.email}</p>
+                <label className="text-sm text-tv-textSecondary">Email</label>
+                <p className="text-tv-text font-medium">{user?.email}</p>
               </div>
               <div>
-                <label className="text-sm text-text-secondary">Role</label>
-                <p className="text-white font-medium capitalize">{user?.role}</p>
+                <label className="text-sm text-tv-textSecondary">Role</label>
+                <p className="text-tv-text font-medium capitalize">{user?.role}</p>
               </div>
             </div>
           ) : (
@@ -206,7 +206,7 @@ export default function ProfilePage() {
         {/* Change Password Card */}
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white">Change Password</h2>
+            <h2 className="text-xl font-bold text-tv-text">Change Password</h2>
             {!isChangingPassword && (
               <Button 
                 variant="ghost" 
@@ -223,7 +223,7 @@ export default function ProfilePage() {
           </div>
 
           {!isChangingPassword ? (
-            <p className="text-text-secondary">
+            <p className="text-tv-textSecondary">
               Keep your account secure by regularly updating your password.
             </p>
           ) : (
@@ -272,11 +272,11 @@ export default function ProfilePage() {
 
         {/* Appearance */}
         <Card>
-          <h2 className="text-xl font-bold text-white mb-4">Appearance</h2>
+          <h2 className="text-xl font-bold text-tv-text mb-4">Appearance</h2>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-white font-medium mb-1">Theme</p>
-              <p className="text-text-secondary text-sm">
+              <p className="text-tv-text font-medium mb-1">Theme</p>
+              <p className="text-tv-textSecondary text-sm">
                 Choose your preferred color scheme
               </p>
             </div>
@@ -285,25 +285,25 @@ export default function ProfilePage() {
                 toggleTheme();
                 lightTap();
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-background-lighter hover:bg-background rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-tv-bgSoft hover:bg-tv-bgHover rounded-lg transition-colors"
             >
               {theme === 'dark' ? '🌙' : '☀️'}
-              <span className="text-white capitalize">{theme}</span>
+              <span className="text-tv-text capitalize">{theme}</span>
             </button>
           </div>
         </Card>
 
         {/* Account Information */}
         <Card>
-          <h2 className="text-xl font-bold text-white mb-4">Account Information</h2>
+          <h2 className="text-xl font-bold text-tv-text mb-4">Account Information</h2>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-text-secondary">Account Type</span>
-              <span className="text-white capitalize">{user?.role}</span>
+              <span className="text-tv-textSecondary">Account Type</span>
+              <span className="text-tv-text capitalize">{user?.role}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-text-secondary">Member Since</span>
-              <span className="text-white">
+              <span className="text-tv-textSecondary">Member Since</span>
+              <span className="text-tv-text">
                 {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
               </span>
             </div>

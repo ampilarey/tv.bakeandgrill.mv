@@ -213,7 +213,7 @@ export default function DisplayManagement() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="h-screen flex items-center justify-center bg-tv-bg">
         <Spinner size="xl" />
       </div>
     );
@@ -222,15 +222,15 @@ export default function DisplayManagement() {
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
       {/* Top Bar */}
-      <div className="bg-background-light border-b border-slate-700 px-6 py-4">
+      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <MobileMenu />
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-white">Display Management</h1>
-              <p className="text-xs md:text-sm text-text-secondary hidden sm:block">
+              <p className="text-xs md:text-sm text-white/90 hidden sm:block">
                 Manage cafe TV displays
-                <span className="ml-3 text-xs text-green-400 animate-pulse">● Auto-refresh (10s)</span>
+                <span className="ml-3 text-xs text-tv-gold animate-pulse">● Auto-refresh (10s)</span>
               </p>
             </div>
           </div>
@@ -246,7 +246,7 @@ export default function DisplayManagement() {
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto flex-1 pb-24 md:pb-6 w-full">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-white">Displays ({displays.length})</h2>
+          <h2 className="text-xl font-semibold text-tv-text">Displays ({displays.length})</h2>
           <div className="flex gap-2">
             <Button variant="primary" onClick={() => setShowPairModal(true)}>
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,10 +266,10 @@ export default function DisplayManagement() {
         {displays.length === 0 ? (
           <Card>
             <div className="text-center py-12">
-              <svg className="w-16 h-16 mx-auto text-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-16 h-16 mx-auto text-tv-textMuted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              <p className="text-text-secondary">No displays configured yet</p>
+              <p className="text-tv-textSecondary">No displays configured yet</p>
             </div>
           </Card>
         ) : (
@@ -285,17 +285,17 @@ export default function DisplayManagement() {
                       </Badge>
                     </div>
                     {display.location && (
-                      <p className="text-sm text-text-secondary mb-2">📍 {display.location}</p>
+                      <p className="text-sm text-tv-textSecondary mb-2">📍 {display.location}</p>
                     )}
                     {display.last_heartbeat ? (
-                      <p className="text-xs text-text-muted">
+                      <p className="text-xs text-tv-textMuted">
                         Last seen: {new Date(display.last_heartbeat).toLocaleString()}
                       </p>
                     ) : (
-                      <p className="text-xs text-text-muted">Never connected</p>
+                      <p className="text-xs text-tv-textMuted">Never connected</p>
                     )}
                     {display.current_channel_id && (
-                      <p className="text-sm text-text-muted mt-1">Now: {display.current_channel_id}</p>
+                      <p className="text-sm text-tv-textMuted mt-1">Now: {display.current_channel_id}</p>
                     )}
                   </div>
                 </div>
@@ -351,7 +351,7 @@ export default function DisplayManagement() {
       >
         <form onSubmit={handleCreateDisplay} className="space-y-4">
           {error && (
-            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+            <div className="bg-tv-error/20 border border-tv-error/30 rounded-lg p-3 text-tv-error text-sm">
               {error}
             </div>
           )}
@@ -372,7 +372,7 @@ export default function DisplayManagement() {
           />
           
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
+            <label className="block text-sm font-medium text-tv-textSecondary mb-2">
               Assign Playlist
             </label>
             <select
@@ -410,31 +410,31 @@ export default function DisplayManagement() {
       >
         <div className="space-y-4">
           {selectedDisplay && (
-            <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
-              <p className="text-blue-400 text-sm">
+            <div className="bg-tv-accent/20 border border-tv-accent/30 rounded-lg p-3">
+              <p className="text-tv-accent text-sm">
                 <strong>Display:</strong> {selectedDisplay.name}
                 {selectedDisplay.location && ` (${selectedDisplay.location})`}
               </p>
               {selectedDisplay.current_channel_id && (
-                <p className="text-text-muted text-xs mt-1">
+                <p className="text-tv-textMuted text-xs mt-1">
                   Currently playing: {selectedDisplay.current_channel_id}
                 </p>
               )}
             </div>
           )}
           
-          <p className="text-text-secondary">Select a channel to play on this display:</p>
+          <p className="text-tv-textSecondary">Select a channel to play on this display:</p>
           
           {channels.length === 0 ? (
             <div className="text-center py-8">
               <Spinner size="md" className="mb-2" />
-              <p className="text-text-muted text-sm">Loading channels...</p>
+              <p className="text-tv-textMuted text-sm">Loading channels...</p>
             </div>
           ) : (
             <div className="space-y-3">
               {/* Group Filter */}
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
+                <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                   Filter by Group
                 </label>
                 <select
@@ -453,7 +453,7 @@ export default function DisplayManagement() {
 
               {/* Channel Selector */}
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
+                <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                   Select Channel ({filteredChannelsForControl.length} available)
                 </label>
                 <select
@@ -503,9 +503,9 @@ export default function DisplayManagement() {
                 </div>
 
                 {/* Volume Slider with iOS Warning */}
-                <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
+                <div className="bg-tv-accent/20 border border-tv-accent/30 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm text-text-secondary">Volume Level</label>
+                    <label className="text-sm text-tv-textSecondary">Volume Level</label>
                     <span className="text-primary font-bold">{volumeLevel}%</span>
                   </div>
                   <input
@@ -516,7 +516,7 @@ export default function DisplayManagement() {
                     onChange={(e) => handleVolumeSliderChange(parseInt(e.target.value))}
                     className="w-full h-2 bg-background-lighter rounded-lg appearance-none cursor-pointer accent-primary mb-2"
                   />
-                  <p className="text-xs text-green-400 text-center mb-2">
+                  <p className="text-xs text-tv-accent text-center mb-2">
                     💡 Volume changes automatically as you drag
                   </p>
                   <p className="text-xs text-yellow-400">
@@ -563,13 +563,13 @@ export default function DisplayManagement() {
       >
         {createdDisplay && (
           <div className="space-y-6">
-            <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
-              <p className="text-green-400 font-medium mb-2">✅ Display "{createdDisplay.name}" created successfully!</p>
-              <p className="text-text-secondary text-sm">Use the URL below to access this display on your cafe TV.</p>
+            <div className="bg-tv-accent/20 border border-tv-accent/30 rounded-lg p-4">
+              <p className="text-tv-accent font-medium mb-2">✅ Display "{createdDisplay.name}" created successfully!</p>
+              <p className="text-tv-textSecondary text-sm">Use the URL below to access this display on your cafe TV.</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                 🌐 Display URL (Computer/Localhost)
               </label>
               <div className="bg-background-lighter border border-slate-600 rounded-lg p-3">
@@ -591,7 +591,7 @@ export default function DisplayManagement() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                 📱 Display URL (Network - Phone/Tablet)
               </label>
               <div className="bg-background-lighter border border-slate-600 rounded-lg p-3">
@@ -613,7 +613,7 @@ export default function DisplayManagement() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
+              <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                 🔑 Display Token
               </label>
               <div className="bg-background-lighter border border-slate-600 rounded-lg p-3">
@@ -624,7 +624,7 @@ export default function DisplayManagement() {
             </div>
 
             <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-              <p className="text-blue-400 text-sm">
+              <p className="text-tv-accent text-sm">
                 <strong>💡 Tip:</strong> Open this URL on your cafe TV browser and bookmark it. 
                 The display will auto-login and start playing channels!
               </p>

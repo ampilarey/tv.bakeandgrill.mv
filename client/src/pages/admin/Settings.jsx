@@ -60,11 +60,11 @@ export default function Settings() {
   return (
     <div className="min-h-screen bg-tv-bg pb-24 md:pb-6 overflow-y-auto">
       {/* Header */}
-      <div className="bg-background-light border-b border-slate-700 p-4">
+      <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">⚙️ System Settings</h1>
-            <p className="text-text-secondary text-sm mt-1">Configure platform preferences</p>
+            <p className="text-white/90 text-sm mt-1">Configure platform preferences</p>
           </div>
           <MobileMenu />
         </div>
@@ -75,8 +75,8 @@ export default function Settings() {
         {message.text && (
           <div className={`p-4 rounded-lg mb-4 ${
             message.type === 'success' 
-              ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-              : 'bg-red-500/20 text-red-400 border border-red-500/50'
+              ? 'bg-tv-accent/20 text-tv-accent border-2 border-tv-accent/50' 
+              : 'bg-tv-error/20 text-tv-error border-2 border-tv-error/50'
           }`}>
             {message.text}
           </div>
@@ -85,7 +85,7 @@ export default function Settings() {
         <form onSubmit={handleSave} className="space-y-6">
           {/* General Settings */}
           <Card>
-            <h2 className="text-xl font-bold text-white mb-4">General Settings</h2>
+            <h2 className="text-xl font-bold text-tv-text mb-4">General Settings</h2>
             <div className="space-y-4">
               <Input
                 label="Application Name"
@@ -95,7 +95,7 @@ export default function Settings() {
               />
 
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
+                <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                   Auto-play on Player Load
                 </label>
                 <div className="flex items-center gap-3">
@@ -144,7 +144,7 @@ export default function Settings() {
             <h2 className="text-xl font-bold text-white mb-4">Analytics & Privacy</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
+                <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                   Enable Analytics Tracking
                 </label>
                 <div className="flex items-center gap-3">
@@ -167,15 +167,15 @@ export default function Settings() {
             <h2 className="text-xl font-bold text-white mb-4">System Information</h2>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-text-secondary">Platform Version</span>
+                <span className="text-tv-textSecondary">Platform Version</span>
                 <span className="text-white font-mono">1.0.5</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-text-secondary">Database</span>
+                <span className="text-tv-textSecondary">Database</span>
                 <span className="text-white">MySQL</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-text-secondary">Environment</span>
+                <span className="text-tv-textSecondary">Environment</span>
                 <span className="text-white">Production</span>
               </div>
             </div>
