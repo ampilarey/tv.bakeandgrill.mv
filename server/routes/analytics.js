@@ -130,4 +130,116 @@ router.get('/', asyncHandler(async (req, res) => {
   });
 }));
 
+/**
+ * GET /api/analytics/users
+ * Get detailed viewing statistics per user
+ */
+router.get('/users', asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const { range = 'all', userId } = req.query;
+
+  // Calculate date range
+  let startDate = null;
+  if (range !== 'all') {
+    const now = new Date();
+    switch(range) {
+      case '24h':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+    }
+  }
+
+  // Build base query for users
+  let usersQuery = `
+    SELECT 
+      u.id,
+      u.email,
+      u.name,
+      COALESCE(SUM(wh.duration_seconds), 0) as total_seconds,
+      COUNT(wh.id) as total_sessions
+    FROM users u
+    LEFT JOIN watch_history wh ON u.id = wh.user_id
+  `;
+  
+  const userParams = [];
+  const conditions = [];
+  
+  if (startDate) {
+    conditions.push('(wh.watched_at >= ? OR wh.watched_at IS NULL)');
+    userParams.push(startDate.toISOString());
+  }
+  
+  if (userId) {
+    conditions.push('u.id = ?');
+    userParams.push(userId);
+  }
+  
+  if (conditions.length > 0) {
+    usersQuery += ' WHERE ' + conditions.join(' AND ');
+  }
+  
+  usersQuery += ' GROUP BY u.id, u.email, u.name ORDER BY total_seconds DESC';
+  
+  const [users] = await db.query(usersQuery, userParams);
+
+  // For each user, get their detailed stats
+  const usersWithDetails = await Promise.all(users.map(async (user) => {
+    // Get channels watched by this user
+    const channelsQuery = `
+      SELECT 
+        wh.channel_id,
+        wh.channel_name,
+        COUNT(*) as view_count,
+        SUM(wh.duration_seconds) as total_seconds,
+        MIN(wh.watched_at) as first_watched,
+        MAX(wh.watched_at) as last_watched
+      FROM watch_history wh
+      WHERE wh.user_id = ? ${startDate ? 'AND wh.watched_at >= ?' : ''}
+      GROUP BY wh.channel_id, wh.channel_name
+      ORDER BY total_seconds DESC
+    `;
+    
+    const channelParams = [user.id];
+    if (startDate) {
+      channelParams.push(startDate.toISOString());
+    }
+    
+    const [channels] = await db.query(channelsQuery, channelParams);
+
+    // Get detailed viewing sessions for this user (most recent first)
+    const sessionsQuery = `
+      SELECT 
+        wh.id,
+        wh.channel_id,
+        wh.channel_name,
+        wh.watched_at,
+        wh.duration_seconds,
+        p.name as playlist_name
+      FROM watch_history wh
+      LEFT JOIN playlists p ON wh.playlist_id = p.id
+      WHERE wh.user_id = ? ${startDate ? 'AND wh.watched_at >= ?' : ''}
+      ORDER BY wh.watched_at DESC
+      LIMIT 100
+    `;
+    const [sessions] = await db.query(sessionsQuery, channelParams);
+
+    return {
+      ...user,
+      channels: channels || [],
+      sessions: sessions || []
+    };
+  }));
+
+  res.json({
+    success: true,
+    users: usersWithDetails
+  });
+}));
+
 module.exports = router;
