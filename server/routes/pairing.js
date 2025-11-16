@@ -119,11 +119,21 @@ router.post('/admin-pair-pin', verifyToken, requireAdmin, asyncHandler(async (re
   const displayPassword = crypto.randomBytes(32).toString('hex');
   const passwordHash = await bcrypt.hash(displayPassword, 10);
   
-  const [userResult] = await db.query(
-    `INSERT INTO users (email, password_hash, role, first_name, last_name, is_active)
-     VALUES (?, ?, 'display', ?, ?, 1)`,
-    [displayEmail, passwordHash, `Display: ${name}`, location || 'Kiosk']
-  );
+  console.log('🔧 Creating display user with role "display"...');
+  let userResult;
+  try {
+    [userResult] = await db.query(
+      `INSERT INTO users (email, password_hash, role, first_name, last_name, is_active)
+       VALUES (?, ?, 'display', ?, ?, 1)`,
+      [displayEmail, passwordHash, `Display: ${name}`, location || 'Kiosk']
+    );
+    console.log('✅ Display user created successfully');
+  } catch (error) {
+    console.error('❌ Error creating display user:', error.message);
+    console.error('❌ Error code:', error.code);
+    console.error('❌ SQL state:', error.sqlState);
+    throw error;
+  }
   
   const displayUserId = userResult.insertId;
 
