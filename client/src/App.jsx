@@ -158,7 +158,9 @@ function AppRouter() {
 function App() {
   return (
     <AuthProvider>
-      <AppRouter />
+      <div className="min-h-screen bg-tv-bg text-tv-text">
+        <AppRouter />
+      </div>
     </AuthProvider>
   );
 }

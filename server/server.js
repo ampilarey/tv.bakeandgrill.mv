@@ -26,6 +26,19 @@ const pairingRoutes = require('./routes/pairing');
 
 // Initialize database
 console.log('🚀 Starting Bake & Grill TV Server...');
+
+// 🚨 CRITICAL: Validate required environment variables
+if (!process.env.JWT_SECRET) {
+  console.error('🚨 CRITICAL: JWT_SECRET environment variable is not set!');
+  console.error('🚨 The application will NOT be secure without this.');
+  if (process.env.NODE_ENV === 'production') {
+    console.error('🚨 Failing in production mode for security.');
+    process.exit(1); // Fail fast in production
+  } else {
+    console.warn('⚠️  Continuing in development mode, but this MUST be fixed before production!');
+  }
+}
+
 initDatabase();
 
 // Create Express app
@@ -34,7 +47,10 @@ const PORT = process.env.PORT || 4000;
 
 app.set('trust proxy', 1);
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://tv.bakeandgrill.mv,https://tv.bakegrill.com')
+// CORS Configuration - Allow customization via environment variable
+// Format: comma-separated list of allowed origins (e.g., "https://example.com,https://app.example.com")
+// In development mode, all origins are allowed for easier testing
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.ALLOWED_ORIGINS || 'https://tv.bakeandgrill.mv,https://tv.bakegrill.com')
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);

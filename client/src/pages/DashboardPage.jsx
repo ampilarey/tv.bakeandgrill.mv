@@ -68,27 +68,27 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="h-screen flex items-center justify-center bg-tv-bg">
         <Spinner size="xl" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-tv-bg flex flex-col">
       {/* Top Bar */}
-      <div className="bg-background-light border-b border-slate-700 px-6 py-4">
+      <div className="bg-tv-bgElevated border-b-2 border-tv-borderSubtle px-6 py-5 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-primary-dark">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-tv-accent to-tv-accentHover shadow-lg">
+              <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">Bake and Grill TV</h1>
-              <p className="text-sm text-text-secondary">Welcome, {user?.firstName || user?.email}</p>
+              <h1 className="text-2xl font-bold text-tv-text">Bake and Grill TV</h1>
+              <p className="text-sm text-tv-textSecondary">Welcome, {user?.firstName || user?.email}</p>
             </div>
           </div>
           <div className="flex gap-3">
@@ -112,9 +112,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-white">
+      <div className="p-6 max-w-7xl mx-auto flex-1 w-full">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-3xl font-bold text-tv-text">
             {user?.role === 'user' ? 'Available Playlists' : 'Your Playlists'}
           </h2>
           {(user?.role === 'admin' || permissions?.can_add_playlists) && (
@@ -124,7 +124,7 @@ export default function DashboardPage() {
               </svg>
               Add Playlist
               {permissions?.max_playlists > 0 && (
-                <span className="ml-2 text-xs opacity-75">
+                <span className="ml-2 text-xs opacity-90">
                   ({playlists.length}/{permissions.max_playlists})
                 </span>
               )}
@@ -134,12 +134,12 @@ export default function DashboardPage() {
 
         {playlists.length === 0 ? (
           <Card>
-            <div className="text-center py-12">
-              <svg className="w-16 h-16 mx-auto text-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="text-center py-16">
+              <svg className="w-20 h-20 mx-auto text-tv-textMuted mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
-              <h3 className="text-xl font-semibold text-white mb-2">No Playlists Yet</h3>
-              <p className="text-text-secondary mb-4">Add your first M3U playlist to start watching</p>
+              <h3 className="text-2xl font-bold text-tv-text mb-3">No Playlists Yet</h3>
+              <p className="text-tv-textSecondary text-lg mb-6">Add your first M3U playlist to start watching</p>
               <Button variant="primary" onClick={() => setShowAddModal(true)}>
                 Add Your First Playlist
               </Button>
@@ -155,17 +155,17 @@ export default function DashboardPage() {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white mb-1">{playlist.name}</h3>
+                    <h3 className="text-xl font-bold text-tv-text mb-2">{playlist.name}</h3>
                     {playlist.description && (
-                      <p className="text-sm text-text-secondary">{playlist.description}</p>
+                      <p className="text-sm text-tv-textSecondary leading-relaxed">{playlist.description}</p>
                     )}
                   </div>
-                  <svg className="w-6 h-6 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6 text-tv-accent flex-shrink-0 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-                <div className="flex items-center text-xs text-text-muted">
-                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex items-center text-sm text-tv-textMuted font-medium">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                   {playlist.is_active ? 'Active' : 'Inactive'}
@@ -186,9 +186,9 @@ export default function DashboardPage() {
         }}
         title="Add New Playlist"
       >
-        <form onSubmit={handleAddPlaylist} className="space-y-4">
+        <form onSubmit={handleAddPlaylist} className="space-y-5">
           {error && (
-            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+            <div className="bg-tv-error/20 border-2 border-tv-error/40 rounded-xl p-4 text-tv-error text-sm font-medium">
               {error}
             </div>
           )}

@@ -582,6 +582,17 @@ export default function KioskModePage() {
 
     setupPlayer();
 
+    // Store playing handler for cleanup
+    let playingHandler = null;
+    
+    // Set up playing handler reference (if not already set)
+    if (!playingHandler) {
+      playingHandler = () => {
+        hasStartedPlaying = true;
+        clearPlaybackTimeout();
+      };
+    }
+
     return () => {
       clearPlaybackTimeout(); // Clear timeout on cleanup
       if (hlsRef.current) {
@@ -591,9 +602,10 @@ export default function KioskModePage() {
       if (errorHandler && video) {
         video.removeEventListener('error', errorHandler);
       }
-      // Remove playing event listener
-      const handlePlayingCleanup = () => {}; // Dummy function for cleanup
-      video.removeEventListener('playing', handlePlayingCleanup);
+      // Remove playing event listener with the actual handler
+      if (playingHandler && video) {
+        video.removeEventListener('playing', playingHandler);
+      }
     };
   }, [currentChannel]);
 

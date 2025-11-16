@@ -13,9 +13,9 @@ export default function Input({
   return (
     <div className={`w-full ${className}`}>
       {label && (
-        <label className="block text-sm font-medium text-text-secondary mb-2">
+        <label className="block text-sm font-medium text-tv-textSecondary mb-2">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-tv-error ml-1">*</span>}
         </label>
       )}
       <input
@@ -25,17 +25,17 @@ export default function Input({
         placeholder={placeholder}
         disabled={disabled}
         className={`
-          w-full px-4 py-2 rounded-lg
-          bg-background-lighter text-white
-          border ${error ? 'border-red-500' : 'border-slate-600'}
-          focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent
+          w-full px-4 py-2.5 rounded-lg font-medium
+          bg-tv-bgSoft text-tv-text placeholder:text-tv-textMuted
+          border-2 ${error ? 'border-tv-error' : 'border-tv-borderSubtle'}
+          focus:outline-none focus:ring-2 focus:ring-tv-accent focus:border-tv-accent
           disabled:opacity-50 disabled:cursor-not-allowed
-          transition-colors duration-200
+          transition-all duration-200
         `}
         {...props}
       />
       {error && (
-        <p className="mt-1 text-sm text-red-500">{error}</p>
+        <p className="mt-2 text-sm text-tv-error font-medium">{error}</p>
       )}
     </div>
   );

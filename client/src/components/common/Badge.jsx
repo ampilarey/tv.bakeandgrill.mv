@@ -1,11 +1,11 @@
-export default function Badge({ children, color = 'default', size = 'md' }) {
+export default function Badge({ children, color = 'default', size = 'md', className = '' }) {
   const colors = {
-    default: 'bg-slate-700 text-slate-200',
-    primary: 'bg-primary/20 text-primary border border-primary/30',
-    success: 'bg-green-900/20 text-green-400 border border-green-900/30',
-    danger: 'bg-red-900/20 text-red-400 border border-red-900/30',
-    warning: 'bg-yellow-900/20 text-yellow-400 border border-yellow-900/30',
-    info: 'bg-blue-900/20 text-blue-400 border border-blue-900/30'
+    default: 'bg-tv-bgSoft text-tv-textSecondary border border-tv-borderSubtle',
+    primary: 'bg-tv-accent/20 text-tv-accentLight border border-tv-accent/40',
+    success: 'bg-tv-success/20 text-tv-success border border-tv-success/40',
+    danger: 'bg-tv-error/20 text-tv-error border border-tv-error/40',
+    warning: 'bg-tv-warning/20 text-tv-warning border border-tv-warning/40',
+    info: 'bg-tv-info/20 text-tv-info border border-tv-info/40'
   };
   
   const sizes = {
@@ -15,7 +15,7 @@ export default function Badge({ children, color = 'default', size = 'md' }) {
   };
   
   return (
-    <span className={`inline-flex items-center rounded-full font-medium ${colors[color]} ${sizes[size]}`}>
+    <span className={`inline-flex items-center rounded-full font-semibold ${colors[color]} ${sizes[size]} ${className}`}>
       {children}
     </span>
   );

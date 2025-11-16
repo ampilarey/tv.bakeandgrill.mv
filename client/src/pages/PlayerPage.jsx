@@ -315,6 +315,17 @@ export default function PlayerPage() {
       hlsRef.current = null;
     }
     
+    // Store handlers in variables accessible to cleanup
+    // IMPORTANT: Initialize BEFORE any playback paths so handlers can be stored
+    const storedHandlers = {
+      handlePlaying: null,
+      handleMetadata: null,
+      iosCanPlayHandler: null,
+      iosMetadataHandler: null,
+      iosDataHandler: null,
+      iosPlayingHandler: null
+    };
+    
     // Clear previous errors and set loading state
     setVideoError(null);
     setRetryCount(0);
@@ -417,30 +428,32 @@ export default function PlayerPage() {
       // 🚨 CRITICAL: Start timeout guard immediately
       startPlaybackTimeout();
       
-      // Enhanced play function with fallback
+      // Enhanced play function with fallback - used in ALL playback paths
       const tryPlayWithFallback = async () => {
         try {
           const playPromise = video.play();
-          if (playPromise !== undefined) {
+          if (playPromise && typeof playPromise.then === 'function') {
             await playPromise;
-            console.log('✅ iOS Video playing successfully');
+            console.log('✅ Video playing successfully');
             hasStartedPlaying = true;
             clearPlaybackTimeout();
             setVideoLoading(false);
+            setVideoError(null);
           }
         } catch (err) {
-          console.log('⏳ iOS Autoplay blocked, trying muted fallback:', err.message);
+          console.warn('⏳ Autoplay blocked, trying muted fallback:', err.message);
           
-          // Try muted playback as fallback (iOS may allow this)
+          // Try muted playback as fallback (may allow this on some devices)
           try {
             video.muted = true;
             const mutedPromise = video.play();
-            if (mutedPromise !== undefined) {
+            if (mutedPromise && typeof mutedPromise.then === 'function') {
               await mutedPromise;
-              console.log('✅ iOS Video playing muted');
+              console.log('✅ Video playing muted');
               hasStartedPlaying = true;
               clearPlaybackTimeout();
               setVideoLoading(false);
+              setVideoError(null);
               
               // Show message that user can unmute
               setTimeout(() => {
@@ -448,23 +461,24 @@ export default function PlayerPage() {
               }, 500);
             }
           } catch (mutedErr) {
-            console.log('⚠️ iOS Autoplay blocked even when muted - user interaction required');
+            console.warn('⚠️ Autoplay blocked even when muted - user interaction required');
             clearPlaybackTimeout(); // Clear timeout since we know it needs user interaction
             setVideoLoading(false);
             video.controls = true; // Ensure controls visible for manual play
-            // Don't set error - this is normal behavior for iOS
+            // Don't set error - this is normal behavior, user can tap to play
           }
         }
       };
       
       // iOS-specific event handlers (will be added alongside general handlers)
-      let iosCanPlayHandler = null;
-      let iosMetadataHandler = null;
-      let iosDataHandler = null;
-      let iosPlayingHandler = null;
+      // Store in storedHandlers for cleanup
+      storedHandlers.iosCanPlayHandler = null;
+      storedHandlers.iosMetadataHandler = null;
+      storedHandlers.iosDataHandler = null;
+      storedHandlers.iosPlayingHandler = null;
       
       // Wait for video to be ready before trying to play
-      iosCanPlayHandler = () => {
+      storedHandlers.iosCanPlayHandler = () => {
         console.log('✅ iOS Video can play - readyState:', video.readyState, {
           videoWidth: video.videoWidth,
           videoHeight: video.videoHeight,
@@ -500,7 +514,7 @@ export default function PlayerPage() {
         tryPlayWithFallback();
       };
       
-      iosMetadataHandler = () => {
+      storedHandlers.iosMetadataHandler = () => {
         console.log('✅ iOS Video metadata loaded:', {
           videoWidth: video.videoWidth,
           videoHeight: video.videoHeight,
@@ -540,7 +554,7 @@ export default function PlayerPage() {
         }
       };
       
-      iosDataHandler = () => {
+      storedHandlers.iosDataHandler = () => {
         console.log('✅ iOS Video data loaded - readyState:', video.readyState, {
           videoWidth: video.videoWidth,
           videoHeight: video.videoHeight,
@@ -562,7 +576,7 @@ export default function PlayerPage() {
       };
       
       // Track when video actually starts playing
-      iosPlayingHandler = () => {
+      storedHandlers.iosPlayingHandler = () => {
         console.log('✅ iOS Video playing event fired', {
           videoWidth: video.videoWidth,
           videoHeight: video.videoHeight,
@@ -626,10 +640,10 @@ export default function PlayerPage() {
         setVideoLoading(false);
       };
       
-      video.addEventListener('canplay', iosCanPlayHandler);
-      video.addEventListener('loadedmetadata', iosMetadataHandler);
-      video.addEventListener('loadeddata', iosDataHandler);
-      video.addEventListener('playing', iosPlayingHandler);
+      video.addEventListener('canplay', storedHandlers.iosCanPlayHandler);
+      video.addEventListener('loadedmetadata', storedHandlers.iosMetadataHandler);
+      video.addEventListener('loadeddata', storedHandlers.iosDataHandler);
+      video.addEventListener('playing', storedHandlers.iosPlayingHandler);
       
       // Also try immediate play (might work on some iOS versions/situations)
       tryPlayWithFallback();
@@ -824,6 +838,48 @@ export default function PlayerPage() {
       // 🚨 CRITICAL: Start timeout guard for HLS.js path
       startPlaybackTimeout();
       
+      // Enhanced play function with fallback - shared with iOS path
+      const tryPlayWithFallback = async () => {
+        try {
+          const playPromise = video.play();
+          if (playPromise && typeof playPromise.then === 'function') {
+            await playPromise;
+            console.log('✅ Video playing successfully');
+            hasStartedPlaying = true;
+            clearPlaybackTimeout();
+            setVideoLoading(false);
+            setVideoError(null);
+          }
+        } catch (err) {
+          console.warn('⏳ Autoplay blocked, trying muted fallback:', err.message);
+          
+          // Try muted playback as fallback
+          try {
+            video.muted = true;
+            const mutedPromise = video.play();
+            if (mutedPromise && typeof mutedPromise.then === 'function') {
+              await mutedPromise;
+              console.log('✅ Video playing muted');
+              hasStartedPlaying = true;
+              clearPlaybackTimeout();
+              setVideoLoading(false);
+              setVideoError(null);
+              
+              // Show message that user can unmute
+              setTimeout(() => {
+                video.controls = true; // Ensure controls visible
+              }, 500);
+            }
+          } catch (mutedErr) {
+            console.warn('⚠️ Autoplay blocked even when muted - user interaction required');
+            clearPlaybackTimeout(); // Clear timeout since we know it needs user interaction
+            setVideoLoading(false);
+            video.controls = true; // Ensure controls visible for manual play
+            // Don't set error - this is normal behavior, user can tap to play
+          }
+        }
+      };
+      
       const hls = new Hls({
         enableWorker: !isMobile, // Disable worker on mobile to reduce memory usage
         lowLatencyMode: false,
@@ -925,42 +981,31 @@ export default function PlayerPage() {
         // Clear previous errors when manifest is parsed successfully
         setVideoError(null);
         
-        // Auto-play once manifest is ready
-        video.play()
-          .then(() => {
-            hasStartedPlaying = true;
-            clearPlaybackTimeout();
-            setVideoLoading(false);
-            // Clear error if playback starts successfully
-            setVideoError(null);
-          })
-          .catch(err => {
-            console.warn('Play error (user interaction may be required):', err);
-            setVideoLoading(false);
-            // On mobile, autoplay is often blocked - this is normal
-            // Don't clear timeout - user may need to interact
-            // Only set error if it's not an autoplay policy error
-            if (!err.message.includes('play() request') && !err.name.includes('NotAllowedError')) {
-              // Check if video has dimensions after metadata loads
-              // Capture values from outer scope
-              const metadataCheck = hasVideoMetadata;
-              const trackCheck = hasVideoTrack;
-              const checkVideoDimensions = () => {
-                setTimeout(() => {
-                  if (video.videoWidth === 0 && video.videoHeight === 0) {
-                    // Double-check by looking at actual video element state
-                    if (video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
-                      console.warn('⚠️ Video has no dimensions after metadata loaded - may be audio-only');
-                      if (metadataCheck && !trackCheck) {
-                        setVideoError('This stream appears to be audio-only or using an incompatible format.');
-                      }
-                    }
+        // Auto-play once manifest is ready - use tryPlayWithFallback for consistent behavior
+        tryPlayWithFallback().catch(err => {
+          console.warn('Play error (user interaction may be required):', err);
+          // Check if video has dimensions after metadata loads
+          // Capture values from outer scope
+          const metadataCheck = hasVideoMetadata;
+          const trackCheck = hasVideoTrack;
+          const checkVideoDimensions = () => {
+            setTimeout(() => {
+              if (video.videoWidth === 0 && video.videoHeight === 0) {
+                // Double-check by looking at actual video element state
+                if (video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+                  console.warn('⚠️ Video has no dimensions after metadata loaded - may be audio-only');
+                  if (metadataCheck && !trackCheck) {
+                    setVideoError('This stream appears to be audio-only or using an incompatible format.');
                   }
-                }, 3000); // Wait 3 seconds for metadata to load
-              };
-              checkVideoDimensions();
-            }
-          });
+                }
+              }
+            }, 3000); // Wait 3 seconds for metadata to load
+          };
+          // Only check dimensions if it's not an autoplay policy error
+          if (!err.message?.includes('play() request') && !err.name?.includes('NotAllowedError')) {
+            checkVideoDimensions();
+          }
+        });
       });
       
       // Track when HLS.js actually starts playing
@@ -973,6 +1018,9 @@ export default function PlayerPage() {
       };
       video.addEventListener('playing', handlePlaying);
       
+      // Store handlers for cleanup
+      storedHandlers.handlePlaying = handlePlaying;
+      
       // Check video dimensions when metadata loads (to detect audio-only streams)
       const handleMetadata = () => {
         if (video.readyState >= 2 && video.videoWidth === 0 && video.videoHeight === 0) {
@@ -981,6 +1029,7 @@ export default function PlayerPage() {
         }
       };
       video.addEventListener('loadedmetadata', handleMetadata);
+      storedHandlers.handleMetadata = handleMetadata;
 
       hls.on(Hls.Events.FRAG_LOADED, () => {
         console.log('HLS fragment loaded');
@@ -1051,6 +1100,15 @@ export default function PlayerPage() {
       // Cleanup function for HLS.js path
       return () => {
         clearPlaybackTimeout();
+        // Remove event listeners
+        if (video) {
+          if (storedHandlers.handlePlaying) {
+            video.removeEventListener('playing', storedHandlers.handlePlaying);
+          }
+          if (storedHandlers.handleMetadata) {
+            video.removeEventListener('loadedmetadata', storedHandlers.handleMetadata);
+          }
+        }
         if (hlsRef.current) {
           hlsRef.current.destroy();
           hlsRef.current = null;
@@ -1159,12 +1217,27 @@ export default function PlayerPage() {
     return () => {
       clearPlaybackTimeout();
       clearTimeout(timer);
-      // Remove event listeners (if they exist)
-      if (video && typeof handlePlaying === 'function') {
-        video.removeEventListener('playing', handlePlaying);
-      }
-      if (video && typeof handleMetadata === 'function') {
-        video.removeEventListener('loadedmetadata', handleMetadata);
+      // Remove event listeners using stored handlers
+      if (video) {
+        if (storedHandlers.handlePlaying) {
+          video.removeEventListener('playing', storedHandlers.handlePlaying);
+        }
+        if (storedHandlers.handleMetadata) {
+          video.removeEventListener('loadedmetadata', storedHandlers.handleMetadata);
+        }
+        // Remove iOS-specific handlers
+        if (storedHandlers.iosCanPlayHandler) {
+          video.removeEventListener('canplay', storedHandlers.iosCanPlayHandler);
+        }
+        if (storedHandlers.iosMetadataHandler) {
+          video.removeEventListener('loadedmetadata', storedHandlers.iosMetadataHandler);
+        }
+        if (storedHandlers.iosDataHandler) {
+          video.removeEventListener('loadeddata', storedHandlers.iosDataHandler);
+        }
+        if (storedHandlers.iosPlayingHandler) {
+          video.removeEventListener('playing', storedHandlers.iosPlayingHandler);
+        }
       }
       if (hlsRef.current) {
         hlsRef.current.destroy();
@@ -1191,18 +1264,18 @@ export default function PlayerPage() {
   const renderSidebarContent = (variant = 'desktop') => {
     const headerClasses =
       variant === 'mobile'
-        ? 'p-4 pb-3 border-b border-slate-700 bg-background-light sticky top-0 z-20 shadow-[0_-12px_32px_rgba(0,0,0,0.65)]'
-        : 'p-4 border-b border-slate-700';
+        ? 'p-4 pb-3 border-b border-tv-borderSubtle bg-tv-bgElevated sticky top-0 z-20 shadow-[0_-12px_32px_rgba(0,0,0,0.65)] flex-shrink-0'
+        : 'p-4 border-b border-tv-borderSubtle flex-shrink-0';
 
     const listWrapperClasses =
       variant === 'mobile'
-        ? 'flex-1 overflow-y-auto custom-scrollbar p-2 pb-32'
-        : 'flex-1 overflow-y-auto custom-scrollbar';
+        ? 'flex-1 overflow-y-auto custom-scrollbar p-2 pb-32 bg-tv-bgElevated min-h-0'
+        : 'flex-1 overflow-y-auto custom-scrollbar p-3 bg-tv-bgElevated min-h-0';
 
     const footerClasses =
       variant === 'mobile'
-        ? 'p-3 border-t border-slate-800 text-xs text-text-muted text-center bg-background-light/95 sticky bottom-0'
-        : 'p-3 border-t border-slate-700 text-sm text-text-muted text-center';
+        ? 'p-3 border-t border-tv-borderSubtle text-xs text-tv-textMuted text-center bg-tv-bgElevated/95 sticky bottom-0 flex-shrink-0'
+        : 'p-3 border-t border-tv-borderSubtle text-sm text-tv-textMuted text-center flex-shrink-0';
 
     return (
       <>
@@ -1243,12 +1316,12 @@ export default function PlayerPage() {
             
             {/* Search History Dropdown */}
             {showSearchSuggestions && searchHistory.length > 0 && !searchQuery && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-background-light border border-slate-600 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-                <div className="flex items-center justify-between p-2 border-b border-slate-700">
-                  <span className="text-xs text-text-secondary font-medium">Recent Searches</span>
+              <div className="absolute top-full left-0 right-0 mt-2 bg-tv-bgSoft border-2 border-tv-borderSubtle rounded-xl shadow-2xl z-10 max-h-48 overflow-y-auto">
+                <div className="flex items-center justify-between p-3 border-b border-tv-borderSubtle bg-tv-bgHover/50">
+                  <span className="text-xs text-tv-textSecondary font-semibold uppercase tracking-wide">Recent Searches</span>
                   <button
                     onClick={clearSearchHistory}
-                    className="text-xs text-red-400 hover:text-red-300"
+                    className="text-xs text-tv-error hover:text-tv-error/80 font-medium"
                   >
                     Clear
                   </button>
@@ -1260,9 +1333,9 @@ export default function PlayerPage() {
                       setSearchQuery(term);
                       setShowSearchSuggestions(false);
                     }}
-                    className="w-full text-left px-3 py-2 hover:bg-background-lighter text-white text-sm transition-colors flex items-center gap-2"
+                    className="w-full text-left px-4 py-2.5 hover:bg-tv-bgHover text-tv-text text-sm transition-all flex items-center gap-3 border-b border-tv-borderSubtle/30 last:border-0"
                   >
-                    <span>🔍</span>
+                    <span className="text-tv-accent">🔍</span>
                     <span>{term}</span>
                   </button>
                 ))}
@@ -1282,7 +1355,7 @@ export default function PlayerPage() {
             <select
               value={selectedGroup}
               onChange={(e) => setSelectedGroup(e.target.value)}
-              className="px-3 py-1 text-sm rounded-lg bg-background-lighter text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-3 py-1.5 text-sm font-medium rounded-lg bg-tv-bgSoft text-tv-text border-2 border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent focus:border-tv-accent"
             >
               <option value="">All Groups</option>
               {groups.map(group => (
@@ -1291,45 +1364,45 @@ export default function PlayerPage() {
             </select>
             
             {/* View Mode Toggle */}
-            <div className="ml-auto flex border border-slate-600 rounded-lg overflow-hidden">
+            <div className="ml-auto flex border-2 border-tv-borderSubtle rounded-lg overflow-hidden bg-tv-bgSoft">
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-3 py-1 text-sm ${
+                className={`px-4 py-1.5 text-sm font-medium transition-all ${
                   viewMode === 'list' 
-                    ? 'bg-primary text-white' 
-                    : 'bg-background-lighter text-text-secondary hover:bg-background'
+                    ? 'bg-tv-accent text-white shadow-md' 
+                    : 'bg-transparent text-tv-textSecondary hover:bg-tv-bgHover hover:text-tv-text'
                 }`}
                 title="List View"
               >
-                ☰
+                ☰ List
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`px-3 py-1 text-sm border-l border-slate-600 ${
+                className={`px-4 py-1.5 text-sm font-medium border-l-2 border-tv-borderSubtle transition-all ${
                   viewMode === 'grid' 
-                    ? 'bg-primary text-white' 
-                    : 'bg-background-lighter text-text-secondary hover:bg-background'
+                    ? 'bg-tv-accent text-white shadow-md' 
+                    : 'bg-transparent text-tv-textSecondary hover:bg-tv-bgHover hover:text-tv-text'
                 }`}
                 title="Grid View"
               >
-                ⊞
+                ⊞ Grid
               </button>
             </div>
           </div>
         </div>
 
         <div className={listWrapperClasses}>
-          {/* Recently Watched Section */}
-          {recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
-            <div className="p-2 border-b border-slate-700">
+          {/* Recently Watched Section - Mobile Only */}
+          {variant === 'mobile' && recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
+            <div className="p-2 border-b border-tv-borderSubtle">
               <div className="flex items-center justify-between mb-2 px-1">
-                <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
+                <h3 className="text-sm font-semibold text-tv-textSecondary uppercase tracking-wide">
                   🕒 Recently Watched
                 </h3>
                 {recentlyWatched.length > 5 && (
                   <button
                     onClick={() => setShowAllRecent(!showAllRecent)}
-                    className="text-xs text-primary hover:text-primary-light transition-colors"
+                    className="text-xs text-tv-accent hover:text-tv-accentSoft transition-colors"
                   >
                     {showAllRecent ? 'Show Less' : `Show All (${recentlyWatched.length})`}
                   </button>
@@ -1343,21 +1416,23 @@ export default function PlayerPage() {
                     className={`
                       p-3 rounded-lg cursor-pointer transition-all
                       ${currentChannel?.id === channel.id 
-                        ? 'bg-primary/20 border border-primary' 
-                        : 'bg-background-lighter/50 hover:bg-background-lighter border border-transparent'
+                        ? 'bg-tv-accent/20 border-l-3 border-tv-accent' 
+                        : 'bg-tv-bgSoft hover:bg-tv-bgHover border-l-3 border-transparent'
                       }
                     `}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-medium text-white truncate text-sm">{channel.name}</h3>
+                          <h3 className={`font-medium truncate text-sm ${
+                            currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
+                          }`}>{channel.name}</h3>
                           {currentChannel?.id === channel.id && (
                             <Badge color="success" size="sm">Playing</Badge>
                           )}
                         </div>
                         {channel.group && (
-                          <p className="text-xs text-text-muted">{channel.group}</p>
+                          <p className="text-xs text-tv-textMuted">{channel.group}</p>
                         )}
                       </div>
                       <button
@@ -1365,7 +1440,7 @@ export default function PlayerPage() {
                           e.stopPropagation();
                           toggleFavorite(channel);
                         }}
-                        className="ml-2 p-1 hover:scale-110 transition-transform"
+                        className="ml-2 p-1 hover:scale-110 transition-transform text-tv-accentSoft"
                       >
                         {isFavorite(channel.id) ? '⭐' : '☆'}
                       </button>
@@ -1378,13 +1453,18 @@ export default function PlayerPage() {
 
           {/* All Channels Section */}
           {filteredChannels.length === 0 ? (
-            <div className="p-8 text-center text-text-muted">
+            <div className="p-8 text-center text-tv-textMuted">
               <p>No channels found</p>
             </div>
           ) : (
-            <div className="p-2">
-              {recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
-                <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-2 px-1">
+            <div>
+              {variant === 'mobile' && recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
+                <h3 className="text-sm font-semibold text-tv-textSecondary uppercase tracking-wide mb-2 px-1">
+                  📺 All Channels
+                </h3>
+              )}
+              {variant === 'desktop' && (
+                <h3 className="text-sm font-semibold text-tv-textSecondary uppercase tracking-wide mb-3 px-1">
                   📺 All Channels
                 </h3>
               )}
@@ -1394,32 +1474,50 @@ export default function PlayerPage() {
                 <div
                   key={channel.id}
                   onClick={() => handleChannelClick(channel)}
-                  className={`
-                    p-3 mb-2 rounded-lg cursor-pointer transition-all
-                    ${currentChannel?.id === channel.id 
-                      ? 'bg-primary/20 border border-primary' 
-                      : 'bg-background hover:bg-background-lighter border border-transparent'
-                    }
-                  `}
+                    className={`
+                      flex items-center gap-3 px-3 py-3 mb-1.5 rounded-lg cursor-pointer transition-all
+                      ${currentChannel?.id === channel.id 
+                        ? 'bg-tv-accent/20 border-l-3 border-tv-accent shadow-lg' 
+                        : 'bg-transparent hover:bg-tv-bgHover border-l-3 border-transparent'
+                      }
+                    `}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium text-white truncate">{channel.name}</h3>
-                        {currentChannel?.id === channel.id && (
-                          <Badge color="success" size="sm">Playing</Badge>
-                        )}
-                      </div>
-                      {channel.group && (
-                        <p className="text-xs text-text-muted">{channel.group}</p>
-                      )}
-                    </div>
+                  {/* Channel logo/avatar */}
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-tv-bgHover border border-tv-borderSubtle flex items-center justify-center overflow-hidden">
+                    {channel.logo ? (
+                      <img 
+                        src={channel.logo} 
+                        alt={channel.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <span className="text-xl text-tv-textMuted">📺</span>
+                    )}
+                  </div>
+                  
+                  {/* Channel name + category */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className={`font-medium truncate ${
+                      currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
+                    }`}>{channel.name}</h3>
+                    {channel.group && (
+                      <p className="text-xs text-tv-textMuted truncate">{channel.group}</p>
+                    )}
+                  </div>
+                  
+                  {/* Badge and favorite button */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {currentChannel?.id === channel.id && (
+                      <Badge color="success" size="sm">Playing</Badge>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleFavorite(channel);
                       }}
-                      className="ml-2 p-1 hover:scale-110 transition-transform"
+                      className="p-1 hover:scale-110 transition-transform text-tv-accentSoft"
+                      title={isFavorite(channel.id) ? 'Remove from favorites' : 'Add to favorites'}
                     >
                       {isFavorite(channel.id) ? '⭐' : '☆'}
                     </button>
@@ -1437,8 +1535,8 @@ export default function PlayerPage() {
                       className={`
                         p-3 rounded-lg cursor-pointer transition-all relative
                         ${currentChannel?.id === channel.id 
-                          ? 'bg-primary/20 border-2 border-primary' 
-                          : 'bg-background hover:bg-background-lighter border-2 border-transparent'
+                          ? 'bg-tv-accent/20 border-2 border-tv-accent shadow-lg' 
+                          : 'bg-tv-bgSoft hover:bg-tv-bgHover border-2 border-transparent'
                         }
                       `}
                     >
@@ -1448,19 +1546,21 @@ export default function PlayerPage() {
                             src={channel.logo} 
                             alt={channel.name}
                             loading="lazy"
-                            className="w-16 h-16 mx-auto mb-2 rounded object-cover"
+                            className="w-16 h-16 mx-auto mb-2 rounded-lg object-cover"
                             onError={(e) => { e.target.style.display = 'none'; }}
                           />
                         ) : (
-                          <div className="w-16 h-16 mx-auto mb-2 bg-slate-700 rounded flex items-center justify-center text-2xl">
+                          <div className="w-16 h-16 mx-auto mb-2 bg-tv-bgHover border border-tv-borderSubtle rounded-lg flex items-center justify-center text-2xl">
                             📺
                           </div>
                         )}
-                        <h3 className="font-medium text-white text-sm truncate mb-1">
+                        <h3 className={`font-medium text-sm truncate mb-1 ${
+                          currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
+                        }`}>
                           {channel.name}
                         </h3>
                         {channel.group && (
-                          <p className="text-xs text-text-muted truncate">{channel.group}</p>
+                          <p className="text-xs text-tv-textMuted truncate">{channel.group}</p>
                         )}
                         {currentChannel?.id === channel.id && (
                           <Badge color="success" size="sm" className="mt-2">▶️</Badge>
@@ -1472,7 +1572,7 @@ export default function PlayerPage() {
                             e.stopPropagation();
                             toggleFavorite(channel);
                           }}
-                          className="absolute top-2 right-2 p-1 bg-background/80 rounded hover:scale-110 transition-transform"
+                          className="absolute top-2 right-2 p-1 bg-tv-bgElevated/80 rounded hover:scale-110 transition-transform text-tv-accentSoft"
                         >
                           {isFavorite(channel.id) ? '⭐' : '☆'}
                         </button>
@@ -1499,8 +1599,10 @@ export default function PlayerPage() {
         </div>
 
         <div className={footerClasses}>
-          Showing {Math.min(displayedChannels, filteredChannels.length)} of {filteredChannels.length} channels
-          {filteredChannels.length !== channels.length && ` (${channels.length} total)`}
+          <span className="text-tv-textMuted">
+            Showing {Math.min(displayedChannels, filteredChannels.length)} of {filteredChannels.length} channels
+            {filteredChannels.length !== channels.length && ` (${channels.length} total)`}
+          </span>
         </div>
       </>
     );
@@ -1692,71 +1794,85 @@ export default function PlayerPage() {
 
   if (loading) {
     return (
-      <div className="h-screen flex flex-col md:flex-row bg-background overflow-hidden">
-        {/* Sidebar Skeleton */}
-        <div className="w-full md:w-96 bg-background-light border-r border-slate-700 p-4">
+      <div className="h-screen flex flex-col lg:grid lg:grid-cols-[280px_minmax(0,1.4fr)_320px] bg-tv-bg overflow-hidden">
+        {/* Left Sidebar Skeleton */}
+        <div className="hidden lg:flex lg:flex-col bg-tv-bgElevated border-r border-tv-borderSubtle p-4">
           <div className="mb-4 space-y-3">
-            <div className="h-10 bg-slate-700 rounded animate-pulse"></div>
-            <div className="h-10 bg-slate-700 rounded animate-pulse"></div>
+            <div className="h-10 bg-tv-bgSoft rounded animate-pulse"></div>
+            <div className="h-10 bg-tv-bgSoft rounded animate-pulse"></div>
           </div>
           <SkeletonLoader type="list" count={10} />
         </div>
         
-        {/* Player Skeleton */}
-        <div className="flex-1 flex items-center justify-center bg-black">
+        {/* Center Player Skeleton */}
+        <div className="flex-1 flex items-center justify-center bg-tv-bg">
           <Spinner size="xl" />
+        </div>
+        
+        {/* Right Panel Skeleton */}
+        <div className="hidden lg:flex lg:flex-col bg-tv-bgElevated border-l border-tv-borderSubtle p-4">
+          <div className="space-y-3">
+            <div className="h-32 bg-tv-bgSoft rounded animate-pulse"></div>
+            <div className="h-20 bg-tv-bgSoft rounded animate-pulse"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative h-screen bg-background overflow-hidden">
-      <div className="h-full flex flex-col md:flex-row bg-background">
-        {/* Sidebar - Desktop Only */}
-        <div className="hidden md:flex md:w-96 bg-background-light border-r border-slate-700 flex-col">
-          {renderSidebarContent('desktop')}
+    <div className="flex flex-col min-h-screen bg-tv-bg text-tv-text">
+      {/* Mobile: Top banner (player-first layout) */}
+      {isMobileView && (
+        <div className="lg:hidden px-4 py-4 border-b-2 border-tv-borderSubtle bg-tv-bgElevated flex items-center justify-between gap-3 sticky top-0 z-20 shadow-md">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs uppercase text-tv-textMuted tracking-wider mb-1.5 font-semibold">Now Playing</p>
+            <p className="text-tv-text font-bold truncate text-base">
+              {currentChannel?.name || 'Select a channel'}
+            </p>
+            {currentChannel?.group && (
+              <p className="text-tv-textSecondary text-sm truncate mt-0.5">{currentChannel.group}</p>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => setIsChannelDrawerOpen(true)}
+            className="flex-shrink-0 shadow-lg"
+          >
+            Channels
+          </Button>
         </div>
+      )}
 
-        {/* Main Player Area */}
-        <div className="flex-1 flex flex-col bg-black relative">
-          {isMobileView && (
-            <div className="md:hidden px-4 py-3 border-b border-slate-800 bg-background-light flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs uppercase text-text-muted tracking-wide mb-1">Now Playing</p>
-                <p className="text-white font-semibold truncate">
-                  {currentChannel?.name || 'Select a channel'}
-                </p>
-                {currentChannel?.group && (
-                  <p className="text-text-secondary text-xs truncate">{currentChannel.group}</p>
-                )}
-              </div>
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={() => setIsChannelDrawerOpen(true)}
-              >
-                Channels ({filteredChannels.length})
-              </Button>
-            </div>
-          )}
-        {currentChannel ? (
-          <>
-            {/* Video Player */}
-            <div className="flex-1 relative group">
-              {videoLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
-                  <div className="text-center">
-                    <Spinner size="xl" />
-                    <p className="text-white mt-4 text-sm">Loading stream...</p>
-                  </div>
-                </div>
-              )}
-              
-              {/* Tap to Play Button (Mobile) - Show when video is paused and needs user interaction */}
-              {!videoLoading && videoRef.current && videoRef.current.paused && (isIOS || (typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || /Android/.test(navigator.userAgent)))) && !videoError && (
-                <div 
-                  className="absolute inset-0 flex items-center justify-center bg-black/60 z-20 cursor-pointer"
+      {/* Main Layout: 3-panel desktop, player-first mobile */}
+      <div className="flex-1 lg:grid lg:grid-cols-[280px_minmax(0,1.4fr)_320px] lg:gap-6 lg:p-6 lg:h-[calc(100vh-96px)] lg:max-h-screen">
+        {/* LEFT COLUMN - Channel List (Desktop Only) */}
+        <aside className="hidden lg:flex lg:flex-col bg-tv-bgElevated border border-tv-borderSubtle rounded-xl overflow-hidden">
+          {renderSidebarContent('desktop')}
+        </aside>
+
+        {/* CENTER COLUMN - Video Player + Info */}
+        <main className="flex flex-col gap-4 px-4 pt-4 pb-4 lg:px-0 lg:pt-0 lg:pb-0 min-h-0">
+          {currentChannel ? (
+            <>
+              {/* Video Player Container - 16:9 aspect ratio */}
+              <div className="relative w-full max-w-5xl mx-auto">
+                <div className="aspect-video bg-black rounded-xl overflow-hidden border border-tv-borderSubtle shadow-2xl">
+                  <div className="relative w-full h-full group">
+                    {videoLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+                        <div className="text-center">
+                          <Spinner size="xl" />
+                          <p className="text-tv-text mt-4 text-sm">Loading stream...</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Tap to Play Button (Mobile) - Show when video is paused and needs user interaction */}
+                    {!videoLoading && videoRef.current && videoRef.current.paused && (isIOS || (typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || /Android/.test(navigator.userAgent)))) && !videoError && (
+                      <div 
+                        className="absolute inset-0 flex items-center justify-center bg-black/70 z-20 cursor-pointer rounded-xl"
                   onClick={async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1788,199 +1904,356 @@ export default function PlayerPage() {
                     }
                   }}
                 >
-                  <div className="text-center p-8">
-                    <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-primary/90 flex items-center justify-center">
-                      <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z"/>
-                      </svg>
+                        <div className="text-center p-8">
+                          <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-tv-accent flex items-center justify-center shadow-2xl border-4 border-tv-accent/30">
+                            <svg className="w-12 h-12 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z"/>
+                            </svg>
+                          </div>
+                          <p className="text-tv-text text-2xl font-bold mb-2">Tap to Play</p>
+                          <p className="text-tv-textSecondary text-base">Touch to start playback</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                      <video
+                        ref={videoRef}
+                        className="w-full h-full object-contain bg-black rounded-xl"
+                        controls={true}
+                        autoPlay
+                        playsInline
+                        webkit-playsinline="true"
+                        x-webkit-airplay="allow"
+                        preload="auto"
+                        muted={false}
+                        src={videoElementSrc ?? undefined}
+                        key={currentChannel?.id || 'no-channel'}
+                        style={{ 
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          WebkitPlaysInline: true,
+                          playsInline: true
+                        }}
+                        onClick={async (e) => {
+                          // On mobile, click video to play if paused
+                          if (videoRef.current) {
+                            if (videoRef.current.paused) {
+                              try {
+                                console.log('📱 Video clicked - attempting to play');
+                                await videoRef.current.play();
+                                setVideoLoading(false);
+                                setVideoError(null);
+                              } catch (err) {
+                                console.error('❌ Play on click failed:', err);
+                              }
+                            }
+                          }
+                        }}
+                        onTouchStart={async (e) => {
+                          // On iOS, tap the video to play if paused
+                          if (videoRef.current && videoRef.current.paused) {
+                            try {
+                              console.log('📱 Video touched - attempting to play');
+                              await videoRef.current.play();
+                              setVideoLoading(false);
+                              setVideoError(null);
+                            } catch (err) {
+                              console.log('Play on touch failed:', err);
+                            }
+                          }
+                        }}
+                      />
+
+                      {/* Custom Video Controls */}
+                      {useCustomControls && (
+                        <VideoControls
+                          videoRef={videoRef}
+                          hlsRef={hlsRef}
+                          onPiP={togglePictureInPicture}
+                          onFullscreen={() => {
+                            if (document.fullscreenElement) {
+                              document.exitFullscreen();
+                            } else {
+                              videoRef.current?.requestFullscreen();
+                            }
+                          }}
+                        />
+                      )}
+                      
+                      {/* Error Overlay */}
+                      {videoError && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-xl z-30">
+                          <div className="text-center p-8 max-w-md bg-tv-bgElevated rounded-2xl border-2 border-tv-error/30 shadow-2xl">
+                            <div className="text-6xl mb-4">⚠️</div>
+                            <h3 className="text-2xl font-bold text-tv-text mb-3">Playback Error</h3>
+                            <p className="text-tv-textSecondary text-base mb-6">{videoError}</p>
+                            <div className="flex gap-2 justify-center">
+                              <Button
+                                onClick={() => {
+                                  setVideoError(null);
+                                  setRetryCount(0);
+                                  // Force reload channel
+                                  const current = currentChannel;
+                                  setCurrentChannel(null);
+                                  setTimeout(() => setCurrentChannel(current), 100);
+                                }}
+                              >
+                                🔄 Retry
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => {
+                                  setVideoError(null);
+                                  setCurrentChannel(null);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-white text-xl font-semibold mb-2">Tap to Play</p>
-                    <p className="text-white/80 text-sm">Video requires user interaction</p>
                   </div>
                 </div>
-              )}
-              
-              <video
-                ref={videoRef}
-                className="w-full h-full object-contain bg-black"
-                controls={true}
-                autoPlay
-                playsInline
-                webkit-playsinline="true"
-                x-webkit-airplay="allow"
-                preload="auto"
-                muted={false}
-                src={videoElementSrc ?? undefined}
-                key={currentChannel?.id || 'no-channel'}
-                style={{ 
-                  minHeight: '200px',
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  WebkitPlaysInline: true,
-                  playsInline: true
-                }}
-                onClick={async (e) => {
-                  // On mobile, click video to play if paused
-                  if (videoRef.current) {
-                    if (videoRef.current.paused) {
-                      try {
-                        console.log('📱 Video clicked - attempting to play');
-                        await videoRef.current.play();
-                        setVideoLoading(false);
-                        setVideoError(null);
-                      } catch (err) {
-                        console.error('❌ Play on click failed:', err);
-                      }
-                    }
-                  }
-                }}
-                onTouchStart={async (e) => {
-                  // On iOS, tap the video to play if paused
-                  if (videoRef.current && videoRef.current.paused) {
-                    try {
-                      console.log('📱 Video touched - attempting to play');
-                      await videoRef.current.play();
-                      setVideoLoading(false);
-                      setVideoError(null);
-                    } catch (err) {
-                      console.log('Play on touch failed:', err);
-                    }
-                  }
-                }}
-              />
 
-              {/* Custom Video Controls */}
-              {useCustomControls && (
-                <VideoControls
-                  videoRef={videoRef}
-                  hlsRef={hlsRef}
-                  onPiP={togglePictureInPicture}
-                  onFullscreen={() => {
-                    if (document.fullscreenElement) {
-                      document.exitFullscreen();
-                    } else {
-                      videoRef.current?.requestFullscreen();
-                    }
-                  }}
-                />
-              )}
-              
-              {/* Error Overlay */}
-              {videoError && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-                  <div className="text-center p-6 max-w-md">
-                    <div className="text-6xl mb-4">⚠️</div>
-                    <h3 className="text-xl font-bold text-white mb-2">Playback Error</h3>
-                    <p className="text-text-secondary mb-4">{videoError}</p>
-                    <div className="flex gap-2 justify-center">
-                      <Button
-                        onClick={() => {
-                          setVideoError(null);
-                          setRetryCount(0);
-                          // Force reload channel
-                          const current = currentChannel;
-                          setCurrentChannel(null);
-                          setTimeout(() => setCurrentChannel(current), 100);
-                        }}
-                      >
-                        🔄 Retry
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setVideoError(null);
-                          setCurrentChannel(null);
-                        }}
-                      >
-                        Cancel
-                      </Button>
+              {/* Current Channel Info Strip */}
+              <section className="max-w-5xl mx-auto w-full flex flex-col gap-3">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Channel logo circle */}
+                    <div className="flex-shrink-0 w-12 h-12 rounded-full bg-tv-bgHover flex items-center justify-center overflow-hidden border-2 border-tv-accent/30 shadow-lg">
+                      {currentChannel.logo ? (
+                        <img 
+                          src={currentChannel.logo} 
+                          alt={currentChannel.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <span className="text-2xl">📺</span>
+                      )}
+                    </div>
+                    
+                    {/* Channel name + category */}
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-xl font-bold text-tv-text truncate">{currentChannel.name}</h2>
+                      {currentChannel.group && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-tv-accent/20 text-tv-accentLight border border-tv-accent/30">
+                            {currentChannel.group}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
+                  
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setShowKeyboardHelp(true)}
+                      title="Keyboard Shortcuts (?)"
+                      className="hidden md:flex"
+                    >
+                      ⌨️
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={togglePictureInPicture}
+                      title="Picture-in-Picture (P)"
+                    >
+                      🖼️
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => toggleFavorite(currentChannel)}
+                      title={isFavorite(currentChannel.id) ? 'Remove from favorites' : 'Add to favorites'}
+                      className={isFavorite(currentChannel.id) ? 'text-tv-accent' : ''}
+                    >
+                      {isFavorite(currentChannel.id) ? '⭐' : '☆'}
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </div>
-
-            {/* Current Channel Info */}
-            <div className="bg-background-light p-4 border-t border-slate-700">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-bold text-white truncate">{currentChannel.name}</h2>
-                  {currentChannel.group && (
-                    <p className="text-sm text-text-secondary">{currentChannel.group}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setShowKeyboardHelp(true)}
-                    title="Keyboard Shortcuts (?)"
-                    className="hidden md:flex"
+                
+                {/* Optional: Playlist name or description */}
+                <p className="text-sm text-tv-textMuted line-clamp-2">
+                  {currentChannel.group && `Category: ${currentChannel.group}`}
+                  {!currentChannel.group && 'Live stream'}
+                </p>
+              </section>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <svg className="w-24 h-24 mx-auto text-tv-textMuted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <p className="text-tv-textSecondary text-lg">Select a channel to start watching</p>
+                {isMobileView && (
+                  <Button
+                    variant="primary"
+                    onClick={() => setIsChannelDrawerOpen(true)}
+                    className="mt-4"
                   >
-                    ⌨️
+                    Browse Channels
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={togglePictureInPicture}
-                    title="Picture-in-Picture (P)"
-                  >
-                    🖼️
-                  </Button>
-                  <Button variant="ghost" onClick={() => toggleFavorite(currentChannel)}>
-                    {isFavorite(currentChannel.id) ? '⭐' : '☆'}
-                  </Button>
-                </div>
+                )}
               </div>
             </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <svg className="w-24 h-24 mx-auto text-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              <p className="text-text-secondary">Select a channel to start watching</p>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </main>
 
-      {/* Close the flex wrapper before rendering overlays */}
+        {/* RIGHT COLUMN - Channel Info & Recently Watched (Desktop Only) */}
+        <aside className="hidden lg:flex flex-col bg-tv-bgElevated border border-tv-borderSubtle rounded-xl px-4 py-4 gap-4 overflow-hidden">
+          {currentChannel ? (
+            <>
+              {/* Channel Info Card */}
+              <div className="space-y-3 bg-tv-bgSoft p-4 rounded-lg border border-tv-borderSubtle">
+                <div className="flex items-center gap-3 pb-3 border-b border-tv-borderSubtle">
+                  <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-tv-bgHover flex items-center justify-center overflow-hidden border-2 border-tv-accent/40 shadow-lg">
+                    {currentChannel.logo ? (
+                      <img 
+                        src={currentChannel.logo} 
+                        alt={currentChannel.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <span className="text-3xl">📺</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg font-bold text-tv-text truncate">{currentChannel.name}</h3>
+                    {currentChannel.group && (
+                      <p className="text-sm text-tv-textSecondary truncate">{currentChannel.group}</p>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Channel Details */}
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between py-1.5 border-b border-tv-borderSubtle/50">
+                    <span className="text-tv-textSecondary">Category</span>
+                    <span className="text-tv-text font-medium">{currentChannel.group || 'General'}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1.5 border-b border-tv-borderSubtle/50">
+                    <span className="text-tv-textSecondary">Status</span>
+                    <span className="text-tv-success font-medium">● Live</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1.5">
+                    <span className="text-tv-textSecondary">Favorite</span>
+                    <button
+                      onClick={() => toggleFavorite(currentChannel)}
+                      className={`text-xl hover:scale-110 transition-transform ${
+                        isFavorite(currentChannel.id) ? 'text-tv-accent' : 'text-tv-textMuted'
+                      }`}
+                    >
+                      {isFavorite(currentChannel.id) ? '⭐' : '☆'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recently Watched Section */}
+              {recentlyWatched.length > 0 && (
+                <div className="flex-1 min-h-0 flex flex-col">
+                  <h3 className="text-sm font-semibold text-tv-textSecondary uppercase tracking-wide mb-2">
+                    🕒 Recently Watched
+                  </h3>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1.5">
+                    {recentlyWatched.slice(0, 5).map((channel) => (
+                      <div
+                        key={`recent-sidebar-${channel.id}`}
+                        onClick={() => handleChannelClick(channel)}
+                        className={`
+                          flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all
+                          ${currentChannel?.id === channel.id 
+                            ? 'bg-tv-accent/20 border-l-3 border-tv-accent' 
+                            : 'bg-tv-bgSoft hover:bg-tv-bgHover border-l-3 border-transparent'
+                          }
+                        `}
+                      >
+                        <div className="flex-shrink-0 w-8 h-8 rounded bg-tv-bgHover border border-tv-borderSubtle flex items-center justify-center overflow-hidden">
+                          {channel.logo ? (
+                            <img 
+                              src={channel.logo} 
+                              alt={channel.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <span className="text-sm">📺</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-medium truncate ${
+                            currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
+                          }`}>
+                            {channel.name}
+                          </p>
+                          {channel.group && (
+                            <p className="text-xs text-tv-textMuted truncate">{channel.group}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center text-tv-textMuted">
+                <svg className="w-16 h-16 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm">Select a channel</p>
+                <p className="text-xs mt-1">Info will appear here</p>
+              </div>
+            </div>
+          )}
+        </aside>
       </div>
       
-      {/* Mobile overlays live outside the flex container to avoid clipping */}
-
+      {/* Mobile Channel Drawer - Bottom Sheet */}
       {isMobileView && isChannelDrawerOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-30"
+          className="lg:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-30"
           onClick={() => setIsChannelDrawerOpen(false)}
         />
       )}
 
       {isMobileView && (
         <div
-          className={`md:hidden fixed inset-x-0 bottom-0 z-40 transition-transform duration-300 ${isChannelDrawerOpen ? 'translate-y-0' : 'translate-y-[calc(100%-72px)]'}`}
+          className={`lg:hidden fixed inset-x-0 bottom-0 z-40 transition-transform duration-300 ease-out ${isChannelDrawerOpen ? 'translate-y-0' : 'translate-y-full'}`}
         >
-          <div className="bg-background-light border-t border-slate-700 rounded-t-3xl shadow-2xl flex flex-col h-[75vh] max-h-[80vh] safe-area-bottom">
+          <div className="bg-tv-bgElevated border-t-2 border-tv-borderSubtle rounded-t-3xl shadow-2xl flex flex-col h-[80vh] max-h-[85vh] safe-area-bottom">
+            {/* Drawer Handle & Header */}
             <button
-              className="flex items-center justify-between px-4 py-3 text-left"
+              className="flex items-center justify-between px-5 py-4 text-left border-b border-tv-borderSubtle bg-tv-bgSoft/50"
               onClick={() => setIsChannelDrawerOpen(prev => !prev)}
             >
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-white truncate">
-                  Channels ({filteredChannels.length})
-                </p>
-                <p className="text-xs text-text-muted truncate">
-                  {currentChannel ? `Now playing: ${currentChannel.name}` : 'Select a channel to start watching'}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-lg font-bold text-tv-text truncate">
+                    Channels ({filteredChannels.length})
+                  </p>
+                </div>
+                <p className="text-sm text-tv-textSecondary truncate">
+                  {currentChannel ? `Now playing: ${currentChannel.name}` : 'Tap to browse channels'}
                 </p>
               </div>
-              <span className="text-primary font-semibold text-sm">
-                {isChannelDrawerOpen ? 'Hide' : 'Show'}
+              <span className="text-tv-accent font-bold text-base ml-3 flex-shrink-0">
+                {isChannelDrawerOpen ? '▼ Hide' : '▲ Show'}
               </span>
             </button>
-            <div className="border-t border-slate-800 flex-1 overflow-hidden">
+            
+            {/* Channel List Content */}
+            <div className="flex-1 overflow-hidden bg-tv-bgElevated">
               <div className="h-full flex flex-col">
                 {renderSidebarContent('mobile')}
               </div>
@@ -1996,14 +2269,14 @@ export default function PlayerPage() {
           onClick={() => setShowKeyboardHelp(false)}
         >
           <div 
-            className="bg-background-light rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6"
+            className="bg-tv-bgElevated border border-tv-borderSubtle rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white">⌨️ Keyboard Shortcuts</h2>
+              <h2 className="text-2xl font-bold text-tv-text">⌨️ Keyboard Shortcuts</h2>
               <button
                 onClick={() => setShowKeyboardHelp(false)}
-                className="text-text-secondary hover:text-white transition-colors"
+                className="text-tv-textSecondary hover:text-tv-text transition-colors"
               >
                 ✕
               </button>
@@ -2012,74 +2285,74 @@ export default function PlayerPage() {
             <div className="space-y-6">
               {/* Playback Controls */}
               <div>
-                <h3 className="text-lg font-semibold text-primary mb-3">Playback Controls</h3>
+                <h3 className="text-lg font-semibold text-tv-accent mb-3">Playback Controls</h3>
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Play / Pause</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">Space</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Play / Pause</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">Space</kbd>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Play / Pause (alternate)</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">K</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Play / Pause (alternate)</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">K</kbd>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Mute / Unmute</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">M</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Mute / Unmute</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">M</kbd>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Volume Up</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">↑</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Volume Up</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">↑</kbd>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Volume Down</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">↓</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Volume Down</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">↓</kbd>
                   </div>
                 </div>
               </div>
 
               {/* Display Controls */}
               <div>
-                <h3 className="text-lg font-semibold text-primary mb-3">Display Controls</h3>
+                <h3 className="text-lg font-semibold text-tv-accent mb-3">Display Controls</h3>
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Fullscreen</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">F</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Fullscreen</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">F</kbd>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Picture-in-Picture</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">P</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Picture-in-Picture</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">P</kbd>
                   </div>
                 </div>
               </div>
 
               {/* Navigation */}
               <div>
-                <h3 className="text-lg font-semibold text-primary mb-3">Channel Navigation</h3>
+                <h3 className="text-lg font-semibold text-tv-accent mb-3">Channel Navigation</h3>
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Next Channel</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">→</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Next Channel</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">→</kbd>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Previous Channel</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">←</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Previous Channel</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">←</kbd>
                   </div>
                 </div>
               </div>
 
               {/* Help */}
               <div>
-                <h3 className="text-lg font-semibold text-primary mb-3">Help</h3>
+                <h3 className="text-lg font-semibold text-tv-accent mb-3">Help</h3>
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700">
-                    <span className="text-white">Show/Hide This Help</span>
-                    <kbd className="px-3 py-1 bg-background rounded text-sm font-mono">?</kbd>
+                  <div className="flex justify-between items-center py-2 border-b border-tv-borderSubtle">
+                    <span className="text-tv-text">Show/Hide This Help</span>
+                    <kbd className="px-3 py-1 bg-tv-bgSoft rounded text-sm font-mono text-tv-text">?</kbd>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-slate-700">
+            <div className="mt-6 pt-4 border-t border-tv-borderSubtle">
               <Button 
                 onClick={() => setShowKeyboardHelp(false)}
                 className="w-full"

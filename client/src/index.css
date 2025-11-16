@@ -3,18 +3,28 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --tv-bg: #0A0E17;
+    --tv-text: #F8FAFC;
+  }
+  
   * {
-    @apply border-slate-700;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
   }
   
   body {
-    @apply bg-background text-text antialiased;
+    @apply antialiased;
+    background-color: #0A0E17;
+    color: #F8FAFC;
   }
   
   html,
   body,
   #root {
     @apply h-full w-full m-0 p-0 overflow-hidden;
+    background-color: #0A0E17;
   }
 
   /* Light theme overrides */

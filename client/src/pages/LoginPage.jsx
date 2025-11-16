@@ -50,26 +50,26 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-tv-bg flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo/Brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-primary to-primary-dark mb-4">
-            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-gradient-to-br from-tv-accent to-tv-accentHover mb-6 shadow-2xl">
+            <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Bake and Grill TV</h1>
-          <p className="text-text-secondary">Sign in to access your channels</p>
+          <h1 className="text-4xl font-bold text-tv-text mb-3">Bake and Grill TV</h1>
+          <p className="text-tv-textSecondary text-lg">Sign in to access your channels</p>
         </div>
 
         {/* Login Form */}
-        <div className="bg-background-light rounded-xl p-8 border border-slate-700 shadow-xl">
+        <div className="bg-tv-bgElevated rounded-2xl p-8 border-2 border-tv-borderSubtle shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
-                <p className="text-red-400 text-sm">{error}</p>
+              <div className="bg-tv-error/20 border-2 border-tv-error/40 rounded-xl p-4">
+                <p className="text-tv-error text-sm font-medium">{error}</p>
               </div>
             )}
 
@@ -107,8 +107,8 @@ export default function LoginPage() {
 
           {/* Default Credentials Hint (Development Only) */}
           {import.meta.env.DEV && (
-            <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-              <p className="text-xs text-blue-400 font-mono">
+            <div className="mt-6 p-4 bg-tv-info/20 border-2 border-tv-info/40 rounded-xl">
+              <p className="text-sm text-tv-info font-mono leading-relaxed">
                 <strong>Dev Hint:</strong><br/>
                 Email: admin@bakegrill.com<br/>
                 Password: BakeGrill2025!
@@ -119,7 +119,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="text-center mt-8">
-          <p className="text-sm text-text-muted">
+          <p className="text-base text-tv-textMuted font-medium">
             &copy; 2025 Bake and Grill. All rights reserved.
           </p>
         </div>

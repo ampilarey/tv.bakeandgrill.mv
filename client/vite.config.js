@@ -36,6 +36,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: null, // Disable auto-inject - we handle registration manually in main.jsx
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable.png'],
       manifest: {
         name: 'Bake & Grill TV',

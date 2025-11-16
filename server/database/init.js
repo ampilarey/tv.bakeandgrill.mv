@@ -78,11 +78,22 @@ async function insertDefaultData(connection) {
       ['admin']
     );
     
-    if (adminRows[0].count === 0) {
+    // Only create default admin if explicitly allowed (security best practice)
+    const allowDefaultAdmin = process.env.ALLOW_DEFAULT_ADMIN !== 'false'; // Default true for backward compatibility
+    
+    if (adminRows[0].count === 0 && allowDefaultAdmin) {
       console.log('👤 Creating default admin user...');
+      console.warn('⚠️  WARNING: Default admin credentials should be changed immediately after first login!');
       
       const email = process.env.DEFAULT_ADMIN_EMAIL || 'admin@bakegrill.com';
       const password = process.env.DEFAULT_ADMIN_PASSWORD || 'BakeGrill2025!';
+      
+      // Security warning for default credentials
+      if (!process.env.DEFAULT_ADMIN_EMAIL || !process.env.DEFAULT_ADMIN_PASSWORD) {
+        console.error('🚨 SECURITY WARNING: Using hardcoded default admin credentials!');
+        console.error('🚨 SECURITY WARNING: Set DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD in .env for production!');
+      }
+      
       const passwordHash = await bcrypt.hash(password, 10);
       
       await connection.query(
@@ -93,6 +104,10 @@ async function insertDefaultData(connection) {
       
       console.log(`✅ Default admin created: ${email}`);
       console.log(`⚠️  IMPORTANT: Change password after first login!`);
+      console.log(`⚠️  SECURITY: Set ALLOW_DEFAULT_ADMIN=false in .env after first admin is created!`);
+    } else if (adminRows[0].count === 0 && !allowDefaultAdmin) {
+      console.log('⚠️  Default admin creation is disabled (ALLOW_DEFAULT_ADMIN=false)');
+      console.log('⚠️  Please create an admin user manually or set ALLOW_DEFAULT_ADMIN=true');
     }
     
     // Check if default settings exist
