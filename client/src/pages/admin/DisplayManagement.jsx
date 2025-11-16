@@ -255,11 +255,53 @@ export default function DisplayManagement() {
             </div>
             <div className="flex-1">
               <h3 className="text-lg font-bold text-tv-text mb-2">📺 Display Management Guide</h3>
-              <div className="space-y-3 text-sm text-tv-textSecondary">
+              <div className="space-y-4 text-sm text-tv-textSecondary">
+                <div>
+                  <p className="font-semibold text-tv-text mb-2">🔢 How to Connect Display Using PIN Code:</p>
+                  <div className="bg-tv-bgSoft rounded-lg p-4 border border-tv-borderSubtle space-y-3">
+                    <div>
+                      <p className="font-medium text-tv-text mb-1">Step 1: On the TV/Display Device</p>
+                      <ol className="list-decimal list-inside space-y-1 ml-2">
+                        <li>Open a browser on the TV/device</li>
+                        <li>Navigate to: <code className="bg-tv-bgElevated px-2 py-1 rounded text-xs">https://tv.bakeandgrill.mv/pair</code></li>
+                        <li>The screen will show a 6-digit PIN code (e.g., <strong>123456</strong>)</li>
+                        <li>You'll see: "Enter this PIN in Admin Panel"</li>
+                        <li>Note: PIN refreshes every 5 minutes</li>
+                        <li>The display checks for pairing every 3 seconds automatically</li>
+                      </ol>
+                    </div>
+                    <div>
+                      <p className="font-medium text-tv-text mb-1">Step 2: In Admin Panel (Your Computer/Phone)</p>
+                      <ol className="list-decimal list-inside space-y-1 ml-2">
+                        <li>Log in to Admin Panel → Display Management</li>
+                        <li>Click "Pair Display" button</li>
+                        <li>In the Pair New Display modal:</li>
+                        <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+                          <li>Select "PIN Code" tab (default)</li>
+                          <li>Enter Display Name (e.g., "Main Wall Display")</li>
+                          <li>Enter Location (optional, e.g., "Cafe Main Wall")</li>
+                          <li>Select Default Playlist (required - must assign a playlist)</li>
+                          <li>Enter the 6-digit PIN shown on the TV</li>
+                        </ul>
+                        <li>Click "Pair Display"</li>
+                      </ol>
+                    </div>
+                    <div>
+                      <p className="font-medium text-tv-text mb-1">Step 3: Automatic Connection ✅</p>
+                      <p className="ml-2">After clicking "Pair Display" in admin panel, the TV/display will automatically:</p>
+                      <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+                        <li>Detect the pairing (checks every 3 seconds)</li>
+                        <li>Show "Paired Successfully!" message</li>
+                        <li>Redirect to kiosk mode player</li>
+                        <li>Start playing the assigned playlist</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
                 <div>
                   <p className="font-semibold text-tv-text mb-1">Two Ways to Add Displays:</p>
                   <ul className="list-disc list-inside space-y-1 ml-2">
-                    <li><strong>Pair Display:</strong> Generate a unique pairing code. Open the display URL on your TV/device, enter the code, and it will automatically connect.</li>
+                    <li><strong>Pair Display:</strong> Use PIN code pairing (recommended). Open <code className="bg-tv-bgElevated px-1 py-0.5 rounded text-xs">/pair</code> on your TV, enter the PIN in admin panel, and it will automatically connect.</li>
                     <li><strong>Manual:</strong> Create a display manually and copy the display URL to open in your TV's browser.</li>
                   </ul>
                 </div>
@@ -274,9 +316,12 @@ export default function DisplayManagement() {
                 <div>
                   <p className="font-semibold text-tv-text mb-1">Quick Tips:</p>
                   <ul className="list-disc list-inside space-y-1 ml-2">
-                    <li>Keep the display URL bookmarked or saved on the TV for easy access.</li>
-                    <li>Displays will enter kiosk mode automatically (fullscreen, no controls).</li>
-                    <li>Use the "View Display URL" button to see the direct link for each display.</li>
+                    <li>PIN expires after 5 minutes - refresh the page on TV to get a new PIN if expired</li>
+                    <li>Playlist is required - you must assign a playlist before pairing</li>
+                    <li>Auto-checking - TV checks for pairing every 3 seconds, no manual refresh needed</li>
+                    <li>Keep the display URL bookmarked or saved on the TV for easy access</li>
+                    <li>Displays will enter kiosk mode automatically (fullscreen, no controls)</li>
+                    <li>Use the "View Display URL" button to see the direct link for each display</li>
                   </ul>
                 </div>
               </div>
