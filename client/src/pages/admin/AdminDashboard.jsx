@@ -45,9 +45,9 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
+    <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
       {/* Top Bar */}
-      <div className="bg-background-light border-b border-slate-700 px-6 py-4">
+      <div className="bg-tv-bgElevated border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <MobileMenu />
@@ -177,7 +177,7 @@ export default function AdminDashboard() {
         )}
       </div>
       
-      <Footer />
+      <Footer className="flex-shrink-0" />
     </div>
   );
 }

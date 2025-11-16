@@ -101,16 +101,16 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24 md:pb-6">
+    <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
       {/* Header */}
-      <div className="bg-background-light border-b border-slate-700 p-4">
+      <div className="bg-tv-bgElevated border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-2xl font-bold text-white">Profile Settings</h1>
           <p className="text-text-secondary text-sm mt-1">Manage your account information</p>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto p-4 space-y-6">
+      <div className="max-w-4xl mx-auto p-4 space-y-6 pb-24 md:pb-6 w-full flex-1">
         {/* Message Display */}
         {message.text && (
           <div className={`p-4 rounded-lg ${
@@ -311,7 +311,7 @@ export default function ProfilePage() {
         </Card>
       </div>
 
-      <Footer />
+      <Footer className="flex-shrink-0" />
     </div>
   );
 }

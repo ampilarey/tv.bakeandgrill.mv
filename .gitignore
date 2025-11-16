@@ -16,11 +16,11 @@ node_modules/
 # client/dist/ - COMMENTED OUT: Need to commit dist for cPanel deployment
 client/dist-ssr/
 
-# Database files (local development only)
-server/database/*.sqlite
-server/database/*.db
-*.sqlite
-*.db
+# Database files (local development only - MySQL dumps)
+*.sql
+!server/database/schema.sql
+!server/database/migrations/*.sql
+*.dump
 
 # Uploads (user-generated content)
 server/uploads/*

@@ -238,7 +238,7 @@ app.listen(PORT, () => {
   console.log('');
   console.log(`🌐 Server running on: http://localhost:${PORT}`);
   console.log(`📡 API endpoints: http://localhost:${PORT}/api/health`);
-  console.log(`🗄️  Database: ${process.env.DB_PATH || './database/database.sqlite'}`);
+  console.log(`🗄️  Database: MySQL (${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME || 'bakegrill_tv'})`);
   console.log(`⚙️  Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log('');
   console.log('🔥 Bake & Grill TV is ready!');

@@ -29,12 +29,13 @@
   
   html,
   body {
-    @apply h-full w-full m-0 p-0 overflow-hidden;
+    @apply h-full w-full m-0 p-0;
     background-color: #FAF9F6;
+    overflow-x: hidden;
   }
   
   #root {
-    @apply h-full w-full m-0 p-0;
+    @apply min-h-full w-full m-0 p-0;
     background-color: #FAF9F6;
     /* Allow scrolling on root for admin pages */
   }
