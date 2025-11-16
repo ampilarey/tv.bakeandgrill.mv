@@ -125,7 +125,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
     <Modal isOpen={isOpen} onClose={onClose} title="Pair New Display">
       <div className="space-y-6">
         {/* Method Tabs */}
-        <div className="flex gap-2 border-b border-slate-700">
+        <div className="flex gap-2 border-b border-tv-borderSubtle">
           {[
             { value: 'pin', label: '🔢 PIN Code' },
             { value: 'qr', label: '📱 QR Code' },
@@ -140,8 +140,8 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
               }}
               className={`px-4 py-2 font-medium transition-colors ${
                 method === m.value
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-text-secondary hover:text-white'
+                  ? 'text-tv-accent border-b-2 border-tv-accent'
+                  : 'text-tv-textSecondary hover:text-tv-text'
               }`}
             >
               {m.label}
@@ -172,13 +172,13 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
             placeholder="e.g., Ground Floor"
           />
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
+            <label className="block text-sm font-medium text-tv-textSecondary mb-2">
               Default Playlist *
             </label>
             <select
               value={playlistId}
               onChange={(e) => setPlaylistId(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg bg-background border border-slate-600 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
               required
             >
               <option value="">Select playlist...</option>
@@ -200,7 +200,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
               maxLength="6"
               className="text-center text-2xl font-mono tracking-widest"
             />
-            <p className="text-text-muted text-sm mt-2">
+            <p className="text-tv-textMuted text-sm mt-2">
               The display will show a 6-digit PIN code. Enter it here to pair.
             </p>
           </div>
@@ -217,7 +217,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
               </div>
             ) : (
               <div className="text-center">
-                <p className="text-text-secondary mb-4">
+                <p className="text-tv-textSecondary mb-4">
                   Click the button below to generate a QR code that can be scanned by the display.
                 </p>
                 <Button onClick={handleGenerateQR} disabled={loading}>
@@ -229,18 +229,18 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
         )}
 
         {method === 'manual' && (
-          <div className="bg-background rounded-lg p-4 border border-slate-700">
-            <p className="text-text-secondary text-sm mb-2">
+          <div className="bg-tv-bgSoft rounded-lg p-4 border border-tv-borderSubtle">
+            <p className="text-tv-textSecondary text-sm mb-2">
               After creating, you'll get a unique URL to enter in the display browser.
             </p>
-            <p className="text-text-muted text-xs">
+            <p className="text-tv-textMuted text-xs">
               Note: URL will be long and difficult to type. Consider using PIN or QR code method instead.
             </p>
           </div>
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-3 pt-4 border-t border-slate-700">
+        <div className="flex gap-3 pt-4 border-t border-tv-borderSubtle">
           <Button
             onClick={
               method === 'pin' ? handlePairWithPin :
