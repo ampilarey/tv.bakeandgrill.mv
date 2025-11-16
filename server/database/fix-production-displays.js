@@ -24,86 +24,10 @@ async function fixProductionDisplays() {
     const connection = await pool.getConnection();
     console.log('✅ Connected to MySQL\n');
     
-    // 1. Fix display role constraint
-    // Check if we're using MariaDB or MySQL
-    const [versionRows] = await connection.query('SELECT VERSION() as version');
-    const dbVersion = versionRows[0].version;
-    const isMariaDB = dbVersion.toLowerCase().includes('mariadb');
+    // 1. Add missing columns first (these are critical for pairing to work)
     
-    console.log(`1️⃣  Fixing display role constraint (${isMariaDB ? 'MariaDB' : 'MySQL'})...`);
-    
-    // Try to drop existing constraint (MariaDB uses DROP CONSTRAINT, MySQL uses DROP CHECK)
-    try {
-      if (isMariaDB) {
-        await connection.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_chk_1');
-      } else {
-        await connection.query('ALTER TABLE users DROP CHECK users_chk_1');
-      }
-      console.log('   ✅ Dropped old constraint');
-    } catch (error) {
-      if (error.message.includes('does not exist') || 
-          error.message.includes('Unknown constraint') ||
-          error.message.includes('syntax')) {
-        // Try alternative syntax
-        try {
-          if (isMariaDB) {
-            await connection.query('ALTER TABLE users DROP CONSTRAINT users_chk_1');
-          }
-        } catch (err2) {
-          console.log('   ⚠️  Constraint does not exist (ok)');
-        }
-      }
-    }
-    
-    // Check if constraint already has 'display' role
-    const [constraints] = await connection.query(`
-      SELECT CHECK_CLAUSE 
-      FROM information_schema.CHECK_CONSTRAINTS 
-      WHERE CONSTRAINT_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'users' 
-      AND CONSTRAINT_NAME = 'users_chk_1'
-    `).catch(() => [[null]]); // If CHECK_CONSTRAINTS table doesn't exist (old MariaDB)
-    
-    if (constraints.length > 0 && constraints[0].CHECK_CLAUSE && 
-        constraints[0].CHECK_CLAUSE.includes("'display'")) {
-      console.log('   ✅ Constraint already includes display role\n');
-    } else {
-      try {
-        await connection.query(`
-          ALTER TABLE users 
-          ADD CONSTRAINT users_chk_1 
-          CHECK (role IN ('admin', 'staff', 'user', 'display'))
-        `);
-        console.log('   ✅ Added constraint with display role\n');
-      } catch (error) {
-        if (error.message.includes('Duplicate') || 
-            error.message.includes('already exists') ||
-            error.message.includes('Duplicate key')) {
-          console.log('   ⚠️  Constraint already exists, trying to modify...');
-          // For MariaDB, we might need to drop and recreate
-          try {
-            if (isMariaDB) {
-              await connection.query('ALTER TABLE users DROP CONSTRAINT users_chk_1');
-            } else {
-              await connection.query('ALTER TABLE users DROP CHECK users_chk_1');
-            }
-            await connection.query(`
-              ALTER TABLE users 
-              ADD CONSTRAINT users_chk_1 
-              CHECK (role IN ('admin', 'staff', 'user', 'display'))
-            `);
-            console.log('   ✅ Constraint recreated with display role\n');
-          } catch (err2) {
-            console.log('   ⚠️  Could not modify constraint (may already be correct)\n');
-          }
-        } else {
-          throw error;
-        }
-      }
-    }
-    
-    // 2. Add location_pin column
-    console.log('2️⃣  Adding location_pin column...');
+    // Step 1: Add location_pin column
+    console.log('1️⃣  Adding location_pin column...');
     const [locationPinCols] = await connection.query(`
       SELECT COUNT(*) as count 
       FROM information_schema.COLUMNS 
@@ -126,8 +50,8 @@ async function fixProductionDisplays() {
       console.log('   ✅ Column already exists\n');
     }
     
-    // 3. Add user_id column
-    console.log('3️⃣  Adding user_id column...');
+    // Step 2: Add user_id column
+    console.log('2️⃣  Adding user_id column...');
     const [userIdCols] = await connection.query(`
       SELECT COUNT(*) as count 
       FROM information_schema.COLUMNS 
@@ -157,8 +81,8 @@ async function fixProductionDisplays() {
       console.log('   ✅ Column already exists\n');
     }
     
-    // Verify all columns exist
-    console.log('4️⃣  Verifying columns...');
+    // Step 3: Verify all columns exist
+    console.log('3️⃣  Verifying columns...');
     const [allCols] = await connection.query(`
       SELECT COLUMN_NAME 
       FROM information_schema.COLUMNS 
@@ -174,10 +98,71 @@ async function fixProductionDisplays() {
     });
     
     if (allCols.length === 2) {
-      console.log('\n🎉 All fixes applied successfully!');
+      console.log('\n🎉 All required columns exist!');
       console.log('✅ Display pairing should work now.\n');
     } else {
       console.log(`\n⚠️  Warning: Missing ${2 - allCols.length} column(s)`);
+    }
+    
+    // Step 4: Try to fix display role constraint (optional - may fail on some DB versions)
+    console.log('4️⃣  Fixing display role constraint (optional)...');
+    try {
+      // Check database version
+      const [versionRows] = await connection.query('SELECT VERSION() as version');
+      const dbVersion = versionRows[0].version;
+      const isMariaDB = dbVersion.toLowerCase().includes('mariadb');
+      
+      console.log(`   Database: ${isMariaDB ? 'MariaDB' : 'MySQL'} ${dbVersion}`);
+      
+      // Try to modify constraint - use a simple approach that works on both
+      // First, try to insert a test user with 'display' role to see if it works
+      const testEmail = `test_display_${Date.now()}@test.com`;
+      try {
+        const [testResult] = await connection.query(`
+          INSERT INTO users (email, password_hash, role, first_name, last_name, is_active)
+          VALUES (?, ?, 'display', 'Test', 'User', 0)
+        `, [testEmail, 'test_hash']);
+        
+        // If we got here, the constraint allows 'display' role!
+        console.log('   ✅ Constraint already allows display role');
+        
+        // Clean up test user
+        await connection.query('DELETE FROM users WHERE email = ?', [testEmail]);
+        console.log('   ✅ Removed test user\n');
+      } catch (testError) {
+        if (testError.message.includes('CHECK constraint') || testError.message.includes('check constraint')) {
+          console.log('   ⚠️  Constraint does not allow display role, attempting to fix...');
+          
+          // Try to drop and recreate constraint
+          try {
+            if (isMariaDB) {
+              await connection.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_chk_1').catch(() => {});
+              await connection.query('ALTER TABLE users DROP CONSTRAINT users_chk_1').catch(() => {});
+            } else {
+              await connection.query('ALTER TABLE users DROP CHECK users_chk_1').catch(() => {});
+            }
+          } catch (dropErr) {
+            // Ignore drop errors
+          }
+          
+          try {
+            await connection.query(`
+              ALTER TABLE users 
+              ADD CONSTRAINT users_chk_1 
+              CHECK (role IN ('admin', 'staff', 'user', 'display'))
+            `);
+            console.log('   ✅ Constraint fixed successfully\n');
+          } catch (addErr) {
+            console.log('   ⚠️  Could not modify constraint automatically');
+            console.log('   ⚠️  You may need to manually update the constraint in the database\n');
+          }
+        } else {
+          throw testError;
+        }
+      }
+    } catch (error) {
+      console.log('   ⚠️  Could not verify/fix constraint (non-critical)');
+      console.log(`   ⚠️  Error: ${error.message}\n`);
     }
     
     connection.release();
