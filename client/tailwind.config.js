@@ -7,43 +7,47 @@ export default {
   theme: {
     extend: {
       colors: {
-        // TV UI Color Scheme - Modern Premium Light Theme
+        // TV UI Color Scheme - Fresh Mint + Warm Gold Theme
         tv: {
-          bg: '#F8FAFC',           // Light gray-blue (main background)
+          bg: '#FAF9F6',           // Soft cream (main background)
           bgElevated: '#FFFFFF',   // Pure white (cards, sidebars)
-          bgSoft: '#F1F5F9',       // Soft gray (hover states)
-          bgHover: '#E2E8F0',      // Light blue-gray (active hover)
-          text: '#0F172A',         // Dark slate (primary text)
-          textSecondary: '#475569', // Medium gray (secondary text)
-          textMuted: '#64748B',    // Light gray (muted text)
-          borderSubtle: '#CBD5E1', // Light borders
-          accent: '#3B82F6',       // Bright blue - vibrant accent
-          accentHover: '#2563EB',  // Darker blue - hover
-          accentLight: '#DBEAFE',  // Light blue - backgrounds
-          success: '#10B981',      // Emerald - success
-          error: '#EF4444',        // Red - errors
-          warning: '#F59E0B',      // Amber - warnings
-          info: '#06B6D4',         // Cyan - info
+          bgSoft: '#F0F7F4',       // Light mint tint (hover states)
+          bgHover: '#E1F5E8',      // Soft mint (active hover)
+          text: '#3C5F56',         // Deep mint-green (primary text)
+          textSecondary: '#6F8F89', // Medium sage (secondary text)
+          textMuted: '#9FB3AE',    // Light sage (muted text)
+          borderSubtle: '#D4E5DF', // Soft mint borders
+          accent: '#A8E6CF',       // Fresh mint - main accent
+          accentHover: '#66CDAA',  // Deep mint - hover
+          accentDark: '#4DB89A',   // Darker mint - pressed
+          gold: '#F4C95D',         // Warm gold - secondary accent
+          goldHover: '#F7D98B',    // Light gold - hover
+          goldDark: '#E6B54A',     // Deep gold - active
+          success: '#66CDAA',      // Mint green - success
+          error: '#EF8080',        // Soft red - errors
+          warning: '#F4C95D',      // Gold - warnings
+          info: '#A8E6CF',         // Mint - info
         },
-        // Keep legacy colors for backward compatibility - updated to match light theme
+        // Keep legacy colors for backward compatibility - updated to match mint/gold theme
         primary: {
-          DEFAULT: '#3B82F6', // Bright blue
-          light: '#60A5FA',   // Light blue
-          dark: '#2563EB',    // Dark blue
+          DEFAULT: '#A8E6CF', // Fresh mint
+          light: '#C7F0DC',   // Light mint
+          dark: '#66CDAA',    // Deep mint
         },
         secondary: {
-          DEFAULT: '#F1F5F9', // Light gray
-          dark: '#E2E8F0',    // Soft gray
+          DEFAULT: '#F4C95D', // Warm gold
+          light: '#F7D98B',   // Light gold
+          dark: '#E6B54A',    // Deep gold
         },
         background: {
-          DEFAULT: '#F8FAFC', // Light background
+          DEFAULT: '#FAF9F6', // Soft cream
           light: '#FFFFFF',   // White
-          lighter: '#F1F5F9', // Soft gray
+          lighter: '#F0F7F4', // Light mint tint
         },
         text: {
-          DEFAULT: '#0F172A',      // Dark text
-          secondary: '#475569',    // Medium gray
-          muted: '#64748B',        // Light gray
+          DEFAULT: '#3C5F56',      // Deep mint-green
+          secondary: '#6F8F89',    // Medium sage
+          muted: '#9FB3AE',        // Light sage
         }
       },
       fontFamily: {

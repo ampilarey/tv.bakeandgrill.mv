@@ -20,11 +20,11 @@ export default function Button({
   const baseStyles = 'font-medium rounded-lg transition-all duration-200 focus-ring inline-flex items-center justify-center';
   
   const variants = {
-    primary: 'bg-tv-accent hover:bg-tv-accentHover text-white disabled:bg-tv-bgSoft shadow-md',
-    secondary: 'bg-tv-bgSoft hover:bg-tv-bgHover text-tv-text border-2 border-tv-borderSubtle',
-    danger: 'bg-tv-error hover:bg-tv-error/90 text-white disabled:bg-tv-error/40',
-    ghost: 'bg-transparent hover:bg-tv-bgHover text-tv-textSecondary hover:text-tv-text',
-    success: 'bg-tv-success hover:bg-tv-success/90 text-white disabled:bg-tv-success/40'
+    primary: 'bg-tv-accent hover:bg-tv-accentHover text-white disabled:bg-tv-bgSoft shadow-lg hover:shadow-xl transition-all font-semibold',
+    secondary: 'bg-tv-gold hover:bg-tv-goldHover text-white border-2 border-tv-gold shadow-md font-semibold',
+    danger: 'bg-tv-error hover:bg-tv-error/90 text-white disabled:bg-tv-error/40 shadow-md',
+    ghost: 'bg-transparent hover:bg-tv-bgHover text-tv-text hover:text-tv-accentDark font-medium',
+    success: 'bg-tv-success hover:bg-tv-accentHover text-white disabled:bg-tv-success/40 shadow-md'
   };
   
   const sizes = {

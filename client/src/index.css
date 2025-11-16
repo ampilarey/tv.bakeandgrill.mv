@@ -4,8 +4,15 @@
 
 @layer base {
   :root {
-    --tv-bg: #F8FAFC;
-    --tv-text: #0F172A;
+    /* Fresh Mint + Warm Gold Theme */
+    --tv-bg: #FAF9F6;
+    --tv-text: #3C5F56;
+    --primary-mint: #A8E6CF;
+    --primary-mint-dark: #66CDAA;
+    --accent-gold: #F4C95D;
+    --bg-soft: #FAF9F6;
+    --text-primary: #3C5F56;
+    --text-secondary: #6F8F89;
   }
   
   * {
@@ -16,19 +23,19 @@
   
   body {
     @apply antialiased;
-    background-color: #F8FAFC;
-    color: #0F172A;
+    background-color: #FAF9F6;
+    color: #3C5F56;
   }
   
   html,
   body {
     @apply h-full w-full m-0 p-0 overflow-hidden;
-    background-color: #F8FAFC;
+    background-color: #FAF9F6;
   }
   
   #root {
     @apply h-full w-full m-0 p-0;
-    background-color: #F8FAFC;
+    background-color: #FAF9F6;
     /* Allow scrolling on root for admin pages */
   }
 
