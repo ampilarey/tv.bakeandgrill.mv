@@ -49,15 +49,41 @@ async function fixMariaDBConstraint() {
       if (!constraint.CHECK_CLAUSE.includes("'display'")) {
         console.log(`🗑️  Dropping constraint: ${constraint.CONSTRAINT_NAME}...`);
         try {
-          // MariaDB uses backticks for constraint names with dots
-          const constraintName = constraint.CONSTRAINT_NAME.includes('.') 
-            ? `\`${constraint.CONSTRAINT_NAME}\``
-            : constraint.CONSTRAINT_NAME;
+          // MariaDB constraint names - try multiple syntaxes
+          const attempts = [
+            `ALTER TABLE users DROP CONSTRAINT \`${constraint.CONSTRAINT_NAME}\``,
+            `ALTER TABLE users DROP CHECK \`${constraint.CONSTRAINT_NAME}\``,
+            `ALTER TABLE users DROP CONSTRAINT ${constraint.CONSTRAINT_NAME}`,
+            `ALTER TABLE users DROP CHECK ${constraint.CONSTRAINT_NAME}`,
+          ];
           
-          await connection.query(`ALTER TABLE users DROP CONSTRAINT ${constraintName}`);
-          console.log(`   ✅ Dropped ${constraint.CONSTRAINT_NAME}\n`);
+          let dropped = false;
+          for (const sql of attempts) {
+            try {
+              await connection.query(sql);
+              console.log(`   ✅ Dropped ${constraint.CONSTRAINT_NAME}\n`);
+              dropped = true;
+              break;
+            } catch (err) {
+              // Try next syntax
+            }
+          }
+          
+          if (!dropped) {
+            console.log(`   ⚠️  Could not drop with any syntax, trying ALTER MODIFY...\n`);
+            // Try to modify the column definition to remove inline CHECK
+            try {
+              await connection.query(`
+                ALTER TABLE users 
+                MODIFY COLUMN role VARCHAR(20) DEFAULT 'user'
+              `);
+              console.log(`   ✅ Removed inline CHECK constraint from role column\n`);
+            } catch (modifyErr) {
+              console.log(`   ⚠️  Could not modify column: ${modifyErr.message}\n`);
+            }
+          }
         } catch (error) {
-          console.log(`   ⚠️  Could not drop: ${error.message}\n`);
+          console.log(`   ⚠️  Error: ${error.message}\n`);
         }
       } else {
         console.log(`✅ Constraint ${constraint.CONSTRAINT_NAME} already includes 'display' role\n`);
