@@ -25,30 +25,80 @@ async function fixProductionDisplays() {
     console.log('✅ Connected to MySQL\n');
     
     // 1. Fix display role constraint
-    console.log('1️⃣  Fixing display role constraint...');
+    // Check if we're using MariaDB or MySQL
+    const [versionRows] = await connection.query('SELECT VERSION() as version');
+    const dbVersion = versionRows[0].version;
+    const isMariaDB = dbVersion.toLowerCase().includes('mariadb');
+    
+    console.log(`1️⃣  Fixing display role constraint (${isMariaDB ? 'MariaDB' : 'MySQL'})...`);
+    
+    // Try to drop existing constraint (MariaDB uses DROP CONSTRAINT, MySQL uses DROP CHECK)
     try {
-      await connection.query('ALTER TABLE users DROP CHECK users_chk_1');
+      if (isMariaDB) {
+        await connection.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_chk_1');
+      } else {
+        await connection.query('ALTER TABLE users DROP CHECK users_chk_1');
+      }
       console.log('   ✅ Dropped old constraint');
     } catch (error) {
-      if (error.message.includes('does not exist') || error.message.includes('Unknown constraint')) {
-        console.log('   ⚠️  Constraint does not exist (ok)');
-      } else {
-        throw error;
+      if (error.message.includes('does not exist') || 
+          error.message.includes('Unknown constraint') ||
+          error.message.includes('syntax')) {
+        // Try alternative syntax
+        try {
+          if (isMariaDB) {
+            await connection.query('ALTER TABLE users DROP CONSTRAINT users_chk_1');
+          }
+        } catch (err2) {
+          console.log('   ⚠️  Constraint does not exist (ok)');
+        }
       }
     }
     
-    try {
-      await connection.query(`
-        ALTER TABLE users 
-        ADD CONSTRAINT users_chk_1 
-        CHECK (role IN ('admin', 'staff', 'user', 'display'))
-      `);
-      console.log('   ✅ Added constraint with display role\n');
-    } catch (error) {
-      if (error.message.includes('Duplicate') || error.message.includes('already exists')) {
-        console.log('   ⚠️  Constraint already exists (ok)\n');
-      } else {
-        throw error;
+    // Check if constraint already has 'display' role
+    const [constraints] = await connection.query(`
+      SELECT CHECK_CLAUSE 
+      FROM information_schema.CHECK_CONSTRAINTS 
+      WHERE CONSTRAINT_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'users' 
+      AND CONSTRAINT_NAME = 'users_chk_1'
+    `).catch(() => [[null]]); // If CHECK_CONSTRAINTS table doesn't exist (old MariaDB)
+    
+    if (constraints.length > 0 && constraints[0].CHECK_CLAUSE && 
+        constraints[0].CHECK_CLAUSE.includes("'display'")) {
+      console.log('   ✅ Constraint already includes display role\n');
+    } else {
+      try {
+        await connection.query(`
+          ALTER TABLE users 
+          ADD CONSTRAINT users_chk_1 
+          CHECK (role IN ('admin', 'staff', 'user', 'display'))
+        `);
+        console.log('   ✅ Added constraint with display role\n');
+      } catch (error) {
+        if (error.message.includes('Duplicate') || 
+            error.message.includes('already exists') ||
+            error.message.includes('Duplicate key')) {
+          console.log('   ⚠️  Constraint already exists, trying to modify...');
+          // For MariaDB, we might need to drop and recreate
+          try {
+            if (isMariaDB) {
+              await connection.query('ALTER TABLE users DROP CONSTRAINT users_chk_1');
+            } else {
+              await connection.query('ALTER TABLE users DROP CHECK users_chk_1');
+            }
+            await connection.query(`
+              ALTER TABLE users 
+              ADD CONSTRAINT users_chk_1 
+              CHECK (role IN ('admin', 'staff', 'user', 'display'))
+            `);
+            console.log('   ✅ Constraint recreated with display role\n');
+          } catch (err2) {
+            console.log('   ⚠️  Could not modify constraint (may already be correct)\n');
+          }
+        } else {
+          throw error;
+        }
       }
     }
     
