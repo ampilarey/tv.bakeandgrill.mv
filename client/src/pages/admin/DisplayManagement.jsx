@@ -283,7 +283,7 @@ export default function DisplayManagement() {
               <div className="text-sm text-tv-textSecondary space-y-2">
                 <p className="font-semibold text-tv-text">Quick Start:</p>
                 <ol className="list-decimal list-inside space-y-1 ml-2">
-                  <li><strong>On TV:</strong> Open <code className="bg-tv-bgElevated px-2 py-1 rounded text-xs">https://tv.bakeandgrill.mv/pair</code> - copy the 6-digit PIN</li>
+                  <li><strong>On TV:</strong> Open <code className="bg-tv-bgElevated px-2 py-1 rounded text-xs">https://tv.bakeandgrill.mv/#/pair</code> - copy the 6-digit PIN</li>
                   <li><strong>In Admin:</strong> Click "Pair Display" → Enter PIN + details → Click "Pair Display"</li>
                   <li><strong>Result:</strong> Display connects automatically and starts playing</li>
                 </ol>
@@ -299,7 +299,7 @@ export default function DisplayManagement() {
                         <p className="font-medium text-tv-text mb-1">Step 1: On the TV/Display Device</p>
                         <ol className="list-decimal list-inside space-y-1 ml-2">
                           <li>Open a browser on the TV/device</li>
-                          <li>Navigate to: <code className="bg-tv-bgElevated px-2 py-1 rounded text-xs">https://tv.bakeandgrill.mv/pair</code></li>
+                          <li>Navigate to: <code className="bg-tv-bgElevated px-2 py-1 rounded text-xs">https://tv.bakeandgrill.mv/#/pair</code></li>
                           <li>The screen will show a 6-digit PIN code (e.g., <strong>123456</strong>)</li>
                           <li>You'll see: "Enter this PIN in Admin Panel"</li>
                           <li>Note: PIN refreshes every 5 minutes</li>
@@ -337,7 +337,7 @@ export default function DisplayManagement() {
                   <div>
                     <p className="font-semibold text-tv-text mb-1">Two Ways to Add Displays:</p>
                     <ul className="list-disc list-inside space-y-1 ml-2">
-                      <li><strong>Pair Display:</strong> Use PIN code pairing (recommended). Open <code className="bg-tv-bgElevated px-1 py-0.5 rounded text-xs">/pair</code> on your TV, enter the PIN in admin panel, and it will automatically connect.</li>
+                      <li><strong>Pair Display:</strong> Use PIN code pairing (recommended). Open <code className="bg-tv-bgElevated px-1 py-0.5 rounded text-xs">/#/pair</code> on your TV, enter the PIN in admin panel, and it will automatically connect.</li>
                       <li><strong>Manual:</strong> Create a display manually and copy the display URL to open in your TV's browser.</li>
                     </ul>
                   </div>
