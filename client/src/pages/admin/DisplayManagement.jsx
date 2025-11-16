@@ -417,7 +417,7 @@ export default function DisplayManagement() {
             <select
               value={newDisplay.playlist_id}
               onChange={(e) => setNewDisplay({...newDisplay, playlist_id: e.target.value})}
-              className="w-full px-4 py-2 rounded-lg bg-background-lighter text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
             >
               <option value="">Select a playlist...</option>
               {playlists.map(playlist => (
@@ -479,7 +479,7 @@ export default function DisplayManagement() {
                 <select
                   value={selectedGroupForControl}
                   onChange={(e) => setSelectedGroupForControl(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg bg-background-lighter text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
                 >
                   <option value="">All Groups ({channels.length} channels)</option>
                   {groupsForControl.map(group => (
@@ -501,7 +501,7 @@ export default function DisplayManagement() {
                     console.log('Selected channel ID:', e.target.value);
                     setSelectedChannel(e.target.value);
                   }}
-                  className="w-full px-4 py-2 rounded-lg bg-background-lighter text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
                   size="12"
                 >
                   <option value="">-- Choose a channel --</option>
