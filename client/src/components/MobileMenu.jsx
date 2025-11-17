@@ -1,21 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 export default function MobileMenu() {
   const [isOpen, setIsOpen] = useState(false);
+  const [permissions, setPermissions] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  
+  // Fetch user permissions
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const response = await api.get('/permissions/me');
+        setPermissions(response.data.permissions);
+      } catch (error) {
+        console.error('Error fetching permissions:', error);
+      }
+    };
+    
+    if (user) {
+      fetchPermissions();
+    }
+  }, [user]);
   
   const menuItems = [
     { path: '/dashboard', icon: '🏠', label: 'Dashboard' },
     { path: '/history', icon: '🕒', label: 'History' },
     { path: '/profile', icon: '👤', label: 'Profile' },
+    // Show Displays if user has permission
+    ...(user?.role === 'admin' || permissions?.can_manage_displays || permissions?.can_control_displays ? [
+      { path: '/admin/displays', icon: '🖥️', label: 'Displays' },
+    ] : []),
+    // Admin-only menu items
     ...(user?.role === 'admin' ? [
       { path: '/admin/dashboard', icon: '⚙️', label: 'Admin Home' },
       { path: '/admin/users', icon: '👥', label: 'Users' },
-      { path: '/admin/displays', icon: '🖥️', label: 'Displays' },
       { path: '/admin/analytics', icon: '📊', label: 'Analytics' },
       { path: '/admin/settings', icon: '🔧', label: 'Settings' },
     ] : []),

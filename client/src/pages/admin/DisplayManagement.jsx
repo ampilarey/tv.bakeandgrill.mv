@@ -32,17 +32,43 @@ export default function DisplayManagement() {
   const [error, setError] = useState('');
   const [showPairModal, setShowPairModal] = useState(false);
   const [guideExpanded, setGuideExpanded] = useState(false);
+  const [userPermissions, setUserPermissions] = useState(null);
   
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user?.role !== 'admin') {
-      navigate('/dashboard');
-      return;
+    // Fetch permissions first
+    fetchUserPermissions();
+  }, [user]);
+
+  const fetchUserPermissions = async () => {
+    try {
+      const response = await api.get('/permissions/me');
+      setUserPermissions(response.data.permissions);
+      
+      // Check if user has access
+      const canAccess = user?.role === 'admin' || 
+                       response.data.permissions?.can_manage_displays || 
+                       response.data.permissions?.can_control_displays;
+      
+      if (!canAccess) {
+        navigate('/dashboard');
+        return;
+      }
+      
+      fetchDisplays();
+      fetchPlaylists();
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      if (user?.role !== 'admin') {
+        navigate('/dashboard');
+      }
     }
-    fetchDisplays();
-    fetchPlaylists();
+  };
+
+  useEffect(() => {
+    if (!userPermissions) return;
 
     // Auto-refresh displays every 10 seconds to update online status
     const refreshInterval = setInterval(() => {
