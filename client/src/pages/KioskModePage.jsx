@@ -117,16 +117,19 @@ export default function KioskModePage() {
 
     const sendHeartbeat = async () => {
       try {
+        console.log('💓 Sending heartbeat...');
         await displayApi.post('/displays/heartbeat', {
           token: displayToken,
           current_channel_id: currentChannel?.id || null
         });
+        console.log('✅ Heartbeat sent successfully');
       } catch (error) {
-        console.error('Heartbeat error:', error);
+        console.error('❌ Heartbeat error:', error);
       }
     };
 
-    // Initial heartbeat
+    // Initial heartbeat (immediate)
+    console.log('🎬 Starting heartbeat system...');
     sendHeartbeat();
 
     // Set up interval

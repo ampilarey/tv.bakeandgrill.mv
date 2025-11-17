@@ -84,13 +84,13 @@ export default function DisplayManagement() {
   useEffect(() => {
     if (!userPermissions) return;
 
-    // Auto-refresh displays every 10 seconds to update online status
+    // Auto-refresh displays every 5 seconds to update online status
     const refreshInterval = setInterval(() => {
       fetchDisplays();
-    }, 10000); // 10 seconds
+    }, 5000); // 5 seconds for faster status updates
 
     return () => clearInterval(refreshInterval);
-  }, [user, navigate]);
+  }, [userPermissions]);
 
   const fetchDisplays = async () => {
     try {
