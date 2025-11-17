@@ -159,16 +159,27 @@ export default function DisplayPairingPage() {
 
   const handlePairingSuccess = (display) => {
     console.log('🎉 Pairing successful! Display info:', display);
+    console.log('📋 Display token:', display.token);
+    
     setDisplayInfo(display);
     localStorage.setItem('display_token', display.token);
     localStorage.setItem('display_id', display.id);
     
-    // Redirect to kiosk mode after 2 seconds
-    console.log('⏱️ Redirecting to player in 2 seconds...');
+    // Redirect to kiosk mode after showing success message
+    console.log('⏱️ Will redirect to player in 2 seconds...');
+    
     setTimeout(() => {
-      const redirectUrl = `/display?token=${display.token}`;
-      console.log('🔄 Navigating to:', redirectUrl);
-      navigate(redirectUrl);
+      const redirectUrl = `/#/display?token=${display.token}`;
+      console.log('🔄 Redirecting to:', redirectUrl);
+      console.log('🔄 Full URL:', window.location.origin + redirectUrl);
+      
+      // Use both navigate AND window.location as fallback
+      try {
+        navigate(`/display?token=${display.token}`);
+      } catch (navError) {
+        console.error('❌ Navigate failed, using window.location:', navError);
+        window.location.href = `${window.location.origin}/#/display?token=${display.token}`;
+      }
     }, 2000);
   };
 
@@ -200,15 +211,20 @@ export default function DisplayPairingPage() {
 
   if (displayInfo) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="text-6xl mb-4">✅</div>
-          <h1 className="text-3xl font-bold text-white mb-2">Paired Successfully!</h1>
-          <p className="text-text-secondary mb-4">
-            Display: <span className="text-primary font-bold">{displayInfo.name}</span>
+      <div className="min-h-screen flex items-center justify-center bg-tv-bg">
+        <div className="text-center p-8">
+          <div className="text-8xl mb-6 animate-bounce">✅</div>
+          <h1 className="text-4xl md:text-5xl font-bold text-tv-accent mb-4">Paired Successfully!</h1>
+          <p className="text-tv-text text-lg mb-6">
+            Display: <span className="text-tv-accent font-bold text-2xl">{displayInfo.name}</span>
           </p>
-          <p className="text-text-muted text-sm">Redirecting to player...</p>
-          <Spinner className="mt-4" />
+          <div className="bg-tv-bgElevated rounded-xl p-6 border-2 border-tv-accent/30 mb-6 max-w-md mx-auto">
+            <p className="text-tv-text font-medium mb-2">Loading player...</p>
+            <Spinner className="mt-4" />
+          </div>
+          <p className="text-tv-textMuted text-sm">
+            Token: <code className="text-xs bg-tv-bgSoft px-2 py-1 rounded">{displayInfo.token?.substring(0, 16)}...</code>
+          </p>
         </div>
       </div>
     );
