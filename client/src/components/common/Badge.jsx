@@ -2,10 +2,10 @@ export default function Badge({ children, color = 'default', size = 'md', classN
   const colors = {
     default: 'bg-tv-bgSoft text-tv-textSecondary border border-tv-borderSubtle',
     primary: 'bg-tv-accent/20 text-tv-accent border border-tv-accent/40',
-    success: 'bg-tv-success/20 text-tv-accent border border-tv-success/40',
-    danger: 'bg-tv-error/20 text-tv-error border border-tv-error/40',
+    success: 'bg-green-500/20 text-green-700 border border-green-500/40',
+    danger: 'bg-red-500/20 text-red-700 border border-red-500/40',
     warning: 'bg-tv-warning/20 text-tv-gold border border-tv-warning/40',
-    info: 'bg-tv-info/20 text-tv-accent border border-tv-info/40'
+    info: 'bg-blue-500/20 text-blue-700 border border-blue-500/40'
   };
   
   const sizes = {
