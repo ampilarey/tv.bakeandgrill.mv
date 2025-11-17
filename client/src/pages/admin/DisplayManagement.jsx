@@ -259,6 +259,17 @@ export default function DisplayManagement() {
     }
   };
 
+  const handleFullscreenControl = async () => {
+    try {
+      await api.post(`/displays/${selectedDisplay.id}/control`, {
+        action: 'toggle_fullscreen'
+      });
+      console.log('✅ Fullscreen command sent');
+    } catch (error) {
+      console.error('Fullscreen control error:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-tv-bg">
@@ -644,6 +655,24 @@ export default function DisplayManagement() {
             </div>
           )}
 
+          {/* Display Controls */}
+          <div className="bg-tv-bgSoft rounded-lg p-4 border border-tv-borderSubtle mb-4">
+            <h3 className="text-sm font-medium text-tv-text mb-3">🎮 Screen Control</h3>
+            <Button
+              variant="primary"
+              onClick={handleFullscreenControl}
+              className="w-full"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+              Toggle Fullscreen
+            </Button>
+            <p className="text-xs text-tv-textMuted mt-2 text-center">
+              Maximize display to fullscreen mode
+            </p>
+          </div>
+          
           {/* Volume Control */}
           {channels.length > 0 && (
             <div className="border-t border-slate-700 pt-4 mt-4">

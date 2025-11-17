@@ -247,6 +247,40 @@ export default function KioskModePage() {
               }
               break;
               
+            case 'toggle_fullscreen':
+              console.log('🖥️ Fullscreen command received');
+              try {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                  // Enter fullscreen
+                  const container = containerRef.current || document.documentElement;
+                  if (container.requestFullscreen) {
+                    await container.requestFullscreen();
+                  } else if (container.webkitRequestFullscreen) {
+                    await container.webkitRequestFullscreen();
+                  } else if (container.mozRequestFullScreen) {
+                    await container.mozRequestFullScreen();
+                  } else if (container.msRequestFullscreen) {
+                    await container.msRequestFullscreen();
+                  }
+                  console.log('✅ Entered fullscreen');
+                } else {
+                  // Exit fullscreen
+                  if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                  } else if (document.webkitExitFullscreen) {
+                    await document.webkitExitFullscreen();
+                  } else if (document.mozCancelFullScreen) {
+                    await document.mozCancelFullScreen();
+                  } else if (document.msExitFullscreen) {
+                    await document.msExitFullscreen();
+                  }
+                  console.log('✅ Exited fullscreen');
+                }
+              } catch (err) {
+                console.error('❌ Fullscreen error:', err);
+              }
+              break;
+              
             default:
               console.warn('Unknown command type:', command.command_type);
           }
