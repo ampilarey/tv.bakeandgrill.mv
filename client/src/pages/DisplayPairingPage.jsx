@@ -95,11 +95,15 @@ export default function DisplayPairingPage() {
 
     try {
       const response = await api.post('/pairing/check-pin', { pin: pinCode });
+      console.log('🔍 Checking if PIN paired:', response.data);
+      
       if (response.data.paired && response.data.display) {
+        console.log('✅ Display paired successfully! Redirecting to player...', response.data.display);
         handlePairingSuccess(response.data.display);
       }
     } catch (error) {
       // Not paired yet, keep waiting
+      console.log('⏳ Not paired yet, continuing to wait...');
     }
   };
 
@@ -154,13 +158,17 @@ export default function DisplayPairingPage() {
   };
 
   const handlePairingSuccess = (display) => {
+    console.log('🎉 Pairing successful! Display info:', display);
     setDisplayInfo(display);
     localStorage.setItem('display_token', display.token);
     localStorage.setItem('display_id', display.id);
     
     // Redirect to kiosk mode after 2 seconds
+    console.log('⏱️ Redirecting to player in 2 seconds...');
     setTimeout(() => {
-      navigate(`/display?token=${display.token}`);
+      const redirectUrl = `/display?token=${display.token}`;
+      console.log('🔄 Navigating to:', redirectUrl);
+      navigate(redirectUrl);
     }, 2000);
   };
 
