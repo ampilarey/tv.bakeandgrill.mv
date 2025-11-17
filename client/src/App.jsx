@@ -1,3 +1,4 @@
+import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Spinner from './components/common/Spinner';
@@ -53,6 +54,64 @@ function AdminRoute({ children }) {
   }
 
   if (!isAuthenticated || user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
+
+// Display Route Component - Allows admin OR users with display permissions
+function DisplayRoute({ children }) {
+  const { user, isAuthenticated, loading } = useAuth();
+  const [hasAccess, setHasAccess] = React.useState(null);
+
+  React.useEffect(() => {
+    const checkAccess = async () => {
+      if (!user) {
+        setHasAccess(false);
+        return;
+      }
+
+      // Admin always has access
+      if (user.role === 'admin') {
+        setHasAccess(true);
+        return;
+      }
+
+      // Check permissions for non-admin users
+      try {
+        const response = await fetch('/api/permissions/me', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        const perms = data.permissions;
+        
+        const canAccess = perms?.can_manage_displays === 1 || 
+                         perms?.can_control_displays === 1;
+        setHasAccess(canAccess);
+      } catch (error) {
+        console.error('Error checking display access:', error);
+        setHasAccess(false);
+      }
+    };
+
+    if (isAuthenticated) {
+      checkAccess();
+    }
+  }, [user, isAuthenticated]);
+
+  if (loading || hasAccess === null) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <Spinner size="xl" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !hasAccess) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -123,9 +182,9 @@ function AppRouter() {
         <Route
           path="/admin/displays"
           element={
-            <AdminRoute>
+            <DisplayRoute>
               <DisplayManagement />
-            </AdminRoute>
+            </DisplayRoute>
           }
         />
         <Route
