@@ -1,10 +1,30 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const [permissions, setPermissions] = useState(null);
+  
+  // Fetch permissions
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const response = await api.get('/permissions/me');
+        console.log('📱 BottomNav permissions:', response.data.permissions);
+        setPermissions(response.data.permissions);
+      } catch (error) {
+        console.error('Error fetching permissions:', error);
+      }
+    };
+    
+    if (user) {
+      fetchPermissions();
+    }
+  }, [user]);
   
   const handleNavigate = (item) => {
     if (item.requiresPlaylist) {
@@ -39,6 +59,13 @@ export default function BottomNav() {
     { path: '/dashboard', icon: '🏠', label: 'Home' },
     { path: '/player', icon: '▶️', label: 'Watch', requiresPlaylist: true },
     { path: '/profile', icon: '👤', label: 'Profile' },
+    // Show Displays if user has permission
+    ...(user?.role === 'admin' || 
+        permissions?.can_manage_displays === 1 || 
+        permissions?.can_control_displays === 1 ? [
+      { path: '/admin/displays', icon: '🖥️', label: 'Displays' },
+    ] : []),
+    // Admin only
     ...(user?.role === 'admin' ? [
       { path: '/admin/users', icon: '👥', label: 'Users' },
     ] : []),
