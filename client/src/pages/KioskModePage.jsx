@@ -249,35 +249,66 @@ export default function KioskModePage() {
               
             case 'toggle_fullscreen':
               console.log('🖥️ Fullscreen command received');
+              console.log('Current fullscreen state:', {
+                fullscreenElement: document.fullscreenElement,
+                webkitFullscreenElement: document.webkitFullscreenElement,
+                isFullscreen: !!(document.fullscreenElement || document.webkitFullscreenElement)
+              });
+              
               try {
-                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                const isCurrentlyFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                
+                if (!isCurrentlyFullscreen) {
                   // Enter fullscreen
+                  console.log('Attempting to enter fullscreen...');
                   const container = containerRef.current || document.documentElement;
+                  
+                  let fullscreenPromise;
                   if (container.requestFullscreen) {
-                    await container.requestFullscreen();
+                    fullscreenPromise = container.requestFullscreen();
                   } else if (container.webkitRequestFullscreen) {
-                    await container.webkitRequestFullscreen();
+                    fullscreenPromise = container.webkitRequestFullscreen();
                   } else if (container.mozRequestFullScreen) {
-                    await container.mozRequestFullScreen();
+                    fullscreenPromise = container.mozRequestFullScreen();
                   } else if (container.msRequestFullscreen) {
-                    await container.msRequestFullscreen();
+                    fullscreenPromise = container.msRequestFullscreen();
                   }
-                  console.log('✅ Entered fullscreen');
+                  
+                  if (fullscreenPromise) {
+                    await fullscreenPromise;
+                    console.log('✅ Entered fullscreen successfully');
+                    setIsFullscreen(true);
+                  } else {
+                    console.error('❌ Fullscreen API not supported');
+                  }
                 } else {
                   // Exit fullscreen
+                  console.log('Attempting to exit fullscreen...');
+                  
+                  let exitPromise;
                   if (document.exitFullscreen) {
-                    await document.exitFullscreen();
+                    exitPromise = document.exitFullscreen();
                   } else if (document.webkitExitFullscreen) {
-                    await document.webkitExitFullscreen();
+                    exitPromise = document.webkitExitFullscreen();
                   } else if (document.mozCancelFullScreen) {
-                    await document.mozCancelFullScreen();
+                    exitPromise = document.mozCancelFullScreen();
                   } else if (document.msExitFullscreen) {
-                    await document.msExitFullscreen();
+                    exitPromise = document.msExitFullscreen();
                   }
-                  console.log('✅ Exited fullscreen');
+                  
+                  if (exitPromise) {
+                    await exitPromise;
+                    console.log('✅ Exited fullscreen successfully');
+                    setIsFullscreen(false);
+                  }
                 }
               } catch (err) {
                 console.error('❌ Fullscreen error:', err);
+                console.error('Error details:', {
+                  message: err.message,
+                  name: err.name,
+                  code: err.code
+                });
               }
               break;
               
