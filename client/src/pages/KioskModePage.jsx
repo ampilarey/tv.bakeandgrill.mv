@@ -216,15 +216,34 @@ export default function KioskModePage() {
               
             case 'unmute':
               if (videoRef.current) {
-                videoRef.current.muted = false;
+                console.log('🔊 Unmute command received');
+                const video = videoRef.current;
+                const wasPaused = video.paused;
+                
+                console.log('Video state before unmute:', {
+                  paused: video.paused,
+                  muted: video.muted,
+                  currentTime: video.currentTime,
+                  readyState: video.readyState
+                });
+                
+                // Unmute first
+                video.muted = false;
                 setIsMuted(false);
                 
-                // Ensure video continues playing after unmute
-                if (videoRef.current.paused) {
-                  videoRef.current.play().catch(err => {
-                    console.error('Error resuming playback after unmute:', err);
+                // Always try to play (resume if paused, continue if playing)
+                video.play().then(() => {
+                  console.log('✅ Video playing with sound');
+                }).catch(err => {
+                  console.error('❌ Error playing after unmute:', err);
+                  // If play fails, try muting again and playing
+                  video.muted = true;
+                  video.play().then(() => {
+                    console.log('⚠️ Playing muted (browser blocked unmuted autoplay)');
                   });
-                }
+                });
+                
+                console.log('Unmute completed, video was paused:', wasPaused);
               }
               break;
               
