@@ -35,7 +35,9 @@ export default function UserManagement() {
   const fetchUsers = async () => {
     try {
       const response = await api.get('/users');
-      setUsers(response.data.users || []);
+      // Filter out display users (internal system users for displays)
+      const realUsers = (response.data.users || []).filter(u => u.role !== 'display');
+      setUsers(realUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
