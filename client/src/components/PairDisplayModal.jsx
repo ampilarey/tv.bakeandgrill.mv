@@ -216,24 +216,34 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
         )}
 
         {method === 'qr' && (
-          <div>
-            {qrCode ? (
-              <div className="bg-white rounded-lg p-6">
-                <img src={qrCode} alt="QR Code" className="w-64 h-64 mx-auto" />
-                <p className="text-center text-slate-900 font-medium mt-4">
-                  Scan this QR code with your phone
-                </p>
-              </div>
-            ) : (
-              <div className="text-center">
-                <p className="text-tv-textSecondary mb-4">
-                  Click the button below to generate a QR code that can be scanned by the display.
-                </p>
-                <Button onClick={handleGenerateQR} disabled={loading}>
-                  {loading ? 'Generating...' : 'Generate QR Code'}
-                </Button>
-              </div>
-            )}
+          <div className="space-y-4">
+            <div className="bg-tv-gold/10 border-2 border-tv-gold/30 rounded-xl p-4">
+              <h4 className="text-tv-text font-bold mb-2 flex items-center gap-2">
+                <span className="text-2xl">💡</span>
+                Easy QR Code Pairing
+              </h4>
+              <p className="text-tv-text text-sm leading-relaxed">
+                <span className="font-bold">New easier way:</span> The display shows a QR code. You scan it with your phone camera, and it opens this page with the PIN already filled in!
+              </p>
+            </div>
+            
+            <div className="bg-tv-bgSoft rounded-xl p-5 border border-tv-borderSubtle">
+              <h4 className="text-tv-text font-bold mb-3">📱 How to use QR Code Pairing:</h4>
+              <ol className="text-tv-text text-sm space-y-2 list-decimal list-inside">
+                <li>On the TV/Display, open: <code className="bg-tv-accent/10 text-tv-accent px-2 py-0.5 rounded text-xs">tv.bakeandgrill.mv/#/pair</code></li>
+                <li>Select "📱 QR Code" tab</li>
+                <li><strong>A large QR code will appear on the TV screen</strong></li>
+                <li>Use your phone camera to scan the QR code</li>
+                <li>Your phone will open this page with PIN auto-filled</li>
+                <li>Just enter display name & playlist, then click Pair!</li>
+              </ol>
+            </div>
+            
+            <div className="bg-tv-bgElevated border-2 border-tv-borderSubtle rounded-xl p-4">
+              <p className="text-tv-textSecondary text-sm text-center">
+                The QR code is displayed <strong className="text-tv-accent">on the TV screen</strong>, not here in admin panel.
+              </p>
+            </div>
           </div>
         )}
 
