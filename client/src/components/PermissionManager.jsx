@@ -56,8 +56,9 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
     setSaving(true);
     try {
       await api.put(`/permissions/${userId}`, permissions);
-      alert('✅ Permissions updated successfully!');
+      alert('✅ Permissions updated successfully!\n\nℹ️ The user must refresh their browser or log out and log in again to see the changes.');
       if (onUpdate) onUpdate();
+      onClose(); // Close modal after save
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to update permissions');
     } finally {
