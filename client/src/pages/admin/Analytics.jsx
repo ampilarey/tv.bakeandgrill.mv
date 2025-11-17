@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
@@ -15,6 +17,7 @@ export default function Analytics() {
   const [timeRange, setTimeRange] = useState('7d'); // 24h, 7d, 30d, all
   const [activeTab, setActiveTab] = useState('overview'); // overview, users
   const [expandedUsers, setExpandedUsers] = useState({});
+  const [userPermissions, setUserPermissions] = useState(null);
   
   // Filter states
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -22,8 +25,53 @@ export default function Analytics() {
   const [channelFilter, setChannelFilter] = useState('');
   const [sortBy, setSortBy] = useState('watchTime'); // watchTime, sessions, channels, name
   const [minWatchTime, setMinWatchTime] = useState('');
+  
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
+    // Fetch permissions first
+    fetchUserPermissions();
+  }, [user]);
+
+  const fetchUserPermissions = async () => {
+    try {
+      const response = await api.get('/permissions/me');
+      setUserPermissions(response.data.permissions);
+      
+      // Check if user has access
+      const canAccess = user?.role === 'admin' || 
+                       response.data.permissions?.can_view_analytics === 1;
+      
+      console.log('📊 Analytics access check:', {
+        role: user?.role,
+        canViewAnalytics: response.data.permissions?.can_view_analytics,
+        hasAccess: canAccess
+      });
+      
+      if (!canAccess) {
+        navigate('/dashboard');
+        return;
+      }
+      
+      // Initial data fetch
+      if (activeTab === 'overview') {
+        fetchAnalytics();
+      } else if (activeTab === 'users') {
+        fetchAllUsers();
+        fetchUserStats();
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      if (user?.role !== 'admin') {
+        navigate('/dashboard');
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!userPermissions) return;
+    
     if (activeTab === 'overview') {
       fetchAnalytics();
     } else if (activeTab === 'users') {

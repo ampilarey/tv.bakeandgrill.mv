@@ -20,17 +20,44 @@ export default function UserManagement() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', first_name: '', last_name: '' });
   const [error, setError] = useState('');
+  const [userPermissions, setUserPermissions] = useState(null);
   
   const { user: currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (currentUser?.role !== 'admin') {
-      navigate('/dashboard');
-      return;
+    // Fetch permissions first
+    fetchUserPermissions();
+  }, [currentUser]);
+
+  const fetchUserPermissions = async () => {
+    try {
+      const response = await api.get('/permissions/me');
+      setUserPermissions(response.data.permissions);
+      
+      // Check if user has access
+      const canAccess = currentUser?.role === 'admin' || 
+                       response.data.permissions?.can_create_users === 1;
+      
+      console.log('👥 UserManagement access check:', {
+        role: currentUser?.role,
+        canCreateUsers: response.data.permissions?.can_create_users,
+        hasAccess: canAccess
+      });
+      
+      if (!canAccess) {
+        navigate('/dashboard');
+        return;
+      }
+      
+      fetchUsers();
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      if (currentUser?.role !== 'admin') {
+        navigate('/dashboard');
+      }
     }
-    fetchUsers();
-  }, [currentUser, navigate]);
+  };
 
   const fetchUsers = async () => {
     try {
