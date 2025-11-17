@@ -15,6 +15,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
   const [error, setError] = useState('');
   const [qrCode, setQrCode] = useState('');
   const [playlists, setPlaylists] = useState([]);
+  const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -217,31 +218,62 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
 
         {method === 'qr' && (
           <div className="space-y-4">
-            <div className="bg-tv-gold/10 border-2 border-tv-gold/30 rounded-xl p-4">
-              <h4 className="text-tv-text font-bold mb-2 flex items-center gap-2">
-                <span className="text-2xl">💡</span>
-                Easy QR Code Pairing
+            <div className="bg-tv-accent/10 border-2 border-tv-accent/30 rounded-xl p-5">
+              <h4 className="text-tv-accent font-bold text-lg mb-3 flex items-center gap-2">
+                <span className="text-3xl">📱</span>
+                Scan QR Code from Display
               </h4>
-              <p className="text-tv-text text-sm leading-relaxed">
-                <span className="font-bold">New easier way:</span> The display shows a QR code. You scan it with your phone camera, and it opens this page with the PIN already filled in!
+              <p className="text-tv-text text-sm leading-relaxed mb-4">
+                The TV/Display shows a QR code. Use your phone's camera app to scan it, then this page will open with the PIN auto-filled!
               </p>
             </div>
             
             <div className="bg-tv-bgSoft rounded-xl p-5 border border-tv-borderSubtle">
-              <h4 className="text-tv-text font-bold mb-3">📱 How to use QR Code Pairing:</h4>
-              <ol className="text-tv-text text-sm space-y-2 list-decimal list-inside">
-                <li>On the TV/Display, open: <code className="bg-tv-accent/10 text-tv-accent px-2 py-0.5 rounded text-xs">tv.bakeandgrill.mv/#/pair</code></li>
-                <li>Select "📱 QR Code" tab</li>
-                <li><strong>A large QR code will appear on the TV screen</strong></li>
-                <li>Use your phone camera to scan the QR code</li>
-                <li>Your phone will open this page with PIN auto-filled</li>
-                <li>Just enter display name & playlist, then click Pair!</li>
-              </ol>
+              <h4 className="text-tv-text font-bold mb-3">📺 Quick Steps:</h4>
+              <div className="space-y-3">
+                <div className="flex gap-3 items-start">
+                  <span className="flex-shrink-0 w-7 h-7 bg-tv-accent text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                  <div>
+                    <p className="text-tv-text text-sm font-medium">On TV: Open <code className="bg-tv-accent/10 text-tv-accent px-2 py-0.5 rounded text-xs ml-1">tv.bakeandgrill.mv/#/pair</code></p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3 items-start">
+                  <span className="flex-shrink-0 w-7 h-7 bg-tv-accent text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                  <div>
+                    <p className="text-tv-text text-sm font-medium">Select "📱 QR Code" tab on the TV</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3 items-start">
+                  <span className="flex-shrink-0 w-7 h-7 bg-tv-accent text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
+                  <div>
+                    <p className="text-tv-text text-sm font-medium"><strong>Large QR code appears on TV screen</strong></p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3 items-start">
+                  <span className="flex-shrink-0 w-7 h-7 bg-tv-gold text-white rounded-full flex items-center justify-center text-sm font-bold">4</span>
+                  <div>
+                    <p className="text-tv-text text-sm font-medium"><strong>Scan it with your phone camera</strong></p>
+                    <p className="text-tv-textMuted text-xs mt-1">Phone will auto-detect and show "Open" notification</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3 items-start">
+                  <span className="flex-shrink-0 w-7 h-7 bg-tv-gold text-white rounded-full flex items-center justify-center text-sm font-bold">5</span>
+                  <div>
+                    <p className="text-tv-text text-sm font-medium">This page opens with PIN pre-filled ✨</p>
+                    <p className="text-tv-textMuted text-xs mt-1">Just enter name & playlist!</p>
+                  </div>
+                </div>
+              </div>
             </div>
             
-            <div className="bg-tv-bgElevated border-2 border-tv-borderSubtle rounded-xl p-4">
-              <p className="text-tv-textSecondary text-sm text-center">
-                The QR code is displayed <strong className="text-tv-accent">on the TV screen</strong>, not here in admin panel.
+            <div className="bg-green-500/10 border-2 border-green-500/30 rounded-xl p-4">
+              <p className="text-tv-text text-sm text-center font-medium">
+                ✅ <strong>No scanning needed in admin panel!</strong><br/>
+                <span className="text-tv-textSecondary text-xs">Your phone's camera app does the scanning automatically.</span>
               </p>
             </div>
           </div>
@@ -260,24 +292,26 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
 
         {/* Action Buttons */}
         <div className="flex gap-3 pt-4 border-t border-tv-borderSubtle">
-          <Button
-            onClick={
-              method === 'pin' ? handlePairWithPin :
-              method === 'qr' ? (qrCode ? onClose : handleGenerateQR) :
-              handleManualCreate
-            }
-            disabled={loading}
-            className="flex-1"
-          >
-            {loading ? 'Processing...' : 
-             method === 'pin' ? 'Pair Display' :
-             method === 'qr' && qrCode ? 'Done' :
-             method === 'qr' ? 'Generate QR' :
-             'Create Display'}
-          </Button>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
+          {method === 'qr' ? (
+            <Button variant="ghost" onClick={onClose} className="w-full">
+              Close
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={method === 'pin' ? handlePairWithPin : handleManualCreate}
+                disabled={loading}
+                className="flex-1"
+              >
+                {loading ? 'Processing...' : 
+                 method === 'pin' ? 'Pair Display' :
+                 'Create Display'}
+              </Button>
+              <Button variant="ghost" onClick={onClose}>
+                Cancel
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </Modal>
