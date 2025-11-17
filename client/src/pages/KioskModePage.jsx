@@ -795,6 +795,31 @@ export default function KioskModePage() {
     }, 3000);
   };
 
+  const handleFullscreenToggle = async () => {
+    try {
+      const isCurrentlyFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      
+      if (!isCurrentlyFullscreen) {
+        const container = containerRef.current || document.documentElement;
+        if (container.requestFullscreen) {
+          await container.requestFullscreen();
+        } else if (container.webkitRequestFullscreen) {
+          await container.webkitRequestFullscreen();
+        }
+        console.log('✅ Entered fullscreen');
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        }
+        console.log('✅ Exited fullscreen');
+      }
+    } catch (err) {
+      console.error('Fullscreen error:', err);
+    }
+  };
+
   return (
     <div ref={containerRef} className="h-screen w-screen bg-black overflow-hidden relative">
       {/* Full Screen Video Player */}
@@ -841,6 +866,34 @@ export default function KioskModePage() {
         )}
       </div>
 
+      {/* Fullscreen Toggle Button (top-left) - hidden in fullscreen */}
+      {!isFullscreen && (
+        <button
+          onClick={handleFullscreenToggle}
+          className="absolute top-4 left-4 bg-tv-gold/90 hover:bg-tv-goldHover text-white p-3 rounded-lg shadow-lg transition-all z-20 backdrop-blur-sm"
+          title="Enter Fullscreen"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg>
+        </button>
+      )}
+      
+      {/* Exit Fullscreen Button - shown IN fullscreen */}
+      {isFullscreen && (
+        <button
+          onClick={handleFullscreenToggle}
+          className="absolute top-4 right-4 bg-tv-accent/90 hover:bg-tv-accentHover text-white px-4 py-2 rounded-lg shadow-lg transition-all z-20 backdrop-blur-sm flex items-center gap-2"
+          style={{ zIndex: 2147483647 }}
+          title="Exit Fullscreen"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <span className="text-sm font-bold">Exit Fullscreen</span>
+        </button>
+      )}
+      
       {/* Display Name (small, top-right) - hidden in fullscreen */}
       {display?.name && !isFullscreen && (
         <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full">
