@@ -58,12 +58,13 @@ export default function DisplayPairingPage() {
 
   // Auto-refresh PIN every 5 minutes
   useEffect(() => {
-    if (pairingMethod === 'pin' && pinCode) {
+    if ((pairingMethod === 'pin' || pairingMethod === 'qr') && pinCode) {
       const interval = setInterval(() => {
         requestPinFromServer();
       }, 5 * 60 * 1000);
 
       // Also poll to check if admin has paired this PIN
+      // This works for BOTH PIN and QR methods since QR also uses PIN internally
       const checkInterval = setInterval(() => {
         checkIfPinPaired();
       }, 3000); // Check every 3 seconds
