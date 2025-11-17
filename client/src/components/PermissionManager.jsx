@@ -120,57 +120,57 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
         <div className="space-y-4 md:space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
           
           {/* Playlist Permissions */}
-          <div className="bg-background-lighter rounded-lg p-4 border border-slate-700">
-            <h3 className="text-lg font-semibold text-white mb-3">📋 Playlist Permissions</h3>
+          <div className="bg-tv-bgSoft rounded-lg p-4 border border-tv-borderSubtle">
+            <h3 className="text-lg font-semibold text-tv-text mb-3">📋 Playlist Permissions</h3>
             
             <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_add_playlists}
                   onChange={(e) => setPermissions({...permissions, can_add_playlists: e.target.checked})}
-                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
                 <div>
-                  <span className="text-white font-medium">Can Add Playlists</span>
-                  <p className="text-xs text-text-muted">User can create their own M3U playlists</p>
+                  <span className="text-tv-text font-medium">Can Add Playlists</span>
+                  <p className="text-xs text-tv-textMuted">User can create their own M3U playlists</p>
                 </div>
               </label>
               
-              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_edit_own_playlists}
                   onChange={(e) => setPermissions({...permissions, can_edit_own_playlists: e.target.checked})}
-                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
                 <div>
-                  <span className="text-white font-medium">Can Edit Own Playlists</span>
-                  <p className="text-xs text-text-muted">User can modify their playlists</p>
+                  <span className="text-tv-text font-medium">Can Edit Own Playlists</span>
+                  <p className="text-xs text-tv-textMuted">User can modify their playlists</p>
                 </div>
               </label>
               
-              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_delete_own_playlists}
                   onChange={(e) => setPermissions({...permissions, can_delete_own_playlists: e.target.checked})}
-                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
                 <div>
-                  <span className="text-white font-medium">Can Delete Own Playlists</span>
-                  <p className="text-xs text-text-muted">User can remove their playlists</p>
+                  <span className="text-tv-text font-medium">Can Delete Own Playlists</span>
+                  <p className="text-xs text-tv-textMuted">User can remove their playlists</p>
                 </div>
               </label>
               
               <div className="pt-2">
-                <label className="block text-sm font-medium text-text-secondary mb-2">
+                <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                   Max Playlists
                 </label>
                 <select
                   value={permissions.max_playlists}
                   onChange={(e) => setPermissions({...permissions, max_playlists: parseInt(e.target.value)})}
-                  className="w-full px-4 py-2 rounded-lg bg-background text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated text-tv-text border border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent"
                 >
                   <option value="-1">None (Cannot create)</option>
                   <option value="1">1 playlist</option>
@@ -184,44 +184,44 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
           </div>
           
           {/* Display Permissions */}
-          <div className="bg-background-lighter rounded-lg p-4 border border-slate-700">
-            <h3 className="text-lg font-semibold text-white mb-3">🖥️ Display Permissions</h3>
+          <div className="bg-tv-bgSoft rounded-lg p-4 border border-tv-borderSubtle">
+            <h3 className="text-lg font-semibold text-tv-text mb-3">🖥️ Display Permissions</h3>
             
             <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_manage_displays}
                   onChange={(e) => setPermissions({...permissions, can_manage_displays: e.target.checked})}
-                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
                 <div>
-                  <span className="text-white font-medium">Can Manage Displays</span>
-                  <p className="text-xs text-text-muted">User can create and configure cafe displays</p>
+                  <span className="text-tv-text font-medium">Can Manage Displays</span>
+                  <p className="text-xs text-tv-textMuted">User can create and configure cafe displays</p>
                 </div>
               </label>
               
-              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_control_displays}
                   onChange={(e) => setPermissions({...permissions, can_control_displays: e.target.checked})}
-                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
                 <div>
-                  <span className="text-white font-medium">Can Control Displays (Remote)</span>
-                  <p className="text-xs text-text-muted">User can change channels and volume remotely</p>
+                  <span className="text-tv-text font-medium">Can Control Displays (Remote)</span>
+                  <p className="text-xs text-tv-textMuted">User can change channels and volume remotely</p>
                 </div>
               </label>
               
               <div className="pt-2">
-                <label className="block text-sm font-medium text-text-secondary mb-2">
+                <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                   Max Displays
                 </label>
                 <select
                   value={permissions.max_displays}
                   onChange={(e) => setPermissions({...permissions, max_displays: parseInt(e.target.value)})}
-                  className="w-full px-4 py-2 rounded-lg bg-background text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated text-tv-text border border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent"
                 >
                   <option value="-1">None (Cannot create)</option>
                   <option value="1">1 display</option>
@@ -235,69 +235,69 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
           </div>
           
           {/* Advanced Permissions */}
-          <div className="bg-background-lighter rounded-lg p-4 border border-slate-700">
-            <h3 className="text-lg font-semibold text-white mb-3">⚙️ Advanced Permissions</h3>
+          <div className="bg-tv-bgSoft rounded-lg p-4 border border-tv-borderSubtle">
+            <h3 className="text-lg font-semibold text-tv-text mb-3">⚙️ Advanced Permissions</h3>
             
             <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_create_users}
                   onChange={(e) => setPermissions({...permissions, can_create_users: e.target.checked})}
-                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
                 <div>
-                  <span className="text-white font-medium">Can Create Users</span>
-                  <p className="text-xs text-text-muted">User can create new user accounts</p>
+                  <span className="text-tv-text font-medium">Can Create Users</span>
+                  <p className="text-xs text-tv-textMuted">User can create new user accounts</p>
                 </div>
               </label>
               
-              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_view_analytics}
                   onChange={(e) => setPermissions({...permissions, can_view_analytics: e.target.checked})}
-                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
                 <div>
-                  <span className="text-white font-medium">Can View Analytics</span>
-                  <p className="text-xs text-text-muted">User can view usage statistics and reports</p>
+                  <span className="text-tv-text font-medium">Can View Analytics</span>
+                  <p className="text-xs text-tv-textMuted">User can view usage statistics and reports</p>
                 </div>
               </label>
               
-              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-background rounded-lg transition-colors">
+              <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
                   checked={permissions.can_manage_schedules}
                   onChange={(e) => setPermissions({...permissions, can_manage_schedules: e.target.checked})}
-                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-background text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                  className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
                 <div>
-                  <span className="text-white font-medium">Can Manage Schedules</span>
-                  <p className="text-xs text-text-muted">User can create time-based channel schedules</p>
+                  <span className="text-tv-text font-medium">Can Manage Schedules</span>
+                  <p className="text-xs text-tv-textMuted">User can create time-based channel schedules</p>
                 </div>
               </label>
             </div>
           </div>
           
           {/* Assigned Playlists */}
-          <div className="bg-background-lighter rounded-lg p-4 border border-slate-700">
+          <div className="bg-tv-bgSoft rounded-lg p-4 border border-tv-borderSubtle">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white">🎯 Assigned Playlists</h3>
+              <h3 className="text-lg font-semibold text-tv-text">🎯 Assigned Playlists</h3>
               <Button variant="primary" size="sm" onClick={() => setShowAssignModal(true)}>
                 + Assign Playlist
               </Button>
             </div>
             
             {assignedPlaylists.length === 0 ? (
-              <p className="text-text-muted text-sm">No playlists assigned. User can only watch channels from their own playlists.</p>
+              <p className="text-tv-textMuted text-sm">No playlists assigned. User can only watch channels from their own playlists.</p>
             ) : (
               <div className="space-y-2">
                 {assignedPlaylists.map((playlist) => (
-                  <div key={playlist.id} className="flex items-center justify-between bg-background rounded-lg p-3">
+                  <div key={playlist.id} className="flex items-center justify-between bg-tv-bgElevated rounded-lg p-3 border border-tv-borderSubtle">
                     <div>
-                      <p className="text-white font-medium">{playlist.playlist_name}</p>
-                      <p className="text-xs text-text-muted">
+                      <p className="text-tv-text font-medium">{playlist.playlist_name}</p>
+                      <p className="text-xs text-tv-textMuted">
                         {playlist.can_edit ? '✏️ Can edit' : '👁️ View only'}
                       </p>
                     </div>
@@ -315,8 +315,8 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
           </div>
           
           {/* Quick Presets */}
-          <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-blue-400 mb-3">⚡ Quick Presets</h4>
+          <div className="bg-tv-gold/10 border border-tv-gold/30 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-tv-text mb-3">⚡ Quick Presets</h4>
             <div className="flex gap-2 flex-wrap">
               <Button 
                 variant="secondary" 
@@ -350,7 +350,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
           </div>
           
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t border-slate-700">
+          <div className="flex gap-3 pt-4 border-t border-tv-borderSubtle">
             <Button variant="ghost" onClick={handleReset} className="flex-1">
               Reset to Defaults
             </Button>
@@ -371,21 +371,21 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
         title="Assign Playlist"
       >
         <div className="space-y-4">
-          <p className="text-text-secondary text-sm">
+          <p className="text-tv-textSecondary text-sm">
             Assign one of your playlists to this user. They will be able to watch channels from it.
           </p>
           
           {availablePlaylists.length === 0 ? (
-            <p className="text-text-muted">No playlists available to assign.</p>
+            <p className="text-tv-textMuted">No playlists available to assign.</p>
           ) : (
             <div className="space-y-2">
               {availablePlaylists
                 .filter(p => !assignedPlaylists.find(ap => ap.playlist_id === p.id))
                 .map((playlist) => (
-                <div key={playlist.id} className="flex items-center justify-between bg-background-lighter rounded-lg p-3">
+                <div key={playlist.id} className="flex items-center justify-between bg-tv-bgSoft rounded-lg p-3 border border-tv-borderSubtle">
                   <div>
-                    <p className="text-white font-medium">{playlist.name}</p>
-                    <p className="text-xs text-text-muted">{playlist.m3u_url?.substring(0, 50)}...</p>
+                    <p className="text-tv-text font-medium">{playlist.name}</p>
+                    <p className="text-xs text-tv-textMuted">{playlist.m3u_url?.substring(0, 50)}...</p>
                   </div>
                   <div className="flex gap-2">
                     <Button 
@@ -408,7 +408,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
             </div>
           )}
           
-          <div className="flex gap-3 pt-4 border-t border-slate-700">
+          <div className="flex gap-3 pt-4 border-t border-tv-borderSubtle">
             <Button variant="secondary" onClick={() => setShowAssignModal(false)} className="w-full">
               Close
             </Button>
