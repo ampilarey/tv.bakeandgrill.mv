@@ -60,8 +60,8 @@ function AdminRoute({ children }) {
   return children;
 }
 
-// Display Route Component - Allows admin OR users with display permissions
-function DisplayRoute({ children }) {
+// Permission-based Route Component - Generic permission checker
+function PermissionRoute({ children, requiredPermissions = [] }) {
   const { user, isAuthenticated, loading } = useAuth();
   const [hasAccess, setHasAccess] = React.useState(null);
 
@@ -89,11 +89,20 @@ function DisplayRoute({ children }) {
         const data = await response.json();
         const perms = data.permissions;
         
-        const canAccess = perms?.can_manage_displays === 1 || 
-                         perms?.can_control_displays === 1;
+        // Check if user has ANY of the required permissions
+        const canAccess = requiredPermissions.some(perm => 
+          perms?.[perm] === 1 || perms?.[perm] === true
+        );
+        
+        console.log('🔐 Permission check:', {
+          required: requiredPermissions,
+          userPerms: perms,
+          hasAccess: canAccess
+        });
+        
         setHasAccess(canAccess);
       } catch (error) {
-        console.error('Error checking display access:', error);
+        console.error('Error checking permissions:', error);
         setHasAccess(false);
       }
     };
@@ -174,25 +183,25 @@ function AppRouter() {
         <Route
           path="/admin/users"
           element={
-            <AdminRoute>
+            <PermissionRoute requiredPermissions={['can_create_users']}>
               <UserManagement />
-            </AdminRoute>
+            </PermissionRoute>
           }
         />
         <Route
           path="/admin/displays"
           element={
-            <DisplayRoute>
+            <PermissionRoute requiredPermissions={['can_manage_displays', 'can_control_displays']}>
               <DisplayManagement />
-            </DisplayRoute>
+            </PermissionRoute>
           }
         />
         <Route
           path="/admin/analytics"
           element={
-            <AdminRoute>
+            <PermissionRoute requiredPermissions={['can_view_analytics']}>
               <Analytics />
-            </AdminRoute>
+            </PermissionRoute>
           }
         />
         <Route

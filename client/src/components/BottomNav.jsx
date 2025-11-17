@@ -55,21 +55,29 @@ export default function BottomNav() {
     return null;
   }
   
+  // Build navigation items based on permissions
   const navItems = [
     { path: '/dashboard', icon: '🏠', label: 'Home' },
     { path: '/player', icon: '▶️', label: 'Watch', requiresPlaylist: true },
     { path: '/profile', icon: '👤', label: 'Profile' },
-    // Show Displays if user has permission
-    ...(user?.role === 'admin' || 
-        permissions?.can_manage_displays === 1 || 
-        permissions?.can_control_displays === 1 ? [
-      { path: '/admin/displays', icon: '🖥️', label: 'Displays' },
-    ] : []),
-    // Admin only
-    ...(user?.role === 'admin' ? [
-      { path: '/admin/users', icon: '👥', label: 'Users' },
-    ] : []),
   ];
+  
+  // Add Displays if user has permission
+  if (user?.role === 'admin' || 
+      permissions?.can_manage_displays === 1 || 
+      permissions?.can_control_displays === 1) {
+    navItems.push({ path: '/admin/displays', icon: '🖥️', label: 'Displays' });
+  }
+  
+  // Add Users if user has permission
+  if (user?.role === 'admin' || permissions?.can_create_users === 1) {
+    navItems.push({ path: '/admin/users', icon: '👥', label: 'Users' });
+  }
+  
+  // Add Analytics if user has permission
+  if (user?.role === 'admin' || permissions?.can_view_analytics === 1) {
+    navItems.push({ path: '/admin/analytics', icon: '📊', label: 'Analytics' });
+  }
   
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-tv-bgElevated border-t-2 border-tv-borderSubtle z-30 safe-area-bottom shadow-2xl">

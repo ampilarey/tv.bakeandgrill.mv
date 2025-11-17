@@ -51,33 +51,37 @@ export default function MobileMenu() {
     { path: '/profile', icon: '👤', label: 'Profile' }
   );
   
-  // Show Displays if user has permission (check both conditions)
-  const hasDisplayAccess = user?.role === 'admin' || 
-                           permissions?.can_manage_displays === true || 
-                           permissions?.can_manage_displays === 1 ||
-                           permissions?.can_control_displays === true ||
-                           permissions?.can_control_displays === 1;
-  
-  console.log('🔍 Display access check:', {
-    role: user?.role,
-    canManage: permissions?.can_manage_displays,
-    canControl: permissions?.can_control_displays,
-    hasAccess: hasDisplayAccess
-  });
-  
-  if (hasDisplayAccess) {
+  // Show Displays if user has permission
+  if (user?.role === 'admin' || 
+      permissions?.can_manage_displays === 1 || 
+      permissions?.can_control_displays === 1) {
     menuItems.push({ path: '/admin/displays', icon: '🖥️', label: 'Displays' });
   }
   
-  // Admin-only menu items
+  // Show Users if user has permission
+  if (user?.role === 'admin' || permissions?.can_create_users === 1) {
+    menuItems.push({ path: '/admin/users', icon: '👥', label: 'Users' });
+  }
+  
+  // Show Analytics if user has permission
+  if (user?.role === 'admin' || permissions?.can_view_analytics === 1) {
+    menuItems.push({ path: '/admin/analytics', icon: '📊', label: 'Analytics' });
+  }
+  
+  // Admin-only items
   if (user?.role === 'admin') {
     menuItems.push(
       { path: '/admin/dashboard', icon: '⚙️', label: 'Admin Home' },
-      { path: '/admin/users', icon: '👥', label: 'Users' },
-      { path: '/admin/analytics', icon: '📊', label: 'Analytics' },
       { path: '/admin/settings', icon: '🔧', label: 'Settings' }
     );
   }
+  
+  console.log('🔍 Menu items built:', {
+    role: user?.role,
+    permissions: permissions,
+    itemCount: menuItems.length,
+    items: menuItems.map(i => i.label)
+  });
   
   const handleNavigate = (path) => {
     navigate(path);
