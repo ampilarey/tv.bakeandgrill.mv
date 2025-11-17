@@ -708,8 +708,8 @@ export default function DisplayManagement() {
                 {/* Volume Slider with iOS Warning */}
                 <div className="bg-tv-accent/20 border border-tv-accent/30 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm text-tv-textSecondary">Volume Level</label>
-                    <span className="text-primary font-bold">{volumeLevel}%</span>
+                    <label className="text-sm text-tv-text">Volume Level</label>
+                    <span className="text-tv-accent font-bold">{volumeLevel}%</span>
                   </div>
                   <input
                     type="range"
@@ -717,12 +717,12 @@ export default function DisplayManagement() {
                     max="100"
                     value={volumeLevel}
                     onChange={(e) => handleVolumeSliderChange(parseInt(e.target.value))}
-                    className="w-full h-2 bg-background-lighter rounded-lg appearance-none cursor-pointer accent-primary mb-2"
+                    className="w-full h-2 bg-tv-bgElevated rounded-lg appearance-none cursor-pointer accent-tv-accent mb-2"
                   />
                   <p className="text-xs text-tv-accent text-center mb-2">
                     💡 Volume changes automatically as you drag
                   </p>
-                  <p className="text-xs text-yellow-400">
+                  <p className="text-xs text-tv-text bg-tv-gold/20 border border-tv-gold/40 rounded px-2 py-1">
                     ⚠️ Note: iPhones ignore web volume control. Use device buttons for iPhones. iPads work perfectly! ✅
                   </p>
                 </div>
@@ -730,7 +730,7 @@ export default function DisplayManagement() {
             </div>
           )}
           
-          <div className="flex gap-3 pt-4 border-t border-slate-700 mt-4">
+          <div className="flex gap-3 pt-4 border-t border-tv-borderSubtle mt-4">
             <Button 
               variant="secondary" 
               onClick={() => {
