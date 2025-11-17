@@ -812,8 +812,15 @@ export default function DisplayManagement() {
         isOpen={showPairModal}
         onClose={() => setShowPairModal(false)}
         onSuccess={(display) => {
-          fetchDisplays();
+          console.log('✅ Display paired successfully:', display);
           setShowPairModal(false);
+          // Immediately refresh display list
+          fetchDisplays();
+          // Refresh again after 3 seconds to catch status update
+          setTimeout(() => {
+            console.log('🔄 Refreshing displays to update online status...');
+            fetchDisplays();
+          }, 3000);
         }}
       />
       
