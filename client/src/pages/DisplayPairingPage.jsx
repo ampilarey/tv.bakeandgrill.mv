@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Spinner from '../components/common/Spinner';
+import QRCode from 'qrcode';
 
 export default function DisplayPairingPage() {
   const [pairingMethod, setPairingMethod] = useState('pin'); // pin, qr, id, auto
@@ -12,6 +13,8 @@ export default function DisplayPairingPage() {
   const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState('');
   const [locationPin, setLocationPin] = useState('');
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
+  const [qrCodeLoading, setQrCodeLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,6 +22,39 @@ export default function DisplayPairingPage() {
     fetchLocations();
     checkAutoPairing();
   }, []);
+
+  // Generate QR code for pairing when QR method is selected
+  useEffect(() => {
+    if (pairingMethod === 'qr' && pinCode) {
+      generateQRCode();
+    }
+  }, [pairingMethod, pinCode]);
+
+  const generateQRCode = async () => {
+    if (!pinCode) return;
+    
+    setQrCodeLoading(true);
+    try {
+      // Create pairing URL with PIN code for admin to pair this display
+      const pairingUrl = `${window.location.origin}/#/admin/displays?autoPairPin=${pinCode}`;
+      
+      // Generate QR code
+      const qrDataUrl = await QRCode.toDataURL(pairingUrl, {
+        width: 400,
+        margin: 2,
+        color: {
+          dark: '#B03A48',  // tv-accent color
+          light: '#FFFFFF'
+        }
+      });
+      
+      setQrCodeDataUrl(qrDataUrl);
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+    } finally {
+      setQrCodeLoading(false);
+    }
+  };
 
   // Auto-refresh PIN every 5 minutes
   useEffect(() => {
@@ -171,21 +207,22 @@ export default function DisplayPairingPage() {
   }
 
   return (
-    <div className="h-screen bg-background overflow-auto">
-      <div className="max-w-4xl mx-auto p-6">
+    <div className="min-h-screen bg-tv-bg overflow-auto">
+      <div className="max-w-5xl mx-auto p-4 md:p-8">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">📺 Display Setup</h1>
-          <p className="text-text-secondary">Choose a pairing method to connect this display</p>
+        <div className="text-center mb-6 md:mb-10">
+          <div className="text-6xl md:text-7xl mb-4">📺</div>
+          <h1 className="text-3xl md:text-5xl font-bold text-tv-accent mb-3">Display Setup</h1>
+          <p className="text-base md:text-lg text-tv-textSecondary">Choose a pairing method to connect this display</p>
         </div>
 
         {/* Pairing Method Selector */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-10">
           {[
-            { value: 'pin', label: 'PIN Code', icon: '🔢' },
-            { value: 'qr', label: 'QR Code', icon: '📱' },
-            { value: 'id', label: 'Location ID', icon: '📍' },
-            { value: 'auto', label: 'Auto-Detect', icon: '🔍' }
+            { value: 'pin', label: 'PIN Code', icon: '🔢', desc: 'Enter 6-digit code' },
+            { value: 'qr', label: 'QR Code', icon: '📱', desc: 'Scan to pair' },
+            { value: 'id', label: 'Location ID', icon: '📍', desc: 'Select location' },
+            { value: 'auto', label: 'Auto-Detect', icon: '🔍', desc: 'Find automatically' }
           ].map(method => (
             <button
               key={method.value}
@@ -193,83 +230,125 @@ export default function DisplayPairingPage() {
                 setPairingMethod(method.value);
                 setError('');
               }}
-              className={`p-6 rounded-lg border-2 transition-all ${
+              className={`p-4 md:p-6 rounded-xl border-2 transition-all shadow-lg ${
                 pairingMethod === method.value
-                  ? 'border-primary bg-primary/20'
-                  : 'border-slate-700 bg-background-light hover:border-slate-600'
+                  ? 'border-tv-accent bg-tv-accent/10 shadow-tv-accent/20'
+                  : 'border-tv-borderSubtle bg-tv-bgElevated hover:border-tv-accent/50 hover:shadow-xl'
               }`}
             >
-              <div className="text-4xl mb-2">{method.icon}</div>
-              <div className="text-white font-medium">{method.label}</div>
+              <div className="text-3xl md:text-5xl mb-2">{method.icon}</div>
+              <div className="text-tv-text font-bold text-sm md:text-base">{method.label}</div>
+              <div className="text-tv-textMuted text-xs mt-1 hidden md:block">{method.desc}</div>
             </button>
           ))}
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="bg-tv-error/20 border border-tv-error/50 text-tv-error p-4 rounded-lg mb-6">
-            {error}
+          <div className="bg-red-500/10 border-2 border-red-500/50 text-red-600 p-4 rounded-xl mb-6 font-medium shadow-lg">
+            ⚠️ {error}
           </div>
         )}
 
         {/* Method 1: PIN Code Pairing */}
         {pairingMethod === 'pin' && (
-          <div className="bg-background-light rounded-lg p-8 border border-slate-700">
-            <h2 className="text-2xl font-bold text-white text-center mb-4">
-              Enter this PIN in Admin Panel
+          <div className="bg-tv-bgElevated rounded-2xl p-6 md:p-10 border-2 border-tv-borderSubtle shadow-2xl">
+            <h2 className="text-2xl md:text-3xl font-bold text-tv-accent text-center mb-6">
+              🔢 Enter this PIN in Admin Panel
             </h2>
-            <div className="bg-background rounded-lg p-8 mb-6 relative">
-              <div className="text-7xl font-bold text-primary text-center tracking-widest font-mono">
+            <div className="bg-gradient-to-br from-tv-accent/5 to-tv-gold/5 rounded-2xl p-8 md:p-12 mb-6 relative border-2 border-tv-accent/20 shadow-inner">
+              <div className="text-6xl md:text-8xl lg:text-9xl font-bold text-tv-accent text-center tracking-[0.3em] font-mono drop-shadow-lg">
                 {loading ? '------' : pinCode}
               </div>
-              <div className="absolute top-2 right-2">
-                <div className="flex items-center gap-2 text-sm text-text-muted">
-                  <span className="animate-pulse">●</span>
-                  <span>Waiting for pairing...</span>
+              <div className="absolute top-3 right-3 md:top-4 md:right-4">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-tv-bgElevated/90 rounded-full border border-tv-borderSubtle">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  <span className="text-xs md:text-sm text-tv-textSecondary font-medium">Active</span>
                 </div>
               </div>
             </div>
-            <div className="space-y-3 text-center">
-              <p className="text-text-secondary text-sm">
-                1. Go to Admin Panel → Displays → "Pair Display"<br/>
-                2. Enter this PIN code<br/>
-                3. This display will connect automatically
-              </p>
-              <div className="bg-primary/10 border border-primary/30 rounded-lg p-3">
-                <p className="text-primary text-sm font-medium">
-                  ⏱️ Checking for pairing every 3 seconds...
+            <div className="space-y-4 text-center">
+              <div className="bg-tv-bgSoft rounded-xl p-4 md:p-5 border border-tv-borderSubtle">
+                <p className="text-tv-text text-sm md:text-base font-medium leading-relaxed">
+                  <span className="text-tv-accent font-bold">1.</span> Open Admin Panel on your phone<br/>
+                  <span className="text-tv-accent font-bold">2.</span> Go to Displays → "Pair Display"<br/>
+                  <span className="text-tv-accent font-bold">3.</span> Enter this PIN code<br/>
+                  <span className="text-tv-accent font-bold">4.</span> Display connects automatically
+                </p>
+              </div>
+              <div className="bg-tv-accent/10 border-2 border-tv-accent/30 rounded-xl p-3 md:p-4">
+                <p className="text-tv-accent text-sm md:text-base font-bold flex items-center justify-center gap-2">
+                  <span className="animate-spin">⟳</span>
+                  Checking for pairing every 3 seconds...
                 </p>
               </div>
             </div>
-            <p className="text-text-muted text-center text-xs mt-4">
-              PIN refreshes every 5 minutes
+            <p className="text-tv-textMuted text-center text-xs md:text-sm mt-6 font-medium">
+              🔄 PIN refreshes automatically every 5 minutes
             </p>
           </div>
         )}
 
-        {/* Method 2: QR Code Pairing */}
+        {/* Method 2: QR Code Pairing - REVERSED FLOW: Display shows QR, Admin scans */}
         {pairingMethod === 'qr' && (
-          <div className="bg-background-light rounded-lg p-8 border border-slate-700">
-            <h2 className="text-2xl font-bold text-white text-center mb-4">
-              Scan QR Code
+          <div className="bg-tv-bgElevated rounded-2xl p-6 md:p-10 border-2 border-tv-borderSubtle shadow-2xl">
+            <h2 className="text-2xl md:text-3xl font-bold text-tv-accent text-center mb-6">
+              📱 Scan QR Code with Admin Phone
             </h2>
-            <div className="bg-white rounded-lg p-8 mb-6 max-w-md mx-auto">
-              <div className="aspect-square flex items-center justify-center">
+            
+            {qrCodeLoading || !qrCodeDataUrl ? (
+              <div className="bg-white rounded-2xl p-8 md:p-12 mb-6 max-w-md mx-auto flex items-center justify-center min-h-[300px]">
                 <div className="text-center">
-                  <div className="text-6xl mb-4">📱</div>
-                  <p className="text-tv-text font-medium">
-                    QR Code will appear here
-                  </p>
-                  <p className="text-tv-textSecondary text-sm mt-2">
-                    Generate from Admin Panel
-                  </p>
+                  <Spinner size="xl" />
+                  <p className="text-tv-text font-medium mt-4">Generating QR Code...</p>
                 </div>
               </div>
+            ) : (
+              <div className="bg-white rounded-2xl p-6 md:p-10 mb-6 max-w-lg mx-auto shadow-2xl border-4 border-tv-accent/20">
+                <div className="relative">
+                  <img 
+                    src={qrCodeDataUrl} 
+                    alt="Pairing QR Code" 
+                    className="w-full h-auto rounded-xl"
+                  />
+                  <div className="absolute -top-3 -right-3 bg-green-500 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                    ACTIVE
+                  </div>
+                </div>
+                <div className="mt-6 text-center">
+                  <p className="text-tv-text font-bold text-lg mb-2">PIN: <span className="text-tv-accent text-2xl font-mono tracking-wider">{pinCode}</span></p>
+                  <p className="text-tv-textSecondary text-sm">(Backup - use if QR scan fails)</p>
+                </div>
+              </div>
+            )}
+            
+            <div className="space-y-4">
+              <div className="bg-tv-bgSoft rounded-xl p-4 md:p-5 border border-tv-borderSubtle">
+                <p className="text-tv-text text-sm md:text-base font-medium leading-relaxed text-center">
+                  <span className="text-tv-accent font-bold">1.</span> Open your Admin Panel on phone<br/>
+                  <span className="text-tv-accent font-bold">2.</span> Use phone camera to scan this QR code<br/>
+                  <span className="text-tv-accent font-bold">3.</span> Enter display details<br/>
+                  <span className="text-tv-accent font-bold">4.</span> Display connects automatically
+                </p>
+              </div>
+              
+              <div className="bg-tv-accent/10 border-2 border-tv-accent/30 rounded-xl p-3 md:p-4">
+                <p className="text-tv-accent text-sm md:text-base font-bold flex items-center justify-center gap-2">
+                  <span className="animate-spin">⟳</span>
+                  Checking for pairing every 3 seconds...
+                </p>
+              </div>
+              
+              <div className="bg-tv-gold/10 border border-tv-gold/30 rounded-xl p-3 text-center">
+                <p className="text-tv-text text-xs md:text-sm font-medium">
+                  💡 <span className="font-bold">Tip:</span> Point your phone camera at the QR code. It will auto-detect and open the pairing link.
+                </p>
+              </div>
             </div>
-            <p className="text-text-secondary text-center text-sm">
-              1. Admin Panel → Displays → "Generate QR Code"<br/>
-              2. Scan with phone camera<br/>
-              3. Display connects automatically
+            
+            <p className="text-tv-textMuted text-center text-xs md:text-sm mt-6 font-medium">
+              🔄 QR code refreshes every 5 minutes
             </p>
           </div>
         )}
