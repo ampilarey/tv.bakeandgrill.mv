@@ -19,6 +19,15 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
   useEffect(() => {
     if (isOpen) {
       fetchPlaylists();
+      
+      // Check for auto-pair PIN from QR code scan
+      if (window.autoPairPin) {
+        console.log('📱 Auto-filling PIN from QR code:', window.autoPairPin);
+        setPinCode(window.autoPairPin);
+        setMethod('pin');
+        // Clear it so it doesn't auto-fill again
+        delete window.autoPairPin;
+      }
     }
   }, [isOpen]);
 

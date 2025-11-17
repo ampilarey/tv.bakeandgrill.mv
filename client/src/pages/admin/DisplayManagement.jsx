@@ -40,6 +40,20 @@ export default function DisplayManagement() {
   useEffect(() => {
     // Fetch permissions first
     fetchUserPermissions();
+    
+    // Check for QR code auto-pair PIN in URL
+    const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
+    const autoPairPin = urlParams.get('autoPairPin');
+    
+    if (autoPairPin) {
+      console.log('🔍 Auto-pair PIN detected from QR code:', autoPairPin);
+      // Open pair modal with pre-filled PIN after a short delay
+      setTimeout(() => {
+        setShowPairModal(true);
+        // We'll pass the PIN to the modal
+        window.autoPairPin = autoPairPin;
+      }, 500);
+    }
   }, [user]);
 
   const fetchUserPermissions = async () => {
