@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const fetchPermissions = async () => {
     try {
       const response = await api.get('/permissions/me');
+      console.log('📋 Dashboard permissions:', response.data.permissions);
       setPermissions(response.data.permissions);
     } catch (error) {
       console.error('Error fetching permissions:', error);

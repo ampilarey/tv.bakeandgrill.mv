@@ -15,6 +15,7 @@ export default function MobileMenu() {
     const fetchPermissions = async () => {
       try {
         const response = await api.get('/permissions/me');
+        console.log('📱 MobileMenu permissions:', response.data.permissions);
         setPermissions(response.data.permissions);
       } catch (error) {
         console.error('Error fetching permissions:', error);
@@ -24,6 +25,20 @@ export default function MobileMenu() {
     if (user) {
       fetchPermissions();
     }
+    
+    // Listen for permission updates from other components
+    const handlePermissionUpdate = () => {
+      console.log('🔄 Permission update event received, refetching...');
+      if (user) {
+        fetchPermissions();
+      }
+    };
+    
+    window.addEventListener('permissionsUpdated', handlePermissionUpdate);
+    
+    return () => {
+      window.removeEventListener('permissionsUpdated', handlePermissionUpdate);
+    };
   }, [user]);
   
   const menuItems = [
