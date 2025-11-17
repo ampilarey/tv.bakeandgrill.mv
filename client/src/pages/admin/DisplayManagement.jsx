@@ -206,8 +206,15 @@ export default function DisplayManagement() {
       
       console.log('Command sent successfully:', response.data);
       
-      setShowControlModal(false);
-      alert(`✅ Command sent! Display will switch to "${channel.name}" within 1-2 seconds.`);
+      // Don't close modal - let user send more commands
+      // Just clear the selection for next command
+      setSelectedChannel('');
+      setSelectedGroupForControl('');
+      
+      // Show brief success feedback (don't block with alert)
+      console.log(`✅ Command sent! Display will switch to "${channel.name}"`);
+      
+      // Optional: You could add a toast notification here instead of alert
     } catch (error) {
       console.error('Remote control error:', error);
       alert(error.response?.data?.error || 'Failed to send command');
