@@ -41,22 +41,43 @@ export default function MobileMenu() {
     };
   }, [user]);
   
-  const menuItems = [
+  // Build menu items dynamically based on permissions
+  const menuItems = [];
+  
+  // Always show these
+  menuItems.push(
     { path: '/dashboard', icon: '🏠', label: 'Dashboard' },
     { path: '/history', icon: '🕒', label: 'History' },
-    { path: '/profile', icon: '👤', label: 'Profile' },
-    // Show Displays if user has permission
-    ...(user?.role === 'admin' || permissions?.can_manage_displays || permissions?.can_control_displays ? [
-      { path: '/admin/displays', icon: '🖥️', label: 'Displays' },
-    ] : []),
-    // Admin-only menu items
-    ...(user?.role === 'admin' ? [
+    { path: '/profile', icon: '👤', label: 'Profile' }
+  );
+  
+  // Show Displays if user has permission (check both conditions)
+  const hasDisplayAccess = user?.role === 'admin' || 
+                           permissions?.can_manage_displays === true || 
+                           permissions?.can_manage_displays === 1 ||
+                           permissions?.can_control_displays === true ||
+                           permissions?.can_control_displays === 1;
+  
+  console.log('🔍 Display access check:', {
+    role: user?.role,
+    canManage: permissions?.can_manage_displays,
+    canControl: permissions?.can_control_displays,
+    hasAccess: hasDisplayAccess
+  });
+  
+  if (hasDisplayAccess) {
+    menuItems.push({ path: '/admin/displays', icon: '🖥️', label: 'Displays' });
+  }
+  
+  // Admin-only menu items
+  if (user?.role === 'admin') {
+    menuItems.push(
       { path: '/admin/dashboard', icon: '⚙️', label: 'Admin Home' },
       { path: '/admin/users', icon: '👥', label: 'Users' },
       { path: '/admin/analytics', icon: '📊', label: 'Analytics' },
-      { path: '/admin/settings', icon: '🔧', label: 'Settings' },
-    ] : []),
-  ];
+      { path: '/admin/settings', icon: '🔧', label: 'Settings' }
+    );
+  }
   
   const handleNavigate = (path) => {
     navigate(path);
