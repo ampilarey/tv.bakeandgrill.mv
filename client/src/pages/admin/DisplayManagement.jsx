@@ -134,8 +134,11 @@ export default function DisplayManagement() {
     try {
       await api.delete(`/displays/${displayId}`);
       fetchDisplays();
+      console.log('✅ Display deleted successfully');
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to delete display');
+      console.error('❌ Delete failed:', error);
+      setError(error.response?.data?.error || 'Failed to delete display');
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -161,10 +164,12 @@ export default function DisplayManagement() {
         setGroupsForControl(groups);
       } catch (error) {
         console.error('Error fetching channels:', error);
-        alert('Failed to load channels: ' + (error.response?.data?.error || error.message));
+        setError('Failed to load channels: ' + (error.response?.data?.error || error.message));
+        setTimeout(() => setError(''), 3000);
       }
     } else {
-      alert('This display has no playlist assigned!');
+      setError('This display has no playlist assigned!');
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -180,7 +185,8 @@ export default function DisplayManagement() {
 
   const handleRemoteControl = async () => {
     if (!selectedChannel) {
-      alert('Please select a channel first!');
+      setError('Please select a channel first!');
+      setTimeout(() => setError(''), 3000);
       return;
     }
     
@@ -188,7 +194,8 @@ export default function DisplayManagement() {
       const channel = channels.find(ch => ch.id === selectedChannel);
       
       if (!channel) {
-        alert('Channel not found!');
+        setError('Channel not found!');
+        setTimeout(() => setError(''), 3000);
         return;
       }
       
@@ -211,13 +218,12 @@ export default function DisplayManagement() {
       setSelectedChannel('');
       setSelectedGroupForControl('');
       
-      // Show brief success feedback (don't block with alert)
+      // Show brief success feedback
       console.log(`✅ Command sent! Display will switch to "${channel.name}"`);
-      
-      // Optional: You could add a toast notification here instead of alert
     } catch (error) {
       console.error('Remote control error:', error);
-      alert(error.response?.data?.error || 'Failed to send command');
+      setError(error.response?.data?.error || 'Failed to send command');
+      setTimeout(() => setError(''), 3000);
     }
   };
 
