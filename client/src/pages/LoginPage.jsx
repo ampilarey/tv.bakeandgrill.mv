@@ -9,6 +9,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDisplayInfo, setShowDisplayInfo] = useState(false);
   
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
