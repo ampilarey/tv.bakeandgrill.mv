@@ -43,8 +43,6 @@ export default function DisplayManagement() {
     end_time: '',
     is_active: true
   });
-  const [reconnectRequests, setReconnectRequests] = useState([]);
-  const [showReconnectNotification, setShowReconnectNotification] = useState(false);
   
   const { user, logout} = useAuth();
   const navigate = useNavigate();
@@ -99,48 +97,10 @@ export default function DisplayManagement() {
     // Auto-refresh displays every 5 seconds to update online status
     const refreshInterval = setInterval(() => {
       fetchDisplays();
-      fetchReconnectRequests(); // Also check for reconnection requests
     }, 5000); // 5 seconds for faster status updates
 
     return () => clearInterval(refreshInterval);
   }, [userPermissions]);
-
-  const fetchReconnectRequests = async () => {
-    try {
-      const response = await api.get('/reconnect/pending');
-      const requests = response.data.requests || [];
-      setReconnectRequests(requests);
-      
-      // Show notification if there are pending requests
-      if (requests.length > 0 && !showReconnectNotification) {
-        setShowReconnectNotification(true);
-      } else if (requests.length === 0) {
-        setShowReconnectNotification(false);
-      }
-    } catch (error) {
-      console.error('Error fetching reconnect requests:', error);
-    }
-  };
-
-  const handleApproveReconnect = async (requestId) => {
-    try {
-      await api.post(`/reconnect/approve/${requestId}`);
-      console.log('✅ Reconnection approved');
-      fetchReconnectRequests();
-    } catch (error) {
-      setError(error.response?.data?.error || 'Failed to approve reconnection');
-    }
-  };
-
-  const handleDenyReconnect = async (requestId) => {
-    try {
-      await api.post(`/reconnect/deny/${requestId}`);
-      console.log('❌ Reconnection denied');
-      fetchReconnectRequests();
-    } catch (error) {
-      setError(error.response?.data?.error || 'Failed to deny reconnection');
-    }
-  };
 
   const fetchDisplays = async () => {
     try {
@@ -411,19 +371,7 @@ export default function DisplayManagement() {
           <div className="flex items-center gap-3">
             <MobileMenu />
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl md:text-2xl font-bold text-white">Display Management</h1>
-                {reconnectRequests.length > 0 && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowReconnectNotification(!showReconnectNotification)}
-                      className="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse hover:bg-red-600 transition-colors"
-                    >
-                      {reconnectRequests.length} Reconnect Request{reconnectRequests.length > 1 ? 's' : ''}
-                    </button>
-                  </div>
-                )}
-              </div>
+              <h1 className="text-xl md:text-2xl font-bold text-white">Display Management</h1>
               <p className="text-xs md:text-sm text-white/90 hidden sm:block">
                 Manage cafe TV displays
                 <span className="ml-3 text-xs text-tv-gold animate-pulse">● Auto-refresh (5s)</span>
@@ -1008,63 +956,6 @@ export default function DisplayManagement() {
         }}
       />
       
-      {/* Reconnection Requests Notification */}
-      {showReconnectNotification && reconnectRequests.length > 0 && (
-        <div className="fixed top-20 right-4 z-50 max-w-md">
-          <div className="bg-tv-bgElevated border-2 border-red-500 rounded-xl shadow-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-tv-text font-bold flex items-center gap-2">
-                <span className="text-2xl">🔔</span>
-                Reconnection Requests ({reconnectRequests.length})
-              </h3>
-              <button
-                onClick={() => setShowReconnectNotification(false)}
-                className="text-tv-textMuted hover:text-tv-text"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {reconnectRequests.map((request) => (
-                <div key={request.id} className="bg-tv-bgSoft border border-tv-borderSubtle rounded-lg p-3">
-                  <p className="text-tv-text font-bold text-sm mb-1">{request.display_name}</p>
-                  <p className="text-tv-textSecondary text-xs mb-2">
-                    {request.display_location && `${request.display_location} • `}
-                    {new Date(request.requested_at).toLocaleTimeString()}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => {
-                        handleApproveReconnect(request.id);
-                        setShowReconnectNotification(false);
-                      }}
-                      className="flex-1"
-                    >
-                      ✅ Approve
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => {
-                        handleDenyReconnect(request.id);
-                      }}
-                      className="flex-1"
-                    >
-                      ❌ Deny
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Schedule Management Modal */}
       <Modal
         isOpen={showScheduleModal}

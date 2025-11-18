@@ -15,93 +15,13 @@ export default function DisplayPairingPage() {
   const [locationPin, setLocationPin] = useState('');
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const [qrCodeLoading, setQrCodeLoading] = useState(false);
-  const [savedToken, setSavedToken] = useState(null);
-  const [reconnecting, setReconnecting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for saved display token first
-    checkSavedToken();
+    requestPinFromServer();
+    fetchLocations();
+    checkAutoPairing();
   }, []);
-
-  const checkSavedToken = async () => {
-    const token = localStorage.getItem('display_token');
-    const displayId = localStorage.getItem('display_id');
-    const displayName = localStorage.getItem('display_name');
-    
-    if (token && displayId) {
-      console.log('🔍 Found saved display token, requesting reconnection approval...');
-      setSavedToken({ token, displayId, displayName });
-      setReconnecting(true);
-      
-      try {
-        // Request reconnection approval from admin
-        const response = await api.post('/reconnect/request', { token });
-        
-        if (response.data.success) {
-          const requestId = response.data.requestId;
-          console.log('📨 Reconnection request sent, waiting for admin approval...', requestId);
-          
-          // Poll for approval (every 3 seconds for 5 minutes)
-          const pollInterval = setInterval(async () => {
-            try {
-              const checkResponse = await api.post(`/reconnect/check/${requestId}`);
-              
-              if (checkResponse.data.status === 'approved') {
-                console.log('✅ Reconnection approved! Loading player...');
-                clearInterval(pollInterval);
-                setTimeout(() => {
-                  navigate(`/display?token=${token}`);
-                }, 500);
-              } else if (checkResponse.data.status === 'denied') {
-                console.log('❌ Reconnection denied by admin');
-                clearInterval(pollInterval);
-                setError('Reconnection denied. Please pair again.');
-                setReconnecting(false);
-                // Clear saved credentials
-                localStorage.removeItem('display_token');
-                localStorage.removeItem('display_id');
-                localStorage.removeItem('display_name');
-                setSavedToken(null);
-              } else if (checkResponse.data.status === 'expired') {
-                console.log('⏱️ Reconnection request expired');
-                clearInterval(pollInterval);
-                setError('Reconnection request expired. Please pair again.');
-                setReconnecting(false);
-              }
-            } catch (error) {
-              console.error('Error checking reconnection status:', error);
-            }
-          }, 3000); // Check every 3 seconds
-          
-          // Stop polling after 5 minutes
-          setTimeout(() => {
-            clearInterval(pollInterval);
-            if (reconnecting) {
-              setError('Reconnection timeout. Please pair again.');
-              setReconnecting(false);
-            }
-          }, 5 * 60 * 1000);
-        }
-      } catch (error) {
-        console.log('⚠️ Reconnection request failed, showing pairing options');
-        setReconnecting(false);
-        // Token invalid, clear it and show pairing page
-        localStorage.removeItem('display_token');
-        localStorage.removeItem('display_id');
-        localStorage.removeItem('display_name');
-        setSavedToken(null);
-      }
-    }
-    
-    // No saved token, proceed with normal pairing flow
-    if (!token) {
-      setReconnecting(false);
-      requestPinFromServer();
-      fetchLocations();
-      checkAutoPairing();
-    }
-  };
 
   // Generate QR code for pairing when QR method is selected
   useEffect(() => {
@@ -243,11 +163,6 @@ export default function DisplayPairingPage() {
     console.log('📋 Display token:', display.token);
     
     setDisplayInfo(display);
-    // Save token, ID, and name for auto-reconnect
-    localStorage.setItem('display_token', display.token);
-    localStorage.setItem('display_id', display.id);
-    localStorage.setItem('display_name', display.name);
-    console.log('💾 Display credentials saved for auto-reconnect');
     
     // Redirect to kiosk mode after showing success message
     console.log('⏱️ Will redirect to player in 2 seconds...');
@@ -293,26 +208,6 @@ export default function DisplayPairingPage() {
     }
   };
 
-  // Auto-reconnecting screen
-  if (reconnecting && savedToken) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-tv-bg">
-        <div className="text-center p-8 max-w-md">
-          <div className="text-7xl mb-6">🔄</div>
-          <h1 className="text-3xl md:text-4xl font-bold text-tv-accent mb-4">Reconnecting...</h1>
-          <p className="text-tv-text text-lg mb-6">
-            Found saved display: <span className="text-tv-accent font-bold">{savedToken.displayName}</span>
-          </p>
-          <div className="bg-tv-bgElevated rounded-xl p-6 border-2 border-tv-accent/30">
-            <Spinner size="lg" className="mb-3" />
-            <p className="text-tv-textSecondary text-sm">Verifying connection...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Pairing success screen
   if (displayInfo) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-tv-bg">
@@ -327,7 +222,7 @@ export default function DisplayPairingPage() {
             <Spinner className="mt-4" />
           </div>
           <p className="text-tv-textMuted text-sm">
-            Token saved for easy reconnection next time! ✅
+            Redirecting to player...
           </p>
         </div>
       </div>
