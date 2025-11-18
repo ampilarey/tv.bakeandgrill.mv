@@ -565,18 +565,26 @@ export default function DisplayManagement() {
                 </div>
 
                 <div className="space-y-2">
-                  <Button 
-                    variant="primary" 
-                    size="sm" 
-                    onClick={() => handleOpenControl(display)}
-                    className="w-full"
-                    disabled={!display.playlist_id}
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                    </svg>
-                    Remote Control
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      variant="primary" 
+                      size="sm" 
+                      onClick={() => handleOpenControl(display)}
+                      className="w-full"
+                      disabled={!display.playlist_id}
+                    >
+                      🎮 Remote
+                    </Button>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      onClick={() => handleOpenSchedules(display)}
+                      className="w-full"
+                      disabled={!display.playlist_id}
+                    >
+                      📅 Schedule
+                    </Button>
+                  </div>
                   
                   <button
                     onClick={() => {
@@ -945,6 +953,123 @@ export default function DisplayManagement() {
         }}
       />
       
+      {/* Schedule Management Modal */}
+      <Modal
+        isOpen={showScheduleModal}
+        onClose={() => {
+          setShowScheduleModal(false);
+          setSelectedDisplay(null);
+          setSchedules([]);
+          setError('');
+        }}
+        title={`Manage Schedules: ${selectedDisplay?.name}`}
+        size="lg"
+      >
+        <div className="space-y-4">
+          {error && (
+            <div className="bg-red-500/20 border-2 border-red-500/50 rounded-xl p-3 text-red-600 text-sm">
+              {error}
+            </div>
+          )}
+
+          {/* Existing Schedules */}
+          <div className="bg-tv-bgSoft rounded-lg p-4 border border-tv-borderSubtle">
+            <h3 className="text-tv-text font-bold mb-3">📅 Active Schedules ({schedules.length})</h3>
+            
+            {schedules.length === 0 ? (
+              <p className="text-tv-textMuted text-sm text-center py-4">No schedules yet. Create one below.</p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {schedules.map((schedule) => (
+                  <div key={schedule.id} className="bg-tv-bgElevated rounded-lg p-3 border border-tv-borderSubtle flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-tv-text font-medium text-sm">{schedule.channel_name}</p>
+                      <p className="text-tv-textMuted text-xs">
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][schedule.day_of_week] || 'Every Day'} • {schedule.start_time?.slice(0,5)} - {schedule.end_time?.slice(0,5)}
+                      </p>
+                    </div>
+                    <Button variant="danger" size="sm" onClick={() => handleDeleteSchedule(schedule.id)}>
+                      Delete
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Create New Schedule */}
+          <div className="bg-tv-bgElevated rounded-lg p-4 border-2 border-tv-accent/30">
+            <h3 className="text-tv-text font-bold mb-3">➕ Add New Schedule</h3>
+            <form onSubmit={handleCreateSchedule} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-tv-textSecondary mb-2">Channel *</label>
+                <select
+                  value={newSchedule.channel_id}
+                  onChange={(e) => setNewSchedule({...newSchedule, channel_id: e.target.value})}
+                  className="w-full px-3 py-2 rounded-lg bg-tv-bgSoft text-tv-text border-2 border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent text-sm"
+                  required
+                >
+                  <option value="">Select channel...</option>
+                  {channels.map(ch => (
+                    <option key={ch.id} value={ch.id}>{ch.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-tv-textSecondary mb-2">Day of Week</label>
+                <select
+                  value={newSchedule.day_of_week}
+                  onChange={(e) => setNewSchedule({...newSchedule, day_of_week: e.target.value})}
+                  className="w-full px-3 py-2 rounded-lg bg-tv-bgSoft text-tv-text border-2 border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent text-sm"
+                >
+                  <option value="">Every Day</option>
+                  <option value="0">Sunday</option>
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-tv-textSecondary mb-2">Start Time *</label>
+                  <input
+                    type="time"
+                    value={newSchedule.start_time}
+                    onChange={(e) => setNewSchedule({...newSchedule, start_time: e.target.value})}
+                    className="w-full px-3 py-2 rounded-lg bg-tv-bgSoft text-tv-text border-2 border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-tv-textSecondary mb-2">End Time *</label>
+                  <input
+                    type="time"
+                    value={newSchedule.end_time}
+                    onChange={(e) => setNewSchedule({...newSchedule, end_time: e.target.value})}
+                    className="w-full px-3 py-2 rounded-lg bg-tv-bgSoft text-tv-text border-2 border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent text-sm"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button type="submit" variant="primary" className="flex-1">
+                  Add Schedule
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => setShowScheduleModal(false)} className="flex-1">
+                  Close
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </Modal>
+
       <Footer />
     </div>
   );
