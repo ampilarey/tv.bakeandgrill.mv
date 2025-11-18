@@ -178,18 +178,23 @@ export default function ProfilePage() {
                 required
               />
               <Input
-                label="Email"
+                label="Phone Number (7 digits)"
+                type="tel"
+                value={profileForm.phone_number}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 7);
+                  setProfileForm({ ...profileForm, phone_number: value });
+                }}
+                placeholder="1234567"
+                required
+                maxLength="7"
+              />
+              <Input
+                label="Email (Optional)"
                 type="email"
                 value={profileForm.email}
                 onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                required
-              />
-              <Input
-                label="Phone Number (Optional)"
-                type="tel"
-                value={profileForm.phone_number}
-                onChange={(e) => setProfileForm({ ...profileForm, phone_number: e.target.value })}
-                placeholder="+960 1234567"
+                placeholder="user@example.com"
               />
               <div className="flex gap-2">
                 <Button type="submit" disabled={loading}>

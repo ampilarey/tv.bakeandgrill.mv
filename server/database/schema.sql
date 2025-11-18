@@ -6,8 +6,8 @@
 -- ============================================
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  phone_number VARCHAR(20) NULL UNIQUE,
+  phone_number VARCHAR(7) UNIQUE NOT NULL,
+  email VARCHAR(255) NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   role VARCHAR(20) DEFAULT 'user' CHECK(role IN ('admin', 'staff', 'user', 'display')),
   first_name VARCHAR(100),

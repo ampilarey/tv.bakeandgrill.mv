@@ -320,12 +320,24 @@ export default function UserManagement() {
           )}
           
           <Input
-            label="Email"
+            label="Phone Number (7 digits)"
+            type="tel"
+            value={newUser.phone_number}
+            onChange={(e) => {
+              const value = e.target.value.replace(/\D/g, '').slice(0, 7);
+              setNewUser({...newUser, phone_number: value});
+            }}
+            placeholder="1234567"
+            required
+            maxLength="7"
+          />
+          
+          <Input
+            label="Email (Optional)"
             type="email"
             value={newUser.email}
             onChange={(e) => setNewUser({...newUser, email: e.target.value})}
             placeholder="user@example.com"
-            required
           />
           
           <Input
@@ -397,20 +409,24 @@ export default function UserManagement() {
           )}
           
           <Input
-            label="Email"
+            label="Phone Number (7 digits)"
+            type="tel"
+            value={editUser.phone_number}
+            onChange={(e) => {
+              const value = e.target.value.replace(/\D/g, '').slice(0, 7);
+              setEditUser({...editUser, phone_number: value});
+            }}
+            placeholder="1234567"
+            required
+            maxLength="7"
+          />
+          
+          <Input
+            label="Email (Optional)"
             type="email"
             value={editUser.email}
             onChange={(e) => setEditUser({...editUser, email: e.target.value})}
             placeholder="user@example.com"
-            required
-          />
-          
-          <Input
-            label="Phone Number (Optional)"
-            type="tel"
-            value={editUser.phone_number}
-            onChange={(e) => setEditUser({...editUser, phone_number: e.target.value})}
-            placeholder="+960 1234567"
           />
           
           <div>

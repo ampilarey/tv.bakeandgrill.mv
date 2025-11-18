@@ -127,7 +127,26 @@ router.post('/', validateUserCreate, asyncHandler(async (req, res) => {
   const { email, phone_number, password, role = 'staff', first_name, last_name, force_password_change = true } = req.body;
   const db = getDatabase();
   
-  // Check if email already exists
+  // Phone number is mandatory (7 digits)
+  if (!phone_number || phone_number.length !== 7 || !/^\d{7}$/.test(phone_number)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Phone number is required (7 digits)',
+      code: 'VALIDATION_ERROR'
+    });
+  }
+  
+  // Check if phone number already exists
+  const [existingPhone] = await db.query('SELECT id FROM users WHERE phone_number = ?', [phone_number]);
+  if (existingPhone.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Phone number already exists',
+      code: 'USER_PHONE_EXISTS'
+    });
+  }
+  
+  // Check if email already exists (if provided)
   if (email) {
     const [existingEmail] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
     if (existingEmail.length > 0) {
@@ -137,27 +156,6 @@ router.post('/', validateUserCreate, asyncHandler(async (req, res) => {
         code: 'USER_EMAIL_EXISTS'
       });
     }
-  }
-  
-  // Check if phone number already exists
-  if (phone_number) {
-    const [existingPhone] = await db.query('SELECT id FROM users WHERE phone_number = ?', [phone_number]);
-    if (existingPhone.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Phone number already exists',
-        code: 'USER_PHONE_EXISTS'
-      });
-    }
-  }
-  
-  // At least email or phone required
-  if (!email && !phone_number) {
-    return res.status(400).json({
-      success: false,
-      error: 'Either email or phone number is required',
-      code: 'VALIDATION_ERROR'
-    });
   }
   
   // Hash password

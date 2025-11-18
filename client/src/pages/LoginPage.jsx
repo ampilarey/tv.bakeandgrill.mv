@@ -178,11 +178,11 @@ export default function LoginPage() {
             )}
 
             <Input
-              label="Email or Phone Number"
+              label="Phone Number or Email"
               type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@bakegrill.com or +960 1234567"
+              placeholder="1234567 or admin@bakegrill.com"
               required
               autoComplete="username"
               autoFocus
