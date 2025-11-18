@@ -15,13 +15,52 @@ export default function DisplayPairingPage() {
   const [locationPin, setLocationPin] = useState('');
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const [qrCodeLoading, setQrCodeLoading] = useState(false);
+  const [savedToken, setSavedToken] = useState(null);
+  const [reconnecting, setReconnecting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Check for saved display token first
+    checkSavedToken();
+  }, []);
+
+  const checkSavedToken = async () => {
+    const token = localStorage.getItem('display_token');
+    const displayId = localStorage.getItem('display_id');
+    const displayName = localStorage.getItem('display_name');
+    
+    if (token && displayId) {
+      console.log('🔍 Found saved display token, attempting auto-reconnect...');
+      setSavedToken({ token, displayId, displayName });
+      setReconnecting(true);
+      
+      try {
+        // Verify token is still valid
+        const response = await api.post('/displays/verify', { token });
+        if (response.data.success && response.data.display) {
+          console.log('✅ Token valid! Auto-reconnecting...');
+          // Token is valid, redirect to player
+          setTimeout(() => {
+            navigate(`/display?token=${token}`);
+          }, 1000);
+          return;
+        }
+      } catch (error) {
+        console.log('⚠️ Saved token invalid or expired, showing pairing options');
+        // Token invalid, clear it and show pairing page
+        localStorage.removeItem('display_token');
+        localStorage.removeItem('display_id');
+        localStorage.removeItem('display_name');
+        setSavedToken(null);
+      }
+    }
+    
+    // No saved token or token invalid, proceed with normal pairing flow
+    setReconnecting(false);
     requestPinFromServer();
     fetchLocations();
     checkAutoPairing();
-  }, []);
+  };
 
   // Generate QR code for pairing when QR method is selected
   useEffect(() => {
@@ -163,8 +202,11 @@ export default function DisplayPairingPage() {
     console.log('📋 Display token:', display.token);
     
     setDisplayInfo(display);
+    // Save token, ID, and name for auto-reconnect
     localStorage.setItem('display_token', display.token);
     localStorage.setItem('display_id', display.id);
+    localStorage.setItem('display_name', display.name);
+    console.log('💾 Display credentials saved for auto-reconnect');
     
     // Redirect to kiosk mode after showing success message
     console.log('⏱️ Will redirect to player in 2 seconds...');
@@ -210,6 +252,26 @@ export default function DisplayPairingPage() {
     }
   };
 
+  // Auto-reconnecting screen
+  if (reconnecting && savedToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-tv-bg">
+        <div className="text-center p-8 max-w-md">
+          <div className="text-7xl mb-6">🔄</div>
+          <h1 className="text-3xl md:text-4xl font-bold text-tv-accent mb-4">Reconnecting...</h1>
+          <p className="text-tv-text text-lg mb-6">
+            Found saved display: <span className="text-tv-accent font-bold">{savedToken.displayName}</span>
+          </p>
+          <div className="bg-tv-bgElevated rounded-xl p-6 border-2 border-tv-accent/30">
+            <Spinner size="lg" className="mb-3" />
+            <p className="text-tv-textSecondary text-sm">Verifying connection...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Pairing success screen
   if (displayInfo) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-tv-bg">
@@ -224,7 +286,7 @@ export default function DisplayPairingPage() {
             <Spinner className="mt-4" />
           </div>
           <p className="text-tv-textMuted text-sm">
-            Token: <code className="text-xs bg-tv-bgSoft px-2 py-1 rounded">{displayInfo.token?.substring(0, 16)}...</code>
+            Token saved for easy reconnection next time! ✅
           </p>
         </div>
       </div>
