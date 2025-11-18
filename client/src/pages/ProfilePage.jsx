@@ -18,9 +18,10 @@ export default function ProfilePage() {
 
   // Profile form state
   const [profileForm, setProfileForm] = useState({
-    first_name: user?.first_name || '',
-    last_name: user?.last_name || '',
-    email: user?.email || ''
+    first_name: user?.firstName || user?.first_name || '',
+    last_name: user?.lastName || user?.last_name || '',
+    email: user?.email || '',
+    phone_number: user?.phoneNumber || user?.phone_number || ''
   });
 
   // Password form state
@@ -146,12 +147,16 @@ export default function ProfilePage() {
               <div>
                 <label className="text-sm text-tv-textSecondary">Full Name</label>
                 <p className="text-tv-text font-medium">
-                  {user?.first_name} {user?.last_name}
+                  {user?.firstName || user?.first_name} {user?.lastName || user?.last_name}
                 </p>
               </div>
               <div>
                 <label className="text-sm text-tv-textSecondary">Email</label>
                 <p className="text-tv-text font-medium">{user?.email}</p>
+              </div>
+              <div>
+                <label className="text-sm text-tv-textSecondary">Phone Number</label>
+                <p className="text-tv-text font-medium">{user?.phoneNumber || user?.phone_number || 'Not set'}</p>
               </div>
               <div>
                 <label className="text-sm text-tv-textSecondary">Role</label>
@@ -179,6 +184,13 @@ export default function ProfilePage() {
                 onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
                 required
               />
+              <Input
+                label="Phone Number (Optional)"
+                type="tel"
+                value={profileForm.phone_number}
+                onChange={(e) => setProfileForm({ ...profileForm, phone_number: e.target.value })}
+                placeholder="+960 1234567"
+              />
               <div className="flex gap-2">
                 <Button type="submit" disabled={loading}>
                   {loading ? 'Saving...' : 'Save Changes'}
@@ -189,9 +201,10 @@ export default function ProfilePage() {
                   onClick={() => {
                     setIsEditingProfile(false);
                     setProfileForm({
-                      first_name: user?.first_name || '',
-                      last_name: user?.last_name || '',
-                      email: user?.email || ''
+                      first_name: user?.firstName || user?.first_name || '',
+                      last_name: user?.lastName || user?.last_name || '',
+                      email: user?.email || '',
+                      phone_number: user?.phoneNumber || user?.phone_number || ''
                     });
                     lightTap();
                   }}
