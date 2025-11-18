@@ -30,23 +30,62 @@ export default function DisplayPairingPage() {
     const displayName = localStorage.getItem('display_name');
     
     if (token && displayId) {
-      console.log('🔍 Found saved display token, attempting auto-reconnect...');
+      console.log('🔍 Found saved display token, requesting reconnection approval...');
       setSavedToken({ token, displayId, displayName });
       setReconnecting(true);
       
       try {
-        // Verify token is still valid
-        const response = await api.post('/displays/verify', { token });
-        if (response.data.success && response.data.display) {
-          console.log('✅ Token valid! Auto-reconnecting...');
-          // Token is valid, redirect to player
+        // Request reconnection approval from admin
+        const response = await api.post('/reconnect/request', { token });
+        
+        if (response.data.success) {
+          const requestId = response.data.requestId;
+          console.log('📨 Reconnection request sent, waiting for admin approval...', requestId);
+          
+          // Poll for approval (every 3 seconds for 5 minutes)
+          const pollInterval = setInterval(async () => {
+            try {
+              const checkResponse = await api.post(`/reconnect/check/${requestId}`);
+              
+              if (checkResponse.data.status === 'approved') {
+                console.log('✅ Reconnection approved! Loading player...');
+                clearInterval(pollInterval);
+                setTimeout(() => {
+                  navigate(`/display?token=${token}`);
+                }, 500);
+              } else if (checkResponse.data.status === 'denied') {
+                console.log('❌ Reconnection denied by admin');
+                clearInterval(pollInterval);
+                setError('Reconnection denied. Please pair again.');
+                setReconnecting(false);
+                // Clear saved credentials
+                localStorage.removeItem('display_token');
+                localStorage.removeItem('display_id');
+                localStorage.removeItem('display_name');
+                setSavedToken(null);
+              } else if (checkResponse.data.status === 'expired') {
+                console.log('⏱️ Reconnection request expired');
+                clearInterval(pollInterval);
+                setError('Reconnection request expired. Please pair again.');
+                setReconnecting(false);
+              }
+            } catch (error) {
+              console.error('Error checking reconnection status:', error);
+            }
+          }, 3000); // Check every 3 seconds
+          
+          // Stop polling after 5 minutes
           setTimeout(() => {
-            navigate(`/display?token=${token}`);
-          }, 1000);
-          return;
+            clearInterval(pollInterval);
+            if (reconnecting) {
+              setError('Reconnection timeout. Please pair again.');
+              setReconnecting(false);
+            }
+          }, 5 * 60 * 1000);
         }
       } catch (error) {
-        console.log('⚠️ Saved token invalid or expired, showing pairing options');
+        console.log('⚠️ Reconnection request failed, showing pairing options');
+        setReconnecting(false);
         // Token invalid, clear it and show pairing page
         localStorage.removeItem('display_token');
         localStorage.removeItem('display_id');
@@ -55,11 +94,13 @@ export default function DisplayPairingPage() {
       }
     }
     
-    // No saved token or token invalid, proceed with normal pairing flow
-    setReconnecting(false);
-    requestPinFromServer();
-    fetchLocations();
-    checkAutoPairing();
+    // No saved token, proceed with normal pairing flow
+    if (!token) {
+      setReconnecting(false);
+      requestPinFromServer();
+      fetchLocations();
+      checkAutoPairing();
+    }
   };
 
   // Generate QR code for pairing when QR method is selected

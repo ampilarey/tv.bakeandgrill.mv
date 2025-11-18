@@ -23,6 +23,7 @@ const analyticsRoutes = require('./routes/analytics');
 const permissionsRoutes = require('./routes/permissions');
 const notificationsRoutes = require('./routes/notifications');
 const pairingRoutes = require('./routes/pairing');
+const reconnectRoutes = require('./routes/reconnect');
 
 // Initialize database
 console.log('🚀 Starting Bake & Grill TV Server...');
@@ -150,6 +151,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/permissions', permissionsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/pairing', pairingRoutes); // Must be before catch-all schedules route
+app.use('/api/reconnect', reconnectRoutes);
 app.use('/api', schedulesRoutes); // Includes /api/schedules/* routes - KEEP THIS LAST
 
 // Serve static frontend in production
