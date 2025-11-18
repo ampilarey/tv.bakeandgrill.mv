@@ -33,8 +33,18 @@ export default function DisplayManagement() {
   const [showPairModal, setShowPairModal] = useState(false);
   const [guideExpanded, setGuideExpanded] = useState(false);
   const [userPermissions, setUserPermissions] = useState(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [schedules, setSchedules] = useState([]);
+  const [newSchedule, setNewSchedule] = useState({
+    channel_id: '',
+    channel_name: '',
+    day_of_week: '',
+    start_time: '',
+    end_time: '',
+    is_active: true
+  });
   
-  const { user, logout } = useAuth();
+  const { user, logout} = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -273,6 +283,75 @@ export default function DisplayManagement() {
       console.log('✅ Fullscreen command sent');
     } catch (error) {
       console.error('Fullscreen control error:', error);
+    }
+  };
+
+  const handleOpenSchedules = async (display) => {
+    setSelectedDisplay(display);
+    setShowScheduleModal(true);
+    setError('');
+    fetchSchedules(display.id);
+    
+    // Also fetch channels for this display's playlist
+    if (display.playlist_id) {
+      try {
+        const response = await api.get(`/channels?playlistId=${display.playlist_id}`);
+        setChannels(response.data.channels || []);
+      } catch (error) {
+        console.error('Error fetching channels for schedule:', error);
+      }
+    }
+  };
+
+  const fetchSchedules = async (displayId) => {
+    try {
+      const response = await api.get(`/displays/${displayId}/schedules`);
+      setSchedules(response.data.schedules || []);
+    } catch (error) {
+      console.error('Error fetching schedules:', error);
+      setSchedules([]);
+    }
+  };
+
+  const handleCreateSchedule = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!newSchedule.channel_id || !newSchedule.start_time || !newSchedule.end_time) {
+      setError('Please fill in all required fields');
+      return;
+    }
+    
+    try {
+      const channel = channels.find(ch => ch.id === newSchedule.channel_id);
+      await api.post(`/displays/${selectedDisplay.id}/schedules`, {
+        ...newSchedule,
+        channel_name: channel?.name || 'Unknown Channel'
+      });
+      
+      setNewSchedule({
+        channel_id: '',
+        channel_name: '',
+        day_of_week: '',
+        start_time: '',
+        end_time: '',
+        is_active: true
+      });
+      
+      fetchSchedules(selectedDisplay.id);
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to create schedule');
+    }
+  };
+
+  const handleDeleteSchedule = async (scheduleId) => {
+    if (!confirm('Delete this schedule?')) return;
+    
+    try {
+      await api.delete(`/schedules/${scheduleId}`);
+      fetchSchedules(selectedDisplay.id);
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to delete schedule');
     }
   };
 
