@@ -212,82 +212,71 @@ export default function LoginPage() {
           
           {/* Display Setup Link */}
           <div className="mt-8 p-6 bg-tv-gold/10 border-2 border-tv-gold/30 rounded-xl">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0">
-                <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-tv-gold/20 flex items-center justify-center">
-                  <svg className="w-7 h-7 md:w-8 md:h-8 text-tv-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
+            <h3 className="text-tv-text font-bold text-xl mb-2 flex items-center gap-2">
+              📺 Setting up a Display?
+            </h3>
+            <p className="text-tv-textSecondary text-sm leading-relaxed mb-3">
+              Turn any TV, tablet, or screen into a smart display that automatically plays your channels. 
+              Perfect for cafes, restaurants, waiting rooms, and kiosks.
+            </p>
+            
+            {showDisplayInfo && (
+              <div className="bg-tv-bgElevated rounded-lg p-4 mb-4 border border-tv-borderSubtle space-y-3">
+                <div>
+                  <h4 className="text-tv-text font-bold text-sm mb-2">✨ Features:</h4>
+                  <ul className="text-tv-textSecondary text-sm space-y-1.5 list-disc list-inside">
+                    <li>Auto-play channels 24/7</li>
+                    <li>Remote control from your phone</li>
+                    <li>Schedule channels by time</li>
+                    <li>Monitor online status</li>
+                    <li>Multiple displays supported</li>
+                  </ul>
+                </div>
+                
+                <div>
+                  <h4 className="text-tv-text font-bold text-sm mb-2">🚀 Quick Setup (2 minutes):</h4>
+                  <ol className="text-tv-textSecondary text-sm space-y-2 list-decimal list-inside">
+                    <li><strong>On TV:</strong> Open <code className="bg-tv-accent/10 text-tv-accent px-1.5 py-0.5 rounded text-xs">tv.bakeandgrill.mv/#/pair</code></li>
+                    <li><strong>Choose method:</strong> PIN Code (easy) or QR Code (fastest)</li>
+                    <li><strong>On Phone:</strong> Login → Displays → Pair Display</li>
+                    <li><strong>Enter PIN or scan QR</strong> shown on TV</li>
+                    <li><strong>Done!</strong> Display starts playing automatically</li>
+                  </ol>
                 </div>
               </div>
-              <div className="flex-1">
-                <h3 className="text-tv-text font-bold text-xl mb-2 flex items-center gap-2">
-                  📺 Setting up a Display?
-                </h3>
-                <p className="text-tv-textSecondary text-sm leading-relaxed mb-3">
-                  Turn any TV, tablet, or screen into a smart display that automatically plays your channels. 
-                  Perfect for cafes, restaurants, waiting rooms, and kiosks.
-                </p>
-                
-                {showDisplayInfo && (
-                  <div className="bg-tv-bgElevated rounded-lg p-4 mb-4 border border-tv-borderSubtle space-y-3">
-                    <div>
-                      <h4 className="text-tv-text font-bold text-sm mb-2">✨ Features:</h4>
-                      <ul className="text-tv-textSecondary text-sm space-y-1.5 list-disc list-inside">
-                        <li>Auto-play channels 24/7</li>
-                        <li>Remote control from your phone</li>
-                        <li>Schedule channels by time</li>
-                        <li>Monitor online status</li>
-                        <li>Multiple displays supported</li>
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <h4 className="text-tv-text font-bold text-sm mb-2">🚀 Quick Setup (2 minutes):</h4>
-                      <ol className="text-tv-textSecondary text-sm space-y-2 list-decimal list-inside">
-                        <li><strong>On TV:</strong> Open <code className="bg-tv-accent/10 text-tv-accent px-1.5 py-0.5 rounded text-xs">tv.bakeandgrill.mv/#/pair</code></li>
-                        <li><strong>Choose method:</strong> PIN Code (easy) or QR Code (fastest)</li>
-                        <li><strong>On Phone:</strong> Login → Displays → Pair Display</li>
-                        <li><strong>Enter PIN or scan QR</strong> shown on TV</li>
-                        <li><strong>Done!</strong> Display starts playing automatically</li>
-                      </ol>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <a
-                    href="/#/pair"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-tv-gold hover:bg-tv-goldHover text-white font-semibold rounded-lg transition-all shadow-md hover:shadow-lg"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            )}
+            
+            <div className="flex flex-col sm:flex-row gap-3">
+              <a
+                href="/#/pair"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-tv-gold hover:bg-tv-goldHover text-white font-semibold rounded-lg transition-all shadow-md hover:shadow-lg"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Pair Display Now
+              </a>
+              
+              <button
+                onClick={() => setShowDisplayInfo(!showDisplayInfo)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-tv-bgElevated hover:bg-tv-bgHover text-tv-text font-medium rounded-lg transition-all border-2 border-tv-borderSubtle"
+              >
+                {showDisplayInfo ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                     </svg>
-                    Pair Display Now
-                  </a>
-                  
-                  <button
-                    onClick={() => setShowDisplayInfo(!showDisplayInfo)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-tv-bgElevated hover:bg-tv-bgHover text-tv-text font-medium rounded-lg transition-all border-2 border-tv-borderSubtle"
-                  >
-                    {showDisplayInfo ? (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        </svg>
-                        Show Less
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Learn More
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+                    Show Less
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Learn More
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
