@@ -565,26 +565,29 @@ export default function DisplayManagement() {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      variant="primary" 
-                      size="sm" 
-                      onClick={() => handleOpenControl(display)}
-                      className="w-full"
-                      disabled={!display.playlist_id}
-                    >
-                      🎮 Remote
-                    </Button>
-                    <Button 
-                      variant="secondary" 
-                      size="sm" 
-                      onClick={() => handleOpenSchedules(display)}
-                      className="w-full"
-                      disabled={!display.playlist_id}
-                    >
-                      📅 Schedule
-                    </Button>
-                  </div>
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    onClick={() => handleOpenControl(display)}
+                    className="w-full"
+                    disabled={!display.playlist_id}
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                    </svg>
+                    Remote Control
+                  </Button>
+                  
+                  {/* Schedule button - hidden on mobile for now, will enhance later */}
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={() => handleOpenSchedules(display)}
+                    className="w-full hidden md:block"
+                    disabled={!display.playlist_id}
+                  >
+                    📅 Manage Schedule
+                  </Button>
                   
                   <button
                     onClick={() => {
