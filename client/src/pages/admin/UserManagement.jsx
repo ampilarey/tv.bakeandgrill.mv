@@ -16,9 +16,11 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user', first_name: '', last_name: '' });
+  const [newUser, setNewUser] = useState({ email: '', phone_number: '', password: '', role: 'user', first_name: '', last_name: '' });
+  const [editUser, setEditUser] = useState({ email: '', phone_number: '', first_name: '', last_name: '', role: '' });
   const [error, setError] = useState('');
   const [userPermissions, setUserPermissions] = useState(null);
   
@@ -86,6 +88,21 @@ export default function UserManagement() {
     }
   };
 
+  const handleEditUser = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    try {
+      await api.put(`/users/${selectedUser.id}`, editUser);
+      setShowEditModal(false);
+      setEditUser({ email: '', phone_number: '', first_name: '', last_name: '', role: '' });
+      setSelectedUser(null);
+      fetchUsers();
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update user');
+    }
+  };
+
   const handleDeleteUser = async (userId) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
     
@@ -95,6 +112,19 @@ export default function UserManagement() {
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to delete user');
     }
+  };
+
+  const openEditModal = (user) => {
+    setSelectedUser(user);
+    setEditUser({
+      email: user.email || '',
+      phone_number: user.phone_number || '',
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      role: user.role || 'user'
+    });
+    setShowEditModal(true);
+    setError('');
   };
 
   if (loading) {
@@ -173,6 +203,13 @@ export default function UserManagement() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => openEditModal(user)}
+                          >
+                            ✏️ Edit
+                          </Button>
                           {user.role !== 'admin' && (
                             <Button
                               variant="primary"
@@ -228,6 +265,14 @@ export default function UserManagement() {
                 </div>
                 
                 <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={() => openEditModal(user)}
+                    className="flex-1 min-h-[44px]"
+                  >
+                    ✏️ Edit
+                  </Button>
                   {user.role !== 'admin' && (
                     <Button
                       variant="primary"
@@ -329,6 +374,88 @@ export default function UserManagement() {
             </Button>
             <Button type="submit" variant="primary" className="flex-1">
               Create User
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit User Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setError('');
+          setSelectedUser(null);
+        }}
+        title={`Edit User: ${selectedUser?.first_name} ${selectedUser?.last_name}`}
+      >
+        <form onSubmit={handleEditUser} className="space-y-4">
+          {error && (
+            <div className="bg-tv-error/20 border border-tv-error/30 rounded-lg p-3 text-tv-error text-sm">
+              {error}
+            </div>
+          )}
+          
+          <Input
+            label="Email"
+            type="email"
+            value={editUser.email}
+            onChange={(e) => setEditUser({...editUser, email: e.target.value})}
+            placeholder="user@example.com"
+            required
+          />
+          
+          <Input
+            label="Phone Number (Optional)"
+            type="tel"
+            value={editUser.phone_number}
+            onChange={(e) => setEditUser({...editUser, phone_number: e.target.value})}
+            placeholder="+960 1234567"
+          />
+          
+          <div>
+            <label className="block text-sm font-medium text-tv-textSecondary mb-2">
+              Role <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={editUser.role}
+              onChange={(e) => setEditUser({...editUser, role: e.target.value})}
+              className="w-full px-4 py-2 rounded-lg bg-tv-bgSoft text-tv-text border-2 border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent"
+            >
+              <option value="user">User (View Only)</option>
+              <option value="staff">Staff (Manage Own Content)</option>
+              <option value="admin">Admin (Full Access)</option>
+            </select>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="First Name"
+              value={editUser.first_name}
+              onChange={(e) => setEditUser({...editUser, first_name: e.target.value})}
+              placeholder="John"
+            />
+            
+            <Input
+              label="Last Name"
+              value={editUser.last_name}
+              onChange={(e) => setEditUser({...editUser, last_name: e.target.value})}
+              placeholder="Doe"
+            />
+          </div>
+          
+          <div className="bg-tv-gold/10 border border-tv-gold/30 rounded-lg p-3">
+            <p className="text-tv-text text-xs">
+              💡 To change this user's password, they should use the "Change Password" option in their Profile page.
+            </p>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)} className="flex-1">
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" className="flex-1">
+              Update User
             </Button>
           </div>
         </form>
