@@ -124,17 +124,39 @@ router.get('/', asyncHandler(async (req, res) => {
  * Create new user
  */
 router.post('/', validateUserCreate, asyncHandler(async (req, res) => {
-  const { email, password, role = 'staff', first_name, last_name } = req.body;
+  const { email, phone_number, password, role = 'staff', first_name, last_name, force_password_change = true } = req.body;
   const db = getDatabase();
   
   // Check if email already exists
-  const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+  if (email) {
+    const [existingEmail] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existingEmail.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email already exists',
+        code: 'USER_EMAIL_EXISTS'
+      });
+    }
+  }
   
-  if (existing.length > 0) {
+  // Check if phone number already exists
+  if (phone_number) {
+    const [existingPhone] = await db.query('SELECT id FROM users WHERE phone_number = ?', [phone_number]);
+    if (existingPhone.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone number already exists',
+        code: 'USER_PHONE_EXISTS'
+      });
+    }
+  }
+  
+  // At least email or phone required
+  if (!email && !phone_number) {
     return res.status(400).json({
       success: false,
-      error: 'Email already exists',
-      code: 'USER_EMAIL_EXISTS'
+      error: 'Either email or phone number is required',
+      code: 'VALIDATION_ERROR'
     });
   }
   
@@ -143,12 +165,16 @@ router.post('/', validateUserCreate, asyncHandler(async (req, res) => {
   
   // Insert user
   const [result] = await db.query(
-    'INSERT INTO users (email, password_hash, role, first_name, last_name) VALUES (?, ?, ?, ?, ?)',
-    [email, password_hash, role, first_name, last_name]
+    `INSERT INTO users (email, phone_number, password_hash, role, first_name, last_name, force_password_change) 
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [email || null, phone_number || null, password_hash, role, first_name, last_name, force_password_change]
   );
   
   // Get created user
-  const [users] = await db.query('SELECT id, email, role, first_name, last_name, created_at FROM users WHERE id = ?', [result.insertId]);
+  const [users] = await db.query(
+    'SELECT id, email, phone_number, role, first_name, last_name, force_password_change, created_at FROM users WHERE id = ?', 
+    [result.insertId]
+  );
   
   res.status(201).json({
     success: true,

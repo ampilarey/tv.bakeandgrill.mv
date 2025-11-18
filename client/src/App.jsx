@@ -5,6 +5,7 @@ import Spinner from './components/common/Spinner';
 
 // Pages
 import LoginPage from './pages/LoginPage';
+import FirstTimeSetupPage from './pages/FirstTimeSetupPage';
 import DashboardPage from './pages/DashboardPage';
 import PlayerPage from './pages/PlayerPage';
 import ProfilePage from './pages/ProfilePage';
@@ -24,7 +25,7 @@ import BottomNav from './components/BottomNav';
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
 
   if (loading) {
     return (
@@ -36,6 +37,11 @@ function ProtectedRoute({ children }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Check if user needs to complete first-time setup
+  if (user?.forcePasswordChange) {
+    return <Navigate to="/first-time-setup" replace />;
   }
 
   return children;
@@ -136,6 +142,9 @@ function AppRouter() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/display" element={<KioskModePage />} />
         <Route path="/pair" element={<DisplayPairingPage />} />
+        
+        {/* First-Time Setup (Semi-protected - requires auth but not full access) */}
+        <Route path="/first-time-setup" element={<FirstTimeSetupPage />} />
 
         {/* Protected User Routes */}
         <Route
