@@ -13,11 +13,14 @@ const router = express.Router();
  * User login
  */
 router.post('/login', validateLogin, asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body; // email can be email OR phone number
   const db = getDatabase();
   
-  // Find user by email
-  const [users] = await db.query('SELECT * FROM users WHERE email = ? AND is_active = TRUE', [email]);
+  // Find user by email OR phone number
+  const [users] = await db.query(
+    'SELECT * FROM users WHERE (email = ? OR phone_number = ?) AND is_active = TRUE', 
+    [email, email] // Use same value for both - will match whichever exists
+  );
   const user = users[0];
   
   if (!user) {
@@ -60,9 +63,11 @@ router.post('/login', validateLogin, asyncHandler(async (req, res) => {
     user: {
       id: user.id,
       email: user.email,
+      phoneNumber: user.phone_number,
       role: user.role,
       firstName: user.first_name,
-      lastName: user.last_name
+      lastName: user.last_name,
+      forcePasswordChange: user.force_password_change === 1 || user.force_password_change === true
     }
   });
 }));

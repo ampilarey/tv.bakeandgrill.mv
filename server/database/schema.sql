@@ -7,15 +7,18 @@
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
+  phone_number VARCHAR(20) NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   role VARCHAR(20) DEFAULT 'user' CHECK(role IN ('admin', 'staff', 'user', 'display')),
   first_name VARCHAR(100),
   last_name VARCHAR(100),
   is_active BOOLEAN DEFAULT TRUE,
+  force_password_change BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   last_login TIMESTAMP NULL,
   INDEX idx_users_email (email),
+  INDEX idx_users_phone (phone_number),
   INDEX idx_users_role (role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
