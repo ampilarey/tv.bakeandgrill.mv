@@ -63,8 +63,8 @@ export default function ProfilePage() {
     lightTap();
 
     // Validate passwords
-    if (passwordForm.new_password.length < 6) {
-      setMessage({ type: 'error', text: 'New password must be at least 6 characters' });
+    if (passwordForm.new_password.length < 8) {
+      setMessage({ type: 'error', text: 'New password must be at least 8 characters' });
       errorFeedback();
       return;
     }
@@ -259,7 +259,7 @@ export default function ProfilePage() {
                 value={passwordForm.new_password}
                 onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
                 required
-                helperText="Must be at least 6 characters"
+                helperText="Must be at least 8 characters"
               />
               <Input
                 label="Confirm New Password"

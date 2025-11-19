@@ -10,31 +10,53 @@ const router = express.Router();
 // Profile routes (any authenticated user)
 router.put('/profile', verifyToken, asyncHandler(async (req, res) => {
   const db = getDatabase();
-  const { first_name, last_name, email } = req.body;
+  const { first_name, last_name, email, phone_number } = req.body;
   const userId = req.user.id;
 
-  // Validate email format
+  // Phone number is mandatory and must be 7 digits
+  if (!phone_number || !/^\d{7}$/.test(phone_number)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Phone number is required (7 digits)' 
+    });
+  }
+
+  // Validate email format if provided
   if (email && !isValidEmail(email)) {
     return res.status(400).json({ success: false, error: 'Invalid email format' });
   }
 
+  // Get current user data
+  const [currentUser] = await db.query('SELECT email, phone_number FROM users WHERE id = ?', [userId]);
+  if (currentUser.length === 0) {
+    return res.status(404).json({ success: false, error: 'User not found' });
+  }
+
+  // Check if phone number is already taken by another user
+  if (phone_number !== currentUser[0].phone_number) {
+    const [existingPhone] = await db.query('SELECT id FROM users WHERE phone_number = ? AND id != ?', [phone_number, userId]);
+    if (existingPhone.length > 0) {
+      return res.status(400).json({ success: false, error: 'Phone number already in use' });
+    }
+  }
+
   // Check if email is already taken by another user
-  if (email && email !== req.user.email) {
-    const [existing] = await db.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, userId]);
-    if (existing.length > 0) {
+  if (email && email !== currentUser[0].email) {
+    const [existingEmail] = await db.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, userId]);
+    if (existingEmail.length > 0) {
       return res.status(400).json({ success: false, error: 'Email already in use' });
     }
   }
 
   // Update user profile
   await db.query(
-    'UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?',
-    [first_name, last_name, email, userId]
+    'UPDATE users SET first_name = ?, last_name = ?, email = ?, phone_number = ? WHERE id = ?',
+    [first_name, last_name, email || null, phone_number, userId]
   );
 
   // Fetch updated user
   const [users] = await db.query(
-    'SELECT id, email, role, first_name, last_name, is_active, created_at FROM users WHERE id = ?',
+    'SELECT id, email, phone_number, role, first_name, last_name, is_active, created_at FROM users WHERE id = ?',
     [userId]
   );
 
@@ -56,7 +78,7 @@ router.put('/password', verifyToken, asyncHandler(async (req, res) => {
   }
 
   if (!isValidPassword(new_password)) {
-    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+    return res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
   }
 
   // Get current password hash
@@ -94,7 +116,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { role, limit = 100, offset = 0 } = req.query;
   
-  let query = 'SELECT id, email, role, first_name, last_name, is_active, created_at, last_login FROM users';
+  let query = 'SELECT id, email, phone_number, role, first_name, last_name, is_active, force_password_change, created_at, last_login FROM users';
   let params = [];
   
   if (role) {
@@ -211,10 +233,10 @@ router.get('/:id', asyncHandler(async (req, res) => {
 router.put('/:id', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
-  const { email, role, first_name, last_name, is_active } = req.body;
+  const { email, phone_number, role, first_name, last_name, is_active, force_password_change } = req.body;
   
   // Check if user exists
-  const [existing] = await db.query('SELECT id FROM users WHERE id = ?', [id]);
+  const [existing] = await db.query('SELECT id, phone_number, email FROM users WHERE id = ?', [id]);
   
   if (existing.length === 0) {
     return res.status(404).json({
@@ -237,16 +259,51 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const updates = [];
   const params = [];
   
+  if (phone_number !== undefined) {
+    if (!/^\d{7}$/.test(phone_number)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone number must be 7 digits',
+        code: 'VALIDATION_ERROR'
+      });
+    }
+    // Check if phone number is already taken by another user
+    if (phone_number !== existing[0].phone_number) {
+      const [existingPhone] = await db.query('SELECT id FROM users WHERE phone_number = ? AND id != ?', [phone_number, id]);
+      if (existingPhone.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Phone number already in use',
+          code: 'USER_PHONE_EXISTS'
+        });
+      }
+    }
+    updates.push('phone_number = ?');
+    params.push(phone_number);
+  }
+  
   if (email !== undefined) {
-    if (!isValidEmail(email)) {
+    // Email can be null (optional), but if provided must be valid format
+    if (email !== null && email !== '' && !isValidEmail(email)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid email format',
         code: 'VALIDATION_ERROR'
       });
     }
+    // Check if email is already taken by another user (only if email is provided and different)
+    if (email && email !== existing[0].email) {
+      const [existingEmail] = await db.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]);
+      if (existingEmail.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email already in use',
+          code: 'USER_EMAIL_EXISTS'
+        });
+      }
+    }
     updates.push('email = ?');
-    params.push(email);
+    params.push(email || null);
   }
   
   if (role !== undefined) {
@@ -276,6 +333,11 @@ router.put('/:id', asyncHandler(async (req, res) => {
     params.push(is_active ? 1 : 0);
   }
   
+  if (force_password_change !== undefined) {
+    updates.push('force_password_change = ?');
+    params.push(force_password_change ? 1 : 0);
+  }
+  
   if (updates.length === 0) {
     return res.status(400).json({
       success: false,
@@ -289,7 +351,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
   
   // Get updated user
-  const [users] = await db.query('SELECT id, email, role, first_name, last_name, is_active, updated_at FROM users WHERE id = ?', [id]);
+  const [users] = await db.query('SELECT id, email, phone_number, role, first_name, last_name, is_active, force_password_change, updated_at FROM users WHERE id = ?', [id]);
   
   res.json({
     success: true,

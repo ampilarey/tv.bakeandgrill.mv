@@ -26,54 +26,62 @@ export default function FirstTimeSetupPage() {
     setError('');
 
     // Validation
-    if (!formData.email && !formData.phone_number) {
-      setError('Please provide either email or phone number');
+    // Phone number is mandatory (7 digits)
+    if (!formData.phone_number || !/^\d{7}$/.test(formData.phone_number)) {
+      setError('Phone number is required (7 digits)');
       return;
     }
 
-    if (formData.new_password && formData.new_password !== formData.confirm_password) {
+    // Email is optional, but if provided, must be valid
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setError('Please provide a valid email address');
+      return;
+    }
+
+    // Password is mandatory on first setup
+    if (!formData.new_password) {
+      setError('Password is required');
+      return;
+    }
+
+    if (formData.new_password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+
+    if (formData.new_password !== formData.confirm_password) {
       setError('Passwords do not match');
       return;
     }
 
-    if (formData.new_password && formData.new_password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (!formData.current_password) {
+      setError('Current password is required');
       return;
     }
 
     setLoading(true);
 
     try {
-      // Update profile
-      await api.put(`/users/${user.id}`, {
-        email: formData.email || user.email,
-        phone_number: formData.phone_number || null,
-        first_name: formData.first_name,
-        last_name: formData.last_name
+      // Update password first (requires current password)
+      await api.put('/users/password', {
+        current_password: formData.current_password,
+        new_password: formData.new_password
       });
 
-      // Update password if provided
-      if (formData.new_password) {
-        await api.put('/users/password', {
-          current_password: formData.current_password,
-          new_password: formData.new_password
-        });
-      }
-
-      // Clear force_password_change flag
+      // Update profile with phone number, email, and clear force_password_change flag
       await api.put(`/users/${user.id}`, {
+        phone_number: formData.phone_number,
+        email: formData.email || null,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
         force_password_change: false
       });
 
-      // Update local user data
-      updateUser({
-        ...user,
-        email: formData.email || user.email,
-        phoneNumber: formData.phone_number,
-        firstName: formData.first_name,
-        lastName: formData.last_name,
-        forcePasswordChange: false
-      });
+      // Refresh user data from server
+      const verifyResponse = await api.get('/auth/verify');
+      if (verifyResponse.data.valid && verifyResponse.data.user) {
+        updateUser(verifyResponse.data.user);
+      }
 
       navigate('/dashboard');
     } catch (error) {
@@ -126,19 +134,24 @@ export default function FirstTimeSetupPage() {
             </div>
 
             <Input
-              label="Email Address"
+              label="Phone Number (7 digits)"
+              type="tel"
+              value={formData.phone_number}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, '').slice(0, 7);
+                setFormData({...formData, phone_number: value});
+              }}
+              placeholder="1234567"
+              required
+              maxLength="7"
+            />
+
+            <Input
+              label="Email Address (Optional)"
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({...formData, email: e.target.value})}
               placeholder="your.email@example.com"
-            />
-
-            <Input
-              label="Phone Number (Optional)"
-              type="tel"
-              value={formData.phone_number}
-              onChange={(e) => setFormData({...formData, phone_number: e.target.value})}
-              placeholder="+960 1234567"
             />
 
             <div className="pt-4 border-t-2 border-tv-borderSubtle">
@@ -161,6 +174,7 @@ export default function FirstTimeSetupPage() {
                   onChange={(e) => setFormData({...formData, new_password: e.target.value})}
                   placeholder="••••••••"
                   required
+                  helperText="Must be at least 8 characters"
                 />
 
                 <Input

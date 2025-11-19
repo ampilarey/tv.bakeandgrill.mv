@@ -47,6 +47,7 @@ function isValidDayOfWeek(day) {
 
 /**
  * Middleware: Validate login request
+ * Accepts either email or phone number
  */
 function validateLogin(req, res, next) {
   const { email, password } = req.body;
@@ -54,15 +55,19 @@ function validateLogin(req, res, next) {
   if (!email || !password) {
     return res.status(400).json({
       success: false,
-      error: 'Email and password are required',
+      error: 'Phone number/Email and password are required',
       code: 'VALIDATION_ERROR'
     });
   }
   
-  if (!isValidEmail(email)) {
+  // Check if input is a valid email OR a valid phone number (7 digits)
+  const isEmail = isValidEmail(email);
+  const isPhone = isValidPhoneNumber(email);
+  
+  if (!isEmail && !isPhone) {
     return res.status(400).json({
       success: false,
-      error: 'Invalid email format',
+      error: 'Please enter a valid email or 7-digit phone number',
       code: 'VALIDATION_ERROR'
     });
   }
@@ -72,19 +77,31 @@ function validateLogin(req, res, next) {
 
 /**
  * Middleware: Validate user creation
+ * Phone number is mandatory, email is optional
  */
 function validateUserCreate(req, res, next) {
-  const { email, password, role } = req.body;
+  const { phone_number, password, role, email } = req.body;
   
-  if (!email || !password) {
+  // Phone number is mandatory
+  if (!phone_number || !isValidPhoneNumber(phone_number)) {
     return res.status(400).json({
       success: false,
-      error: 'Email and password are required',
+      error: 'Phone number is required (7 digits)',
       code: 'VALIDATION_ERROR'
     });
   }
   
-  if (!isValidEmail(email)) {
+  // Password is required
+  if (!password) {
+    return res.status(400).json({
+      success: false,
+      error: 'Password is required',
+      code: 'VALIDATION_ERROR'
+    });
+  }
+  
+  // Email is optional, but if provided, must be valid format
+  if (email && !isValidEmail(email)) {
     return res.status(400).json({
       success: false,
       error: 'Invalid email format',
@@ -189,6 +206,7 @@ function validateScheduleCreate(req, res, next) {
 module.exports = {
   isValidEmail,
   isValidPassword,
+  isValidPhoneNumber,
   isValidM3UUrl,
   isValidTime,
   isValidDayOfWeek,

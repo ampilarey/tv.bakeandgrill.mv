@@ -97,9 +97,11 @@ router.get('/verify', verifyToken, asyncHandler(async (req, res) => {
     user: {
       id: user.id,
       email: user.email,
+      phoneNumber: user.phone_number,
       role: user.role,
       firstName: user.first_name,
-      lastName: user.last_name
+      lastName: user.last_name,
+      forcePasswordChange: user.force_password_change === 1 || user.force_password_change === true
     }
   });
 }));
