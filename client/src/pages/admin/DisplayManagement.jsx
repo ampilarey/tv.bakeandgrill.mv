@@ -364,7 +364,7 @@ export default function DisplayManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
+    <div className="min-h-screen bg-tv-bg flex flex-col overflow-y-auto" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
       {/* Top Bar */}
       <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
@@ -388,7 +388,7 @@ export default function DisplayManagement() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1 md:pb-6 w-full" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+      <div className="p-6 max-w-7xl mx-auto flex-1 md:pb-6 w-full">
         {/* Guide Section */}
         <Card className="mb-6 border-2 border-tv-accent/30 bg-tv-accent/5">
           <div className="flex items-start gap-4">

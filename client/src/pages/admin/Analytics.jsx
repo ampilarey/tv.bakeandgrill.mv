@@ -201,7 +201,7 @@ export default function Analytics() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-tv-bg md:pb-6 overflow-y-auto" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+      <div className="min-h-screen bg-tv-bg md:pb-6 overflow-y-auto" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
         <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <h1 className="text-2xl font-bold text-white">Analytics</h1>
@@ -216,7 +216,7 @@ export default function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-tv-bg pb-24 md:pb-6 overflow-y-auto">
+    <div className="min-h-screen bg-tv-bg md:pb-6 overflow-y-auto" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
       {/* Header */}
       <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-7xl mx-auto">

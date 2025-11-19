@@ -45,7 +45,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
+    <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
       {/* Top Bar */}
       <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
@@ -70,7 +70,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1 md:pb-6 w-full" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+      <div className="p-6 max-w-7xl mx-auto flex-1 md:pb-6 w-full">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>

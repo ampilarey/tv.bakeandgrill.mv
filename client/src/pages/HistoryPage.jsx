@@ -146,7 +146,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background md:pb-6" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+    <div className="min-h-screen bg-background md:pb-6" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
       {/* Header */}
       <div className="bg-background-light border-b border-slate-700 p-4">
         <div className="max-w-6xl mx-auto">

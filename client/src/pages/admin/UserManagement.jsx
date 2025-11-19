@@ -136,7 +136,7 @@ export default function UserManagement() {
   }
 
   return (
-    <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
+    <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
       {/* Top Bar */}
       <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
@@ -157,7 +157,7 @@ export default function UserManagement() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1 md:pb-6 w-full" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+      <div className="p-6 max-w-7xl mx-auto flex-1 md:pb-6 w-full">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-tv-text">All Users ({users.length})</h2>
           <Button variant="primary" onClick={() => setShowCreateModal(true)}>
