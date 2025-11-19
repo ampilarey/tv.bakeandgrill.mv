@@ -195,7 +195,31 @@ All database queries are **SAFE from SQL injection**:
 **Issue:** Missing validation on query params (range, sort, search)  
 **Risk:** Unexpected behavior, potential injection  
 **Fix:** Whitelist allowed values, enforce limits  
-**Status:** PENDING
+**Status:** ✅ COMPLETED
+
+**Changes Made:**
+1. **Users route** (`/api/users`):
+   - Whitelisted `role` parameter: only allows 'admin', 'staff', 'user', 'display'
+   - Sanitized `limit`: min 1, max 500, default 100
+   - Sanitized `offset`: min 0, no max
+
+2. **History route** (`/api/history`):
+   - Sanitized `limit`: min 1, max 500, default 50
+   - Sanitized `offset`: min 0, no max
+
+3. **Notifications route** (`/api/notifications`):
+   - Sanitized `limit`: min 1, max 200, default 50
+
+4. **Analytics routes** (`/api/analytics`, `/api/analytics/users`):
+   - Whitelisted `range` parameter: only allows '24h', '7d', '30d', '90d', 'all'
+   - Invalid values default to safe fallback ('7d' or 'all')
+
+5. **Channels route** (`/api/channels`):
+   - `search`, `group`, `sort` are handled by utility functions
+   - Utilities use safe string methods (includes, localeCompare)
+   - No SQL involved (operates on parsed M3U arrays)
+
+**Result:** All query parameters are now properly validated and sanitized.
 
 ### ✅ 6. Error response audit
 **Issue:** Errors may leak SQL queries or stack traces  
@@ -281,7 +305,8 @@ For each fix:
 - **Completed P1-3:** Secured default admin creation (opt-in, no hardcoded creds)
 - **Completed P1-4:** SQL injection audit (no vulnerabilities found)
 - **✅ PRIORITY 1 COMPLETE!** All critical security items resolved
-- **Next:** Priority 2 items (security & stability)
+- **Completed P2-1:** Input validation (query params whitelisted and sanitized)
+- **Next:** P2-2 Error response audit
 
 ---
 
