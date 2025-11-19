@@ -19,6 +19,13 @@ function isValidPassword(password) {
 }
 
 /**
+ * Validate phone number format (7 digits)
+ */
+function isValidPhoneNumber(phone) {
+  return phone && /^\d{7}$/.test(phone);
+}
+
+/**
  * Validate M3U URL format
  */
 function isValidM3UUrl(url) {
