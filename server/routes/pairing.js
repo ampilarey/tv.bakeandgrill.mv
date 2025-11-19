@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { getDatabase } = require('../database/init');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandler');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ setInterval(() => {
  * Display requests to generate a PIN for pairing
  */
 router.post('/request-pin', asyncHandler(async (req, res) => {
-  console.log('🔢 PIN request received');
+  logger.debug('🔢 PIN request received');
   
   // Generate 6-digit PIN
   const pin = Math.floor(100000 + Math.random() * 900000).toString();
@@ -42,7 +43,7 @@ router.post('/request-pin', asyncHandler(async (req, res) => {
     expiresAt
   });
 
-  console.log('✅ Generated PIN:', pin);
+  logger.debug('✅ Generated PIN:', pin);
 
   res.json({
     success: true,
@@ -119,7 +120,7 @@ router.post('/admin-pair-pin', verifyToken, requireAdmin, asyncHandler(async (re
   const displayPassword = crypto.randomBytes(32).toString('hex');
   const passwordHash = await bcrypt.hash(displayPassword, 10);
   
-  console.log('🔧 Creating display user with role "display"...');
+  logger.debug('🔧 Creating display user with role "display"...');
   let userResult;
   try {
     [userResult] = await db.query(
@@ -127,11 +128,11 @@ router.post('/admin-pair-pin', verifyToken, requireAdmin, asyncHandler(async (re
        VALUES (?, ?, 'display', ?, ?, 1)`,
       [displayEmail, passwordHash, `Display: ${name}`, location || 'Kiosk']
     );
-    console.log('✅ Display user created successfully');
+    logger.debug('✅ Display user created successfully');
   } catch (error) {
-    console.error('❌ Error creating display user:', error.message);
-    console.error('❌ Error code:', error.code);
-    console.error('❌ SQL state:', error.sqlState);
+    logger.error('❌ Error creating display user:', error.message);
+    logger.error('❌ Error code:', error.code);
+    logger.error('❌ SQL state:', error.sqlState);
     throw error;
   }
   
