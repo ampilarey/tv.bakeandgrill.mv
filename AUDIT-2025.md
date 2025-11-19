@@ -429,7 +429,42 @@ console.error('Error:', err); // Always runs
 ### ✅ 12. Now Playing overlay feature
 **Purpose:** Better UX for channel changes  
 **Implementation:** Auto-hiding overlay with channel info  
-**Status:** PENDING
+**Status:** ✅ COMPLETED
+
+**Implementation:**
+Added a beautiful "Now Playing" overlay to PlayerPage with the following features:
+
+1. **Auto-display triggers:**
+   - Shows automatically when a channel loads
+   - Shows when user changes channels
+   - Can be toggled by clicking the video (when playing)
+
+2. **Auto-hide behavior:**
+   - Disappears after 6 seconds
+   - Can be manually closed via X button
+   - Timer resets if overlay is toggled again
+
+3. **Information displayed:**
+   - Channel name (bold, prominent)
+   - Channel logo (if available)
+   - Category/group (with 📂 icon)
+   - Current local time (with 🕒 icon)
+   - "Now Playing" label
+
+4. **Design:**
+   - Gradient background (soft maroon theme)
+   - Semi-transparent backdrop blur
+   - Top-left corner positioning (desktop & mobile)
+   - Rounded corners with white border
+   - Smooth fadeIn animation
+   - Responsive sizing (adapts to mobile/TV)
+
+5. **User interaction:**
+   - Click video (while playing) → Toggle overlay
+   - Click X button → Close overlay
+   - Overlay auto-hides after 6 seconds
+
+**Result:** Enhanced UX for channel identification, especially useful on large displays.
 
 ---
 
@@ -481,7 +516,9 @@ For each fix:
 - **Completed P3-1:** Created backend logger utility
 - **Completed P3-2:** Backend console cleanup (key routes done)
 - **Completed P3-3:** Frontend logging cleanup (player pages done)
-- **Next:** P3-4 Now Playing overlay feature
+- **Completed P3-4:** Now Playing overlay feature implemented
+- **✅ PRIORITY 3 COMPLETE!** All DX & UX improvements done
+- **Next:** Priority 4 items (code quality)
 
 ---
 
