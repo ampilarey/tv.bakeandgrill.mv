@@ -113,13 +113,79 @@ Checked compiled `dist/sw.js` - confirmed NetworkOnly handlers are registered co
 **Issue:** Hardcoded passwords in database initialization  
 **Risk:** Production security breach  
 **Fix:** Use environment variables with clear warnings  
-**Status:** PENDING
+**Status:** ✅ COMPLETED
+
+**Changes Made:**
+1. **Changed to OPT-IN model** (was opt-out):
+   - `ALLOW_DEFAULT_ADMIN` must now be explicitly set to `'true'`
+   - Default is now FALSE (secure by default)
+
+2. **Removed hardcoded credentials**:
+   - No fallback to `admin@bakegrill.com` / `BakeGrill2025!`
+   - REQUIRES env vars: `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`
+
+3. **Added password strength validation**:
+   - Minimum 12 characters required for default password
+   - Aborts creation if weak password provided
+
+4. **Improved security messages**:
+   - Clear instructions when no admin exists
+   - Warns to remove `ALLOW_DEFAULT_ADMIN` after creation
+
+**For Existing Production:**
+If admin user already exists, NO ACTION NEEDED. The server will not attempt to create a new admin.
+
+**For New Installations:**
+```bash
+# In .env (ONLY during initial setup)
+ALLOW_DEFAULT_ADMIN=true
+DEFAULT_ADMIN_EMAIL=admin@yourdomain.com
+DEFAULT_ADMIN_PASSWORD=YourSecurePassword123!
+
+# After first admin is created, REMOVE or set:
+ALLOW_DEFAULT_ADMIN=false
+```
 
 ### ✅ 4. SQL injection audit
 **Issue:** String concatenation in queries  
 **Risk:** Database compromise  
 **Fix:** Use parameterized queries everywhere  
-**Status:** PENDING
+**Status:** ✅ COMPLETED (No vulnerabilities found!)
+
+**Audit Scope:**
+- Checked all 14 route files with database queries
+- Examined dynamic SQL construction in UPDATE, SELECT, DELETE statements
+- Verified ORDER BY, LIMIT, OFFSET handling
+- Checked middleware functions
+
+**Findings:**
+All database queries are **SAFE from SQL injection**:
+
+1. **Parameterized queries everywhere:**
+   - All user input is passed via `?` placeholders
+   - Values are in separate params arrays
+   - Example: `db.query('SELECT * FROM users WHERE email = ?', [email])`
+
+2. **Dynamic UPDATE queries (safe):**
+   - Column names are hardcoded arrays like `['phone_number = ?', 'email = ?']`
+   - No user input in column names
+   - Example: `UPDATE users SET ${updates.join(', ')} WHERE id = ?`
+
+3. **LIMIT/OFFSET (safe):**
+   - Uses `parseInt(limit)` and `parseInt(offset)`
+   - Then passed as parameterized values
+   - Example: `params.push(parseInt(limit), parseInt(offset))`
+
+4. **ORDER BY (safe):**
+   - All ORDER BY clauses are hardcoded
+   - Example: `ORDER BY created_at DESC`
+
+5. **Table names (safe):**
+   - All table names are hardcoded in code
+   - Not derived from user input
+   - Example: `checkResourceLimit('displays', 'displays', ...)`
+
+**Result:** ✅ No SQL injection vulnerabilities. Excellent security practices throughout.
 
 ---
 
@@ -212,7 +278,10 @@ For each fix:
 - **Started:** Full production readiness audit
 - **Completed P1-1:** Fixed health endpoint (returns 500 on DB failure)
 - **Completed P1-2:** PWA caching audit (already correct, no changes needed)
-- **Next:** P1-3 Default admin credentials audit
+- **Completed P1-3:** Secured default admin creation (opt-in, no hardcoded creds)
+- **Completed P1-4:** SQL injection audit (no vulnerabilities found)
+- **✅ PRIORITY 1 COMPLETE!** All critical security items resolved
+- **Next:** Priority 2 items (security & stability)
 
 ---
 
