@@ -79,8 +79,11 @@ export default function BottomNav() {
     navItems.push({ path: '/admin/analytics', icon: '📊', label: 'Analytics' });
   }
   
+  const currentYear = new Date().getFullYear();
+  
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-tv-bgElevated border-t-2 border-tv-borderSubtle z-30 safe-area-bottom shadow-2xl">
+      {/* Navigation Tabs */}
       <div className="flex justify-around items-center px-1 py-1.5">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path || 
@@ -101,6 +104,13 @@ export default function BottomNav() {
             </button>
           );
         })}
+      </div>
+      
+      {/* Footer inside bottom nav */}
+      <div className="border-t border-tv-borderSubtle py-1.5 px-4">
+        <p className="text-tv-textMuted text-[9px] text-center leading-tight">
+          © {currentYear} <span className="text-tv-accent font-semibold">Bake & Grill</span>
+        </p>
       </div>
     </nav>
   );

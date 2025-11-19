@@ -102,7 +102,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
+    <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
       {/* Header */}
       <div className="bg-tv-bgElevated border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-4xl mx-auto">

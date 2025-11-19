@@ -88,7 +88,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-tv-bg flex flex-col" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
+    <div className="min-h-screen bg-tv-bg flex flex-col">
       {/* Top Bar */}
       <div className="bg-tv-bgElevated border-b-2 border-tv-borderSubtle px-6 py-5 shadow-lg">
         <div className="flex items-center justify-between">

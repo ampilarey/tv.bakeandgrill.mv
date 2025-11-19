@@ -364,7 +364,7 @@ export default function DisplayManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-tv-bg flex flex-col overflow-y-auto" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
+    <div className="min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
       {/* Top Bar */}
       <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
