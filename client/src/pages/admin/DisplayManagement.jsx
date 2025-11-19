@@ -388,7 +388,7 @@ export default function DisplayManagement() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1 pb-20 md:pb-6 w-full">
+      <div className="p-6 max-w-7xl mx-auto flex-1 md:pb-6 w-full" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
         {/* Guide Section */}
         <Card className="mb-6 border-2 border-tv-accent/30 bg-tv-accent/5">
           <div className="flex items-start gap-4">
