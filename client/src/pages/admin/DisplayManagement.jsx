@@ -388,7 +388,7 @@ export default function DisplayManagement() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1 pb-24 md:pb-6 w-full">
+      <div className="p-6 max-w-7xl mx-auto flex-1 pb-20 md:pb-6 w-full">
         {/* Guide Section */}
         <Card className="mb-6 border-2 border-tv-accent/30 bg-tv-accent/5">
           <div className="flex items-start gap-4">

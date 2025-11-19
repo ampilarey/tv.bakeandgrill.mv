@@ -58,7 +58,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="min-h-screen bg-tv-bg pb-24 md:pb-6 overflow-y-auto">
+    <div className="min-h-screen bg-tv-bg pb-20 md:pb-6 overflow-y-auto">
       {/* Header */}
       <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-4xl mx-auto flex items-center justify-between">

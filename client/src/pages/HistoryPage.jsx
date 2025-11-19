@@ -146,7 +146,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24 md:pb-6">
+    <div className="min-h-screen bg-background pb-20 md:pb-6">
       {/* Header */}
       <div className="bg-background-light border-b border-slate-700 p-4">
         <div className="max-w-6xl mx-auto">
