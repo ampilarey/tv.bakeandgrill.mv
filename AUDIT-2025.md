@@ -35,13 +35,79 @@
 **Issue:** Returns 200 even when database is down  
 **Risk:** Uptime monitoring will show false positives  
 **Fix:** Return 500 with proper error status when DB fails  
-**Status:** PENDING
+**Status:** ✅ COMPLETED
+
+**Changes Made:**
+- Health endpoint now returns HTTP 500 (not 200) when database fails
+- Success response includes `database: 'connected'`
+- Error response includes `status: 'error'`, `database: 'unavailable'`
+- Logs error to console for monitoring
+
+**Testing:**
+```bash
+# Test healthy state
+curl https://tv.bakeandgrill.mv/api/health
+
+# Expected: HTTP 200
+{
+  "status": "ok",
+  "timestamp": "2025-01-19T...",
+  "version": "1.0.0",
+  "database": "connected",
+  "stats": {
+    "users": 5,
+    "playlists": 3
+  }
+}
+
+# To test failure (stop MySQL temporarily):
+sudo systemctl stop mysql
+curl -i https://tv.bakeandgrill.mv/api/health
+
+# Expected: HTTP 500
+{
+  "status": "error",
+  "timestamp": "2025-01-19T...",
+  "version": "1.0.0",
+  "database": "unavailable",
+  "error": "Database connection failed"
+}
+```
 
 ### ✅ 2. Audit PWA service worker caching
 **Issue:** If `.m3u8` or `.ts` files are cached, live streams break  
 **Risk:** Video playback failure after service worker updates  
 **Fix:** Ensure NetworkOnly strategy for all HLS content  
-**Status:** PENDING
+**Status:** ✅ COMPLETED (No changes needed - already correct!)
+
+**Findings:**
+PWA caching is **perfectly configured**:
+
+1. **Precaching exclusions** (`vite.config.js` line 91):
+   ```javascript
+   globIgnores: ['**/*.js', '**/*.html', '**/*.m3u8', '**/*.ts']
+   ```
+   Explicitly excludes `.m3u8` and `.ts` from being precached.
+
+2. **Runtime caching for .m3u8** (lines 94-100):
+   ```javascript
+   urlPattern: /\.m3u8(\?.*)?$/i,
+   handler: 'NetworkOnly',  // ✅ NEVER cached
+   ```
+
+3. **Runtime caching for .ts segments** (lines 102-108):
+   ```javascript
+   urlPattern: /\.ts(\?.*)?$/i,
+   handler: 'NetworkOnly',  // ✅ NEVER cached
+   ```
+
+4. **JS/CSS/HTML also NetworkOnly** (lines 110-121):
+   Forces fresh updates, avoiding stale cached code.
+
+**Verification:**
+Checked compiled `dist/sw.js` - confirmed NetworkOnly handlers are registered correctly.
+
+**Result:** HLS streams will NEVER be cached. Live video will work correctly.
 
 ### ✅ 3. Check default admin credentials
 **Issue:** Hardcoded passwords in database initialization  
@@ -144,7 +210,9 @@ For each fix:
 ### 2025-01-19
 - **Completed:** Login system audit (phone number mandatory, email optional)
 - **Started:** Full production readiness audit
-- **Next:** Priority 1 items
+- **Completed P1-1:** Fixed health endpoint (returns 500 on DB failure)
+- **Completed P1-2:** PWA caching audit (already correct, no changes needed)
+- **Next:** P1-3 Default admin credentials audit
 
 ---
 

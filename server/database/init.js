@@ -128,19 +128,29 @@ async function insertDefaultData(connection) {
     );
     
     // Only create default admin if explicitly allowed (security best practice)
-    const allowDefaultAdmin = process.env.ALLOW_DEFAULT_ADMIN !== 'false'; // Default true for backward compatibility
+    // OPT-IN security model: must explicitly set ALLOW_DEFAULT_ADMIN=true
+    const allowDefaultAdmin = process.env.ALLOW_DEFAULT_ADMIN === 'true';
     
     if (adminRows[0].count === 0 && allowDefaultAdmin) {
       console.log('👤 Creating default admin user...');
       console.warn('⚠️  WARNING: Default admin credentials should be changed immediately after first login!');
       
-      const email = process.env.DEFAULT_ADMIN_EMAIL || 'admin@bakegrill.com';
-      const password = process.env.DEFAULT_ADMIN_PASSWORD || 'BakeGrill2025!';
+      // Require environment variables for security
+      const email = process.env.DEFAULT_ADMIN_EMAIL;
+      const password = process.env.DEFAULT_ADMIN_PASSWORD;
       
-      // Security warning for default credentials
-      if (!process.env.DEFAULT_ADMIN_EMAIL || !process.env.DEFAULT_ADMIN_PASSWORD) {
-        console.error('🚨 SECURITY WARNING: Using hardcoded default admin credentials!');
-        console.error('🚨 SECURITY WARNING: Set DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD in .env for production!');
+      if (!email || !password) {
+        console.error('🚨 SECURITY ERROR: DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD must be set in .env');
+        console.error('🚨 SECURITY ERROR: Default admin creation aborted!');
+        console.error('📝 Example: DEFAULT_ADMIN_EMAIL=admin@example.com DEFAULT_ADMIN_PASSWORD=SecurePass123!');
+        return;
+      }
+      
+      // Validate password strength
+      if (password.length < 12) {
+        console.error('🚨 SECURITY ERROR: DEFAULT_ADMIN_PASSWORD must be at least 12 characters');
+        console.error('🚨 SECURITY ERROR: Default admin creation aborted!');
+        return;
       }
       
       const passwordHash = await bcrypt.hash(password, 10);
@@ -153,10 +163,14 @@ async function insertDefaultData(connection) {
       
       console.log(`✅ Default admin created: ${email}`);
       console.log(`⚠️  IMPORTANT: Change password after first login!`);
-      console.log(`⚠️  SECURITY: Set ALLOW_DEFAULT_ADMIN=false in .env after first admin is created!`);
-    } else if (adminRows[0].count === 0 && !allowDefaultAdmin) {
-      console.log('⚠️  Default admin creation is disabled (ALLOW_DEFAULT_ADMIN=false)');
-      console.log('⚠️  Please create an admin user manually or set ALLOW_DEFAULT_ADMIN=true');
+      console.log(`🔒 SECURITY: Remove or set ALLOW_DEFAULT_ADMIN=false in .env immediately!`);
+    } else if (adminRows[0].count === 0) {
+      console.log('⚠️  No admin user exists!');
+      console.log('📝 To create default admin, set in .env:');
+      console.log('   ALLOW_DEFAULT_ADMIN=true');
+      console.log('   DEFAULT_ADMIN_EMAIL=your-email@example.com');
+      console.log('   DEFAULT_ADMIN_PASSWORD=YourSecurePassword123!');
+      console.log('🔒 Then restart the server');
     }
     
     // Check if default settings exist
