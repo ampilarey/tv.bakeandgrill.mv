@@ -72,6 +72,10 @@ export default function PlayerPage() {
   });
   const [isChannelDrawerOpen, setIsChannelDrawerOpen] = useState(false);
   
+  // Now Playing overlay state
+  const [showNowPlaying, setShowNowPlaying] = useState(false);
+  const nowPlayingTimeoutRef = useRef(null);
+  
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const navigate = useNavigate();
@@ -1252,6 +1256,48 @@ export default function PlayerPage() {
     };
   }, [currentChannel, playlistId]);
 
+  // Show Now Playing overlay when channel changes
+  useEffect(() => {
+    if (currentChannel) {
+      showNowPlayingOverlay();
+    }
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (nowPlayingTimeoutRef.current) {
+        clearTimeout(nowPlayingTimeoutRef.current);
+      }
+    };
+  }, [currentChannel]);
+  
+  // Show Now Playing overlay with auto-hide
+  const showNowPlayingOverlay = () => {
+    // Clear existing timeout
+    if (nowPlayingTimeoutRef.current) {
+      clearTimeout(nowPlayingTimeoutRef.current);
+    }
+    
+    // Show overlay
+    setShowNowPlaying(true);
+    
+    // Auto-hide after 6 seconds
+    nowPlayingTimeoutRef.current = setTimeout(() => {
+      setShowNowPlaying(false);
+    }, 6000);
+  };
+  
+  // Toggle Now Playing overlay manually
+  const toggleNowPlaying = () => {
+    if (showNowPlaying) {
+      if (nowPlayingTimeoutRef.current) {
+        clearTimeout(nowPlayingTimeoutRef.current);
+      }
+      setShowNowPlaying(false);
+    } else {
+      showNowPlayingOverlay();
+    }
+  };
+  
   const handleChannelClick = (channel) => {
     setCurrentChannel(channel);
     setIsAutoPlay(false); // Mark as user-initiated
@@ -1875,6 +1921,63 @@ export default function PlayerPage() {
                       </div>
                     )}
                     
+                    {/* Now Playing Overlay */}
+                    {showNowPlaying && currentChannel && (
+                      <div className="absolute top-4 left-4 right-4 md:top-6 md:left-6 md:right-auto md:max-w-md z-30 pointer-events-none animate-fadeIn">
+                        <div className="bg-gradient-to-br from-tv-accent/95 to-tv-accentHover/95 backdrop-blur-md rounded-2xl p-4 md:p-5 shadow-2xl border-2 border-white/20">
+                          <div className="flex items-start gap-3 md:gap-4">
+                            {/* Channel Logo */}
+                            <div className="flex-shrink-0 w-14 h-14 md:w-16 md:h-16 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden border-2 border-white/30">
+                              {currentChannel.logo ? (
+                                <img 
+                                  src={currentChannel.logo} 
+                                  alt={currentChannel.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => { e.target.style.display = 'none'; }}
+                                />
+                              ) : (
+                                <span className="text-2xl md:text-3xl">📺</span>
+                              )}
+                            </div>
+                            
+                            {/* Channel Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white/60 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1">
+                                Now Playing
+                              </p>
+                              <h3 className="text-white text-lg md:text-xl font-bold line-clamp-2 leading-tight mb-1.5">
+                                {currentChannel.name}
+                              </h3>
+                              {currentChannel.group && (
+                                <p className="text-white/80 text-xs md:text-sm font-medium mb-1">
+                                  📂 {currentChannel.group}
+                                </p>
+                              )}
+                              <p className="text-white/70 text-xs">
+                                🕒 {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                            
+                            {/* Close button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (nowPlayingTimeoutRef.current) {
+                                  clearTimeout(nowPlayingTimeoutRef.current);
+                                }
+                                setShowNowPlaying(false);
+                              }}
+                              className="flex-shrink-0 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors pointer-events-auto"
+                            >
+                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Tap to Play Button (Mobile) - Show when video is paused and needs user interaction */}
                     {!videoLoading && videoRef.current && videoRef.current.paused && (isIOS || (typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || /Android/.test(navigator.userAgent)))) && !videoError && (
                       <div 
@@ -1942,17 +2045,20 @@ export default function PlayerPage() {
                           playsInline: true
                         }}
                         onClick={async (e) => {
-                          // On mobile, click video to play if paused
+                          // On mobile, click video to play if paused or toggle Now Playing info
                           if (videoRef.current) {
                             if (videoRef.current.paused) {
                               try {
-                                console.log('📱 Video clicked - attempting to play');
+                                debugLog('📱 Video clicked - attempting to play');
                                 await videoRef.current.play();
                                 setVideoLoading(false);
                                 setVideoError(null);
                               } catch (err) {
                                 console.error('❌ Play on click failed:', err);
                               }
+                            } else {
+                              // Video is playing, toggle Now Playing overlay
+                              toggleNowPlaying();
                             }
                           }
                         }}

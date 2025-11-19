@@ -249,7 +249,7 @@ export default function KioskModePage() {
                   });
                 });
                 
-                console.log('Unmute completed, video was paused:', wasPaused);
+                debugLog('Unmute completed, video was paused:', wasPaused);
               }
               break;
               

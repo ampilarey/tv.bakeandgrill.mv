@@ -391,7 +391,40 @@ The codebase has ~200 console statements across 18 files. Most are in:
 ### ✅ 11. Frontend logging cleanup
 **Purpose:** Remove debug spam in production  
 **Implementation:** Wrap logs with dev checks  
-**Status:** PENDING
+**Status:** ✅ COMPLETED (Key pages cleaned up)
+
+**Changes Made:**
+Added `debugLog` helper to major pages and wrapped debug console.log calls:
+
+1. **PlayerPage.jsx** (~11 debug logs wrapped):
+   - Device detection logs
+   - Channel fetching/filtering logs
+   - Group filtering debugging
+   - Search filtering logs
+
+2. **KioskModePage.jsx** (~9 debug logs wrapped):
+   - Display verification logs
+   - Channel loading logs
+   - Heartbeat logs
+   - Volume/unmute command logs
+
+**Implementation Pattern:**
+```javascript
+const isDev = import.meta.env.MODE !== 'production';
+const debugLog = (...args) => {
+  if (isDev) console.log(...args);
+};
+
+// Usage
+debugLog('Debug info:', data); // Only runs in dev
+console.error('Error:', err); // Always runs
+```
+
+**Remaining console.log instances (144 total):**
+- **Keep:** Error logs, warnings, critical auth/pairing flows
+- **Future cleanup:** Admin pages, context providers, utilities
+
+**Result:** Player pages (highest traffic) now have clean production logs.
 
 ### ✅ 12. Now Playing overlay feature
 **Purpose:** Better UX for channel changes  
@@ -447,7 +480,8 @@ For each fix:
 - **✅ PRIORITY 2 COMPLETE!** All high-priority security items resolved
 - **Completed P3-1:** Created backend logger utility
 - **Completed P3-2:** Backend console cleanup (key routes done)
-- **Next:** P3-3 Frontend logging cleanup
+- **Completed P3-3:** Frontend logging cleanup (player pages done)
+- **Next:** P3-4 Now Playing overlay feature
 
 ---
 
