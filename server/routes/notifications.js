@@ -16,9 +16,12 @@ router.get('/', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { limit = 50 } = req.query;
   
+  // Validate and sanitize limit
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 200); // Max 200 notifications
+  
   const [notifications] = await db.query(
     'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
-    [req.user.id, parseInt(limit)]
+    [req.user.id, safeLimit]
   );
   
   res.json({

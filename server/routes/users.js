@@ -116,6 +116,19 @@ router.get('/', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { role, limit = 100, offset = 0 } = req.query;
   
+  // Validate role parameter
+  if (role && !['admin', 'staff', 'user', 'display'].includes(role)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid role filter. Must be: admin, staff, user, or display',
+      code: 'VALIDATION_ERROR'
+    });
+  }
+  
+  // Validate and sanitize limit and offset
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 100, 1), 500); // Max 500
+  const safeOffset = Math.max(parseInt(offset) || 0, 0);
+  
   let query = 'SELECT id, email, phone_number, role, first_name, last_name, is_active, force_password_change, created_at, last_login FROM users';
   let params = [];
   
@@ -125,7 +138,7 @@ router.get('/', asyncHandler(async (req, res) => {
   }
   
   query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-  params.push(parseInt(limit), parseInt(offset));
+  params.push(safeLimit, safeOffset);
   
   const [users] = await db.query(query, params);
   
@@ -136,8 +149,8 @@ router.get('/', asyncHandler(async (req, res) => {
     success: true,
     users,
     total: totalCount[0].count,
-    limit: parseInt(limit),
-    offset: parseInt(offset)
+    limit: safeLimit,
+    offset: safeOffset
   });
 }));
 

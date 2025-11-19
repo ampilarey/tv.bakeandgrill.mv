@@ -16,15 +16,19 @@ router.get('/', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { range = '7d' } = req.query;
 
+  // Validate range parameter (whitelist)
+  const allowedRanges = ['24h', '7d', '30d', '90d', 'all'];
+  const safeRange = allowedRanges.includes(range) ? range : '7d';
+
   // Calculate date range
   let dateFilter = '';
   let dateParams = [];
   
-  if (range !== 'all') {
+  if (safeRange !== 'all') {
     const now = new Date();
     let startDate;
     
-    switch(range) {
+    switch(safeRange) {
       case '24h':
         startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         break;
@@ -33,6 +37,9 @@ router.get('/', asyncHandler(async (req, res) => {
         break;
       case '30d':
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
         break;
       default:
         startDate = new Date(0);
@@ -138,11 +145,15 @@ router.get('/users', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { range = 'all', userId } = req.query;
 
+  // Validate range parameter (whitelist)
+  const allowedRanges = ['24h', '7d', '30d', '90d', 'all'];
+  const safeRange = allowedRanges.includes(range) ? range : 'all';
+
   // Calculate date range
   let startDate = null;
-  if (range !== 'all') {
+  if (safeRange !== 'all') {
     const now = new Date();
-    switch(range) {
+    switch(safeRange) {
       case '24h':
         startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         break;
@@ -151,6 +162,9 @@ router.get('/users', asyncHandler(async (req, res) => {
         break;
       case '30d':
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
         break;
     }
   }

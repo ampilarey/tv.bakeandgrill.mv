@@ -16,9 +16,13 @@ router.get('/', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { limit = 50, offset = 0 } = req.query;
   
+  // Validate and sanitize limit and offset
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 500); // Max 500
+  const safeOffset = Math.max(parseInt(offset) || 0, 0);
+  
   const [history] = await db.query(
     'SELECT * FROM watch_history WHERE user_id = ? ORDER BY watched_at DESC LIMIT ? OFFSET ?',
-    [req.user.id, parseInt(limit), parseInt(offset)]
+    [req.user.id, safeLimit, safeOffset]
   );
   
   const [countResult] = await db.query('SELECT COUNT(*) as count FROM watch_history WHERE user_id = ?', [req.user.id]);
@@ -27,8 +31,8 @@ router.get('/', asyncHandler(async (req, res) => {
     success: true,
     history,
     total: countResult[0].count,
-    limit: parseInt(limit),
-    offset: parseInt(offset)
+    limit: safeLimit,
+    offset: safeOffset
   });
 }));
 
