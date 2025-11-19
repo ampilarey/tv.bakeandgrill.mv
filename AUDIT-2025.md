@@ -225,19 +225,103 @@ All database queries are **SAFE from SQL injection**:
 **Issue:** Errors may leak SQL queries or stack traces  
 **Risk:** Information disclosure  
 **Fix:** Standardize error responses, sanitize messages  
-**Status:** PENDING
+**Status:** ✅ COMPLETED
+
+**Changes Made:**
+Enhanced `errorHandler` middleware to sanitize error responses:
+
+1. **Database error sanitization:**
+   - Detects MySQL errors (ER_*, ECONNREFUSED, PROTOCOL_*, etc.)
+   - In production: returns generic "A database error occurred" message
+   - In development: shows full error details for debugging
+
+2. **500 error sanitization:**
+   - In production: returns generic "An internal error occurred" message
+   - Only sends detailed messages if explicitly marked as `userFacing`
+   - In development: includes stack trace and original error
+
+3. **Sensitive info protection:**
+   - No SQL queries in responses
+   - No file paths or system info
+   - No stack traces in production
+
+4. **Development debugging:**
+   - Full error details still logged server-side
+   - Stack traces visible in dev mode
+   - Original errors preserved in logs
+
+**Result:** Production errors are now safe and don't leak sensitive information.
 
 ### ✅ 7. HLS player cleanup
 **Issue:** Memory leaks from uncleaned hls.js instances  
 **Risk:** Performance degradation on long-running displays  
 **Fix:** Proper cleanup in useEffect return  
-**Status:** PENDING
+**Status:** ✅ COMPLETED (No issues found - already excellent!)
+
+**Audit Findings:**
+
+**PlayerPage.jsx** (User player):
+- ✅ Destroys HLS instance on unmount (line 1243)
+- ✅ Removes all event listeners (lines 1222-1240)
+  - Playing handler
+  - Metadata handler
+  - iOS-specific handlers (canplay, loadeddata, playing)
+- ✅ Clears timeouts (playback timeout, history timer)
+- ✅ Sets `hlsRef.current = null` after destroy
+- ✅ Cleanup runs when channel changes or component unmounts
+
+**KioskModePage.jsx** (Display player):
+- ✅ Destroys HLS instance on unmount (line 686)
+- ✅ Removes event listeners (error, playing handlers)
+- ✅ Clears playback timeout (line 684)
+- ✅ Sets `hlsRef.current = null` after destroy
+- ✅ Clears intervals on unmount (heartbeat, command polling)
+
+**Additional cleanup verified:**
+- Fullscreen change listeners properly removed
+- Keyboard event listeners cleaned up
+- Heartbeat intervals cleared
+- Command polling intervals cleared
+
+**Result:** No memory leaks. Both players have excellent cleanup implementations.
 
 ### ✅ 8. Security headers check
 **Issue:** Verify helmet, CORS, rate limiting  
 **Risk:** Various security vulnerabilities  
 **Fix:** Ensure proper configuration  
-**Status:** PENDING
+**Status:** ✅ COMPLETED (Good configuration, minor recommendations)
+
+**Findings:**
+
+1. **Helmet (HTTP Security Headers)** - ✅ Good:
+   - Enabled with reasonable exceptions for video streaming
+   - CSP disabled (necessary for HLS video)
+   - crossOriginEmbedderPolicy: false (necessary for external streams)
+   - crossOriginOpenerPolicy: 'same-origin-allow-popups'
+
+2. **CORS (Cross-Origin Resource Sharing)** - ✅ Good:
+   - Production: Whitelist from `CORS_ORIGINS` env var
+   - Default: `https://tv.bakeandgrill.mv,https://tv.bakegrill.com`
+   - Development: Allows all origins (safe for dev)
+   - Credentials: true (required for authentication)
+   - Logs blocked origins for monitoring
+
+3. **Rate Limiting** - ✅ Good:
+   - **Auth routes** (`/api/auth`): 100 requests per 15 min (configurable)
+   - **General API** (`/api/`): 600 requests per 15 min (configurable)
+   - Uses standard headers (not legacy)
+   - Configurable via `AUTH_RATE_LIMIT` and `API_RATE_LIMIT` env vars
+
+4. **Additional Security**:
+   - Request body size limited to 1MB
+   - Compression enabled for performance
+   - Trust proxy enabled (for proper IP detection behind reverse proxy)
+
+**Recommendations for Future:**
+- Consider tightening auth rate limit to 20-30/15min in production
+- Add rate limiting to `/api/pairing` endpoint (brute force protection)
+
+**Result:** Security headers are properly configured. System is well-protected.
 
 ---
 
@@ -306,7 +390,11 @@ For each fix:
 - **Completed P1-4:** SQL injection audit (no vulnerabilities found)
 - **✅ PRIORITY 1 COMPLETE!** All critical security items resolved
 - **Completed P2-1:** Input validation (query params whitelisted and sanitized)
-- **Next:** P2-2 Error response audit
+- **Completed P2-2:** Error response audit (sanitized database and 500 errors)
+- **Completed P2-3:** HLS player cleanup (already excellent, no issues)
+- **Completed P2-4:** Security headers (helmet, CORS, rate limiting all good)
+- **✅ PRIORITY 2 COMPLETE!** All high-priority security items resolved
+- **Next:** Priority 3 items (DX & UX improvements)
 
 ---
 
