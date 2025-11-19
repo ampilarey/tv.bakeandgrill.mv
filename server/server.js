@@ -115,17 +115,20 @@ app.get('/api/health', async (req, res) => {
       status: 'ok',
       timestamp: new Date().toISOString(),
       version: '1.0.0',
+      database: 'connected',
       stats: {
         users: userCount[0].count,
         playlists: playlistCount[0].count
       }
     });
   } catch (error) {
-    res.json({
-      status: 'ok',
+    console.error('❌ Health check failed:', error.message);
+    res.status(500).json({
+      status: 'error',
       timestamp: new Date().toISOString(),
       version: '1.0.0',
-      database: 'connecting...'
+      database: 'unavailable',
+      error: 'Database connection failed'
     });
   }
 });
