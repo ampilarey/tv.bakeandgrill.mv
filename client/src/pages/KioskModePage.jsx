@@ -28,6 +28,12 @@ const displayApi = axios.create({
 });
 
 export default function KioskModePage() {
+  // Debug logging helper (dev-only)
+  const isDev = import.meta.env.MODE !== 'production';
+  const debugLog = (...args) => {
+    if (isDev) console.log(...args);
+  };
+  
   const [searchParams] = useSearchParams();
   const displayToken = searchParams.get('token');
   
@@ -79,9 +85,9 @@ export default function KioskModePage() {
 
     const verifyDisplay = async () => {
       try {
-        console.log('🖥️ Verifying display with token:', displayToken);
+        debugLog('🖥️ Verifying display with token:', displayToken);
         const response = await displayApi.post('/displays/verify', { token: displayToken });
-        console.log('✅ Display verification successful:', response.data);
+        debugLog('✅ Display verification successful:', response.data);
         
         const { display: displayData, playlist, channels: channelsList } = response.data;
         
@@ -89,12 +95,12 @@ export default function KioskModePage() {
         
         // Channels are now included in the verify response
         if (channelsList && channelsList.length > 0) {
-          console.log('📺 Channels loaded:', channelsList.length);
+          debugLog('📺 Channels loaded:', channelsList.length);
           setChannels(channelsList);
           
           // Auto-play first channel
           const firstChannel = channelsList[0];
-          console.log('▶️ Auto-playing:', firstChannel.name);
+          debugLog('▶️ Auto-playing:', firstChannel.name);
           setCurrentChannel(firstChannel);
         } else {
           console.warn('⚠️ No channels found for this display');
@@ -117,19 +123,19 @@ export default function KioskModePage() {
 
     const sendHeartbeat = async () => {
       try {
-        console.log('💓 Sending heartbeat...');
+        debugLog('💓 Sending heartbeat...');
         await displayApi.post('/displays/heartbeat', {
           token: displayToken,
           current_channel_id: currentChannel?.id || null
         });
-        console.log('✅ Heartbeat sent successfully');
+        debugLog('✅ Heartbeat sent successfully');
       } catch (error) {
         console.error('❌ Heartbeat error:', error);
       }
     };
 
     // Initial heartbeat (immediate)
-    console.log('🎬 Starting heartbeat system...');
+    debugLog('🎬 Starting heartbeat system...');
     sendHeartbeat();
 
     // Set up interval
@@ -200,7 +206,7 @@ export default function KioskModePage() {
                     });
                   }
                   
-                  console.log(`🔊 Volume set to ${commandData.volume}%`);
+                  debugLog(`🔊 Volume set to ${commandData.volume}%`);
                 } catch (err) {
                   console.error('Error setting volume:', err);
                 }
@@ -216,11 +222,11 @@ export default function KioskModePage() {
               
             case 'unmute':
               if (videoRef.current) {
-                console.log('🔊 Unmute command received');
+                debugLog('🔊 Unmute command received');
                 const video = videoRef.current;
                 const wasPaused = video.paused;
                 
-                console.log('Video state before unmute:', {
+                debugLog('Video state before unmute:', {
                   paused: video.paused,
                   muted: video.muted,
                   currentTime: video.currentTime,
@@ -233,13 +239,13 @@ export default function KioskModePage() {
                 
                 // Always try to play (resume if paused, continue if playing)
                 video.play().then(() => {
-                  console.log('✅ Video playing with sound');
+                  debugLog('✅ Video playing with sound');
                 }).catch(err => {
                   console.error('❌ Error playing after unmute:', err);
                   // If play fails, try muting again and playing
                   video.muted = true;
                   video.play().then(() => {
-                    console.log('⚠️ Playing muted (browser blocked unmuted autoplay)');
+                    debugLog('⚠️ Playing muted (browser blocked unmuted autoplay)');
                   });
                 });
                 

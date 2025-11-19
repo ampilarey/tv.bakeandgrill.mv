@@ -11,6 +11,12 @@ import SkeletonLoader from '../components/SkeletonLoader';
 import VideoControls from '../components/VideoControls';
 
 export default function PlayerPage() {
+  // Debug logging helper (dev-only)
+  const isDev = import.meta.env.MODE !== 'production';
+  const debugLog = (...args) => {
+    if (isDev) console.log(...args);
+  };
+  
   // 🚨 CRITICAL: Detect iOS FIRST - before anything else
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
   const isIOS = typeof navigator !== 'undefined' && (
@@ -19,9 +25,9 @@ export default function PlayerPage() {
   );
   
   // 🚨 VERSION CHECK: Log to verify new code is running
-  console.log('📱 PlayerPage.jsx loaded - Version: 2025-01-15-ios-native-hls-fix-v3');
-  console.log('🔍 Device:', userAgent);
-  console.log('🍎 iOS Detected:', isIOS);
+  debugLog('📱 PlayerPage.jsx loaded - Version: 2025-01-15-ios-native-hls-fix-v3');
+  debugLog('🔍 Device:', userAgent);
+  debugLog('🍎 iOS Detected:', isIOS);
   
   // 🚨 CRITICAL: If iOS, NEVER use HLS.js - disable it completely
   if (isIOS && typeof Hls !== 'undefined') {
@@ -133,8 +139,8 @@ export default function PlayerPage() {
         const channelsList = response.data.channels || [];
         const groupsList = response.data.groups || [];
         
-        console.log('Fetched channels:', channelsList.length);
-        console.log('Groups found:', groupsList);
+        debugLog('Fetched channels:', channelsList.length);
+        debugLog('Groups found:', groupsList);
         
         setChannels(channelsList);
         setFilteredChannels(channelsList);
@@ -209,7 +215,7 @@ export default function PlayerPage() {
   useEffect(() => {
     let result = [...channels]; // Create copy to avoid mutation
 
-    console.log('Filtering channels:', {
+    debugLog('Filtering channels:', {
       total: channels.length,
       selectedGroup,
       showFavoritesOnly,
@@ -220,7 +226,7 @@ export default function PlayerPage() {
     if (showFavoritesOnly) {
       const favChannelIds = favorites.map(f => f.channel_id);
       result = result.filter(ch => favChannelIds.includes(ch.id));
-      console.log('After favorites filter:', result.length);
+      debugLog('After favorites filter:', result.length);
     }
 
     // Group filter
@@ -229,7 +235,7 @@ export default function PlayerPage() {
       result = result.filter(ch => {
         // Handle null/undefined groups
         if (!ch.group) {
-          console.log('Channel without group:', ch.name);
+          debugLog('Channel without group:', ch.name);
           return false;
         }
         
@@ -241,16 +247,16 @@ export default function PlayerPage() {
         const match = channelGroup === filterGroup;
         
         if (!match) {
-          console.log(`No match: "${channelGroup}" !== "${filterGroup}" for channel:`, ch.name);
+          debugLog(`No match: "${channelGroup}" !== "${filterGroup}" for channel:`, ch.name);
         }
         
         return match;
       });
-      console.log(`After group filter "${selectedGroup}": ${beforeFilter} -> ${result.length} channels`);
+      debugLog(`After group filter "${selectedGroup}": ${beforeFilter} -> ${result.length} channels`);
       
       // If no results, log sample channel groups for debugging
       if (result.length === 0 && channels.length > 0) {
-        console.log('No channels matched! Sample channel groups:', 
+        debugLog('No channels matched! Sample channel groups:', 
           channels.slice(0, 5).map(ch => ({ name: ch.name, group: ch.group }))
         );
       }
@@ -263,10 +269,10 @@ export default function PlayerPage() {
         (ch.name && ch.name.toLowerCase().includes(query)) ||
         (ch.group && ch.group.toLowerCase().includes(query))
       );
-      console.log('After search filter:', result.length);
+      debugLog('After search filter:', result.length);
     }
 
-    console.log('Final filtered channels:', result.length);
+    debugLog('Final filtered channels:', result.length);
     setFilteredChannels(result);
   }, [searchQuery, selectedGroup, showFavoritesOnly, channels, favorites]);
 
@@ -297,7 +303,7 @@ export default function PlayerPage() {
                          video.canPlayType('application/x-mpegURL') !== '';
     
     // CRITICAL: Log all detection values BEFORE making decision
-    console.log('🔍 Device Detection:', {
+    debugLog('🔍 Device Detection:', {
       userAgent: currentUserAgent,
       isIOS: isIOS,
       checkIOS: checkIOS,
