@@ -81,7 +81,7 @@ export default function BottomNav() {
   
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-tv-bgElevated border-t-2 border-tv-borderSubtle z-30 safe-area-bottom shadow-2xl">
-      <div className="flex justify-around items-center px-2 py-2">
+      <div className="flex justify-around items-center px-1 py-1.5">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path || 
                           (item.path === '/player' && location.pathname.startsWith('/player'));
@@ -90,14 +90,14 @@ export default function BottomNav() {
             <button
               key={item.path}
               onClick={() => handleNavigate(item)}
-              className={`flex flex-col items-center justify-center px-4 py-2.5 rounded-xl transition-all min-h-[60px] min-w-[68px] ${
+              className={`flex flex-col items-center justify-center px-2 py-2 rounded-lg transition-all min-h-[56px] ${
                 isActive
-                  ? 'bg-tv-accent text-white scale-105 shadow-lg'
+                  ? 'bg-tv-accent text-white shadow-md'
                   : 'text-tv-textSecondary hover:text-tv-text hover:bg-tv-bgHover'
               }`}
             >
-              <span className="text-2xl mb-1">{item.icon}</span>
-              <span className="text-xs font-semibold">{item.label}</span>
+              <span className="text-xl mb-0.5">{item.icon}</span>
+              <span className="text-[10px] font-semibold leading-tight">{item.label}</span>
             </button>
           );
         })}
