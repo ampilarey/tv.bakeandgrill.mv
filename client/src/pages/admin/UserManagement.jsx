@@ -108,28 +108,46 @@ export default function UserManagement() {
     
     if (!user) return;
     
-    // If user is already inactive, offer to permanently delete or reactivate
+    // If user is already inactive, offer options
     if (!user.is_active) {
-      const action = confirm(
-        `This user is already inactive.\n\n` +
-        `Click OK to REACTIVATE this user.\n` +
-        `Click Cancel to keep inactive.`
+      const choice = confirm(
+        `User: ${user.first_name} ${user.last_name} is INACTIVE.\n\n` +
+        `Click OK to REACTIVATE.\n` +
+        `Click Cancel to see more options.`
       );
       
-      if (!action) return;
-      
-      try {
+      if (choice) {
         // Reactivate user
-        await api.put(`/users/${userId}`, { is_active: true });
-        fetchUsers();
-      } catch (error) {
-        alert(error.response?.data?.error || 'Failed to reactivate user');
+        try {
+          await api.put(`/users/${userId}`, { is_active: true });
+          fetchUsers();
+        } catch (error) {
+          alert(error.response?.data?.error || 'Failed to reactivate user');
+        }
+      } else {
+        // Ask if they want to permanently delete
+        const permanentDelete = confirm(
+          `⚠️ PERMANENT DELETE?\n\n` +
+          `This will PERMANENTLY delete ${user.first_name} ${user.last_name} and ALL their data.\n\n` +
+          `This action CANNOT be undone!\n\n` +
+          `Click OK to PERMANENTLY DELETE.\n` +
+          `Click Cancel to keep inactive.`
+        );
+        
+        if (permanentDelete) {
+          try {
+            await api.delete(`/users/${userId}?permanent=true`);
+            fetchUsers();
+          } catch (error) {
+            alert(error.response?.data?.error || 'Failed to permanently delete user');
+          }
+        }
       }
       return;
     }
     
     // User is active - confirm soft delete
-    if (!confirm(`Are you sure you want to deactivate ${user.first_name} ${user.last_name}?`)) return;
+    if (!confirm(`Are you sure you want to deactivate ${user.first_name} ${user.last_name}?\n\n(User can be reactivated later)`)) return;
     
     try {
       await api.delete(`/users/${userId}`);

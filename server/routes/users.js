@@ -446,11 +446,12 @@ router.patch('/:id/password', asyncHandler(async (req, res) => {
 
 /**
  * DELETE /api/users/:id
- * Delete user (soft delete)
+ * Delete user (soft delete by default, permanent with ?permanent=true)
  */
 router.delete('/:id', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
+  const { permanent } = req.query;
   
   // Prevent admin from deleting themselves
   if (id == req.user.id) {
@@ -461,7 +462,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     });
   }
   
-  const [existing] = await db.query('SELECT id FROM users WHERE id = ?', [id]);
+  const [existing] = await db.query('SELECT id, is_active, role FROM users WHERE id = ?', [id]);
   
   if (existing.length === 0) {
     return res.status(404).json({
@@ -471,12 +472,41 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     });
   }
   
+  // Permanent delete (only for inactive users)
+  if (permanent === 'true') {
+    // Only allow permanent deletion of inactive users
+    if (existing[0].is_active === 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'User must be deactivated before permanent deletion',
+        code: 'USER_STILL_ACTIVE'
+      });
+    }
+    
+    // Prevent permanent deletion of admin users
+    if (existing[0].role === 'admin') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot permanently delete admin users',
+        code: 'ADMIN_DELETE_FORBIDDEN'
+      });
+    }
+    
+    // Permanent delete - this will CASCADE to related tables
+    await db.query('DELETE FROM users WHERE id = ?', [id]);
+    
+    return res.json({
+      success: true,
+      message: 'User permanently deleted'
+    });
+  }
+  
   // Soft delete
   await db.query('UPDATE users SET is_active = FALSE WHERE id = ?', [id]);
   
   res.json({
     success: true,
-    message: 'User deleted successfully'
+    message: 'User deactivated successfully'
   });
 }));
 
