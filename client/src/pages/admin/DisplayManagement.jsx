@@ -783,22 +783,33 @@ export default function DisplayManagement() {
                     </button>
                   </div>
                 ) : (
-                  <select
-                    value={selectedChannel}
-                    onChange={(e) => {
-                      console.log('Selected channel ID:', e.target.value);
-                      setSelectedChannel(e.target.value);
-                    }}
-                    className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
-                    size="12"
-                  >
-                    <option value="">-- Choose a channel --</option>
-                    {filteredChannelsForControl.map(channel => (
-                      <option key={channel.id} value={channel.id}>
-                        {channel.name} {channel.group && `[${channel.group}]`}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="max-h-[400px] overflow-y-auto border-2 border-tv-borderSubtle rounded-lg bg-tv-bgElevated">
+                    <div className="divide-y divide-tv-borderSubtle">
+                      {filteredChannelsForControl.map(channel => (
+                        <button
+                          key={channel.id}
+                          onClick={() => {
+                            console.log('Selected channel ID:', channel.id);
+                            setSelectedChannel(channel.id);
+                          }}
+                          className={`w-full px-4 py-3 text-left transition-colors ${
+                            selectedChannel === channel.id
+                              ? 'bg-tv-accent text-white'
+                              : 'hover:bg-tv-bgSoft text-tv-text'
+                          }`}
+                        >
+                          <div className="font-medium">{channel.name}</div>
+                          {channel.group && (
+                            <div className={`text-xs mt-1 ${
+                              selectedChannel === channel.id ? 'text-white/80' : 'text-tv-textMuted'
+                            }`}>
+                              📂 {channel.group}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
