@@ -14,7 +14,6 @@ export default function FirstTimeSetupPage() {
     phone_number: '',
     first_name: '',
     last_name: '',
-    current_password: '',
     new_password: '',
     confirm_password: ''
   });
