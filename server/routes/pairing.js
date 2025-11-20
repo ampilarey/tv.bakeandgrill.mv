@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { getDatabase } = require('../database/init');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 const { asyncHandler } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 
@@ -98,9 +99,9 @@ router.post('/check-pin', asyncHandler(async (req, res) => {
 
 /**
  * POST /api/pairing/admin-pair-pin
- * Admin pairs a display using PIN
+ * Admin or user with permissions pairs a display using PIN
  */
-router.post('/admin-pair-pin', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+router.post('/admin-pair-pin', verifyToken, checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { pin, name, location, playlist_id } = req.body;
 
@@ -162,9 +163,9 @@ router.post('/admin-pair-pin', verifyToken, requireAdmin, asyncHandler(async (re
 
 /**
  * POST /api/pairing/generate-qr
- * Admin generates QR code for display pairing
+ * Admin or user with permissions generates QR code for display pairing
  */
-router.post('/generate-qr', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+router.post('/generate-qr', verifyToken, checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { name, location, playlist_id } = req.body;
 
