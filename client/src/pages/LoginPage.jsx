@@ -249,7 +249,7 @@ export default function LoginPage() {
             <div className="flex flex-col sm:flex-row gap-3">
               <a
                 href="/#/pair"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-tv-gold hover:bg-tv-goldHover text-white font-semibold rounded-lg transition-all shadow-md hover:shadow-lg"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-tv-goldDark hover:bg-tv-gold text-white font-semibold rounded-lg transition-all shadow-md hover:shadow-lg"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />

@@ -876,7 +876,7 @@ export default function KioskModePage() {
       {!isFullscreen && (
         <button
           onClick={handleFullscreenToggle}
-          className="absolute top-4 left-4 bg-tv-gold/90 hover:bg-tv-goldHover text-white p-3 rounded-lg shadow-lg transition-all z-20 backdrop-blur-sm"
+          className="absolute top-4 left-4 bg-tv-goldDark/90 hover:bg-tv-gold text-white p-3 rounded-lg shadow-lg transition-all z-20 backdrop-blur-sm"
           title="Enter Fullscreen"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -597,7 +597,7 @@ export default function DisplayManagement() {
                       setCreatedDisplay(display);
                       setShowTokenModal(true);
                     }}
-                    className="w-full text-xs text-primary hover:text-primary-light text-center py-2 hover:bg-background-lighter rounded transition-colors"
+                    className="w-full text-xs text-tv-accent hover:text-tv-accentHover text-center py-2 hover:bg-tv-bgSoft rounded transition-colors"
                   >
                     View Display URL
                   </button>
@@ -793,11 +793,11 @@ export default function DisplayManagement() {
                             // Automatically change channel when clicked
                             handleRemoteControl(channel.id);
                           }}
-                          className="w-full px-4 py-3 text-left transition-colors hover:bg-tv-accent hover:text-white text-tv-text"
+                          className="w-full px-4 py-3 text-left transition-colors hover:bg-tv-accent hover:text-white text-tv-text group"
                         >
-                          <div className="font-medium">{channel.name}</div>
+                          <div className="font-medium group-hover:text-white">{channel.name}</div>
                           {channel.group && (
-                            <div className="text-xs mt-1 text-tv-textMuted hover:text-white/80">
+                            <div className="text-xs mt-1 text-tv-textMuted group-hover:text-white/90">
                               📂 {channel.group}
                             </div>
                           )}
@@ -900,8 +900,8 @@ export default function DisplayManagement() {
               <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                 🌐 Display URL (Computer/Localhost)
               </label>
-              <div className="bg-background-lighter border border-slate-600 rounded-lg p-3">
-                <code className="text-primary text-sm break-all">
+              <div className="bg-tv-bgSoft border border-tv-borderSubtle rounded-lg p-3">
+                <code className="text-tv-accent text-sm break-all font-mono">
                   http://localhost:5173/display?token={createdDisplay.token}
                 </code>
               </div>
@@ -922,8 +922,8 @@ export default function DisplayManagement() {
               <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                 📱 Display URL (Network - Phone/Tablet)
               </label>
-              <div className="bg-background-lighter border border-slate-600 rounded-lg p-3">
-                <code className="text-primary text-sm break-all">
+              <div className="bg-tv-bgSoft border border-tv-borderSubtle rounded-lg p-3">
+                <code className="text-tv-accent text-sm break-all font-mono">
                   http://192.168.100.236:5173/display?token={createdDisplay.token}
                 </code>
               </div>
@@ -944,8 +944,8 @@ export default function DisplayManagement() {
               <label className="block text-sm font-medium text-tv-textSecondary mb-2">
                 🔑 Display Token
               </label>
-              <div className="bg-background-lighter border border-slate-600 rounded-lg p-3">
-                <code className="text-yellow-400 text-xs break-all font-mono">
+              <div className="bg-tv-bgSoft border border-tv-borderSubtle rounded-lg p-3">
+                <code className="text-tv-accentDark text-xs break-all font-mono">
                   {createdDisplay.token}
                 </code>
               </div>

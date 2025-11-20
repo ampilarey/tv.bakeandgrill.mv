@@ -253,7 +253,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
                 </div>
                 
                 <div className="flex gap-3 items-start">
-                  <span className="flex-shrink-0 w-7 h-7 bg-tv-gold text-white rounded-full flex items-center justify-center text-sm font-bold">4</span>
+                  <span className="flex-shrink-0 w-7 h-7 bg-tv-goldDark text-white rounded-full flex items-center justify-center text-sm font-bold">4</span>
                   <div>
                     <p className="text-tv-text text-sm font-medium"><strong>Scan it with your phone camera</strong></p>
                     <p className="text-tv-textMuted text-xs mt-1">Phone will auto-detect and show "Open" notification</p>
@@ -261,7 +261,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
                 </div>
                 
                 <div className="flex gap-3 items-start">
-                  <span className="flex-shrink-0 w-7 h-7 bg-tv-gold text-white rounded-full flex items-center justify-center text-sm font-bold">5</span>
+                  <span className="flex-shrink-0 w-7 h-7 bg-tv-goldDark text-white rounded-full flex items-center justify-center text-sm font-bold">5</span>
                   <div>
                     <p className="text-tv-text text-sm font-medium">This page opens with PIN pre-filled ✨</p>
                     <p className="text-tv-textMuted text-xs mt-1">Just enter name & playlist!</p>
