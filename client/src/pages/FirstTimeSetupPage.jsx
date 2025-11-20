@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -6,6 +6,9 @@ import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 
 export default function FirstTimeSetupPage() {
+  const { user, updateUser } = useAuth();
+  const navigate = useNavigate();
+  
   const [formData, setFormData] = useState({
     email: '',
     phone_number: '',
@@ -18,8 +21,18 @@ export default function FirstTimeSetupPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { user, updateUser } = useAuth();
-  const navigate = useNavigate();
+  // Pre-populate form with existing user data
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        phone_number: user.phoneNumber || user.phone_number || '',
+        email: user.email || '',
+        first_name: user.firstName || user.first_name || '',
+        last_name: user.lastName || user.last_name || ''
+      }));
+    }
+  }, [user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -111,9 +124,18 @@ export default function FirstTimeSetupPage() {
             <div className="bg-tv-gold/10 border-2 border-tv-gold/30 rounded-xl p-4 mb-6">
               <p className="text-tv-text text-sm">
                 <strong>🔒 First-Time Setup Required</strong><br/>
-                Please update your contact information and set a new password to continue.
+                Please verify your contact information and set a new secure password to continue.
               </p>
             </div>
+            
+            {/* Show current phone number */}
+            {user?.phoneNumber && (
+              <div className="bg-tv-accent/10 border-2 border-tv-accent/30 rounded-xl p-4 mb-4">
+                <p className="text-tv-text text-sm">
+                  <strong>📱 Your Account Phone:</strong> {user.phoneNumber || user.phone_number}
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
@@ -155,16 +177,18 @@ export default function FirstTimeSetupPage() {
             />
 
             <div className="pt-4 border-t-2 border-tv-borderSubtle">
-              <h3 className="text-lg font-bold text-tv-text mb-4">Change Password</h3>
+              <h3 className="text-lg font-bold text-tv-text mb-2">Set New Password</h3>
+              <p className="text-tv-textSecondary text-sm mb-4">Enter your temporary password and create a new secure password</p>
               
               <div className="space-y-4">
                 <Input
-                  label="Current Password"
+                  label="Current Password (Temporary)"
                   type="password"
                   value={formData.current_password}
                   onChange={(e) => setFormData({...formData, current_password: e.target.value})}
-                  placeholder="••••••••"
+                  placeholder="Password you used to login"
                   required
+                  helperText="This is the temporary password you were given"
                 />
 
                 <Input
