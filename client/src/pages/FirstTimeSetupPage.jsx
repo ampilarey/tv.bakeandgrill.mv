@@ -51,9 +51,15 @@ export default function FirstTimeSetupPage() {
       return;
     }
 
+    // First name is required
+    if (!formData.first_name || !formData.first_name.trim()) {
+      setError('First name is required');
+      return;
+    }
+
     // Password is mandatory on first setup
     if (!formData.new_password) {
-      setError('Password is required');
+      setError('New password is required');
       return;
     }
 
@@ -67,27 +73,16 @@ export default function FirstTimeSetupPage() {
       return;
     }
 
-    if (!formData.current_password) {
-      setError('Current password is required');
-      return;
-    }
-
     setLoading(true);
 
     try {
-      // Update password first (requires current password)
-      await api.put('/users/password', {
-        current_password: formData.current_password,
-        new_password: formData.new_password
-      });
-
-      // Update profile with phone number, email, and clear force_password_change flag
-      await api.put(`/users/${user.id}`, {
+      // Update profile first, then password (no current password needed for first-time setup)
+      await api.put(`/users/${user.id}/first-time-setup`, {
         phone_number: formData.phone_number,
         email: formData.email || null,
         first_name: formData.first_name,
-        last_name: formData.last_name,
-        force_password_change: false
+        last_name: formData.last_name || null,
+        new_password: formData.new_password
       });
 
       // Refresh user data from server
@@ -147,11 +142,10 @@ export default function FirstTimeSetupPage() {
               />
               
               <Input
-                label="Last Name"
+                label="Last Name (Optional)"
                 value={formData.last_name}
                 onChange={(e) => setFormData({...formData, last_name: e.target.value})}
                 placeholder="Doe"
-                required
               />
             </div>
 
@@ -177,20 +171,10 @@ export default function FirstTimeSetupPage() {
             />
 
             <div className="pt-4 border-t-2 border-tv-borderSubtle">
-              <h3 className="text-lg font-bold text-tv-text mb-2">Set New Password</h3>
-              <p className="text-tv-textSecondary text-sm mb-4">Enter your temporary password and create a new secure password</p>
+              <h3 className="text-lg font-bold text-tv-text mb-2">Set Your Password</h3>
+              <p className="text-tv-textSecondary text-sm mb-4">Create a secure password for your account</p>
               
               <div className="space-y-4">
-                <Input
-                  label="Current Password (Temporary)"
-                  type="password"
-                  value={formData.current_password}
-                  onChange={(e) => setFormData({...formData, current_password: e.target.value})}
-                  placeholder="Password you used to login"
-                  required
-                  helperText="This is the temporary password you were given"
-                />
-
                 <Input
                   label="New Password"
                   type="password"
@@ -202,7 +186,7 @@ export default function FirstTimeSetupPage() {
                 />
 
                 <Input
-                  label="Confirm New Password"
+                  label="Confirm Password"
                   type="password"
                   value={formData.confirm_password}
                   onChange={(e) => setFormData({...formData, confirm_password: e.target.value})}

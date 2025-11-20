@@ -105,6 +105,102 @@ router.put('/password', verifyToken, asyncHandler(async (req, res) => {
   });
 }));
 
+/**
+ * PUT /api/users/:id/first-time-setup
+ * Complete first-time setup (no current password required)
+ */
+router.put('/:id/first-time-setup', verifyToken, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const { id } = req.params;
+  const { phone_number, email, first_name, last_name, new_password } = req.body;
+  
+  // Only the user themselves can complete their own setup
+  if (req.user.id != id) {
+    return res.status(403).json({
+      success: false,
+      error: 'Can only update your own profile',
+      code: 'AUTH_INSUFFICIENT_PERMISSIONS'
+    });
+  }
+  
+  // Verify user has force_password_change flag (security check)
+  const [users] = await db.query('SELECT force_password_change FROM users WHERE id = ?', [id]);
+  if (users.length === 0) {
+    return res.status(404).json({ success: false, error: 'User not found' });
+  }
+  
+  if (!users[0].force_password_change) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'First-time setup already completed. Use regular profile update instead.' 
+    });
+  }
+  
+  // Validate phone number (mandatory, 7 digits)
+  if (!phone_number || !/^\d{7}$/.test(phone_number)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Phone number is required (7 digits)' 
+    });
+  }
+  
+  // Validate email if provided
+  if (email && !isValidEmail(email)) {
+    return res.status(400).json({ success: false, error: 'Invalid email format' });
+  }
+  
+  // Validate first name is required
+  if (!first_name || !first_name.trim()) {
+    return res.status(400).json({ success: false, error: 'First name is required' });
+  }
+  
+  // Validate new password
+  if (!new_password || !isValidPassword(new_password)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'New password is required (minimum 8 characters)' 
+    });
+  }
+  
+  // Check if phone number is already taken by another user
+  const [existingPhone] = await db.query('SELECT id FROM users WHERE phone_number = ? AND id != ?', [phone_number, id]);
+  if (existingPhone.length > 0) {
+    return res.status(400).json({ success: false, error: 'Phone number already in use' });
+  }
+  
+  // Check if email is already taken (if provided)
+  if (email) {
+    const [existingEmail] = await db.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]);
+    if (existingEmail.length > 0) {
+      return res.status(400).json({ success: false, error: 'Email already in use' });
+    }
+  }
+  
+  // Hash new password
+  const newPasswordHash = await bcrypt.hash(new_password, 10);
+  
+  // Update everything in one go
+  await db.query(
+    `UPDATE users 
+     SET phone_number = ?, email = ?, first_name = ?, last_name = ?, 
+         password_hash = ?, force_password_change = FALSE 
+     WHERE id = ?`,
+    [phone_number, email || null, first_name, last_name || null, newPasswordHash, id]
+  );
+  
+  // Get updated user
+  const [updatedUser] = await db.query(
+    'SELECT id, email, phone_number, role, first_name, last_name, is_active FROM users WHERE id = ?',
+    [id]
+  );
+  
+  res.json({
+    success: true,
+    message: 'Setup completed successfully',
+    user: updatedUser[0]
+  });
+}));
+
 // All routes below require authentication and admin role
 router.use(verifyToken, requireAdmin);
 
