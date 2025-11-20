@@ -13,9 +13,13 @@ export default function DashboardPage() {
   const [playlists, setPlaylists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [newPlaylist, setNewPlaylist] = useState({ name: '', m3u_url: '', description: '' });
+  const [editPlaylist, setEditPlaylist] = useState({ name: '', m3u_url: '', description: '' });
   const [permissions, setPermissions] = useState(null);
   const [error, setError] = useState('');
+  const [editError, setEditError] = useState('');
   
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -77,6 +81,45 @@ export default function DashboardPage() {
       window.localStorage.setItem('lastPlaylistId', playlistId);
     }
     navigate(`/player?playlistId=${playlistId}`);
+  };
+
+  const handleEditPlaylist = async (e) => {
+    e.preventDefault();
+    setEditError('');
+    
+    try {
+      await api.put(`/playlists/${selectedPlaylist.id}`, editPlaylist);
+      setShowEditModal(false);
+      setSelectedPlaylist(null);
+      setEditPlaylist({ name: '', m3u_url: '', description: '' });
+      fetchPlaylists();
+    } catch (error) {
+      setEditError(error.response?.data?.error || 'Failed to update playlist');
+    }
+  };
+
+  const handleDeletePlaylist = async (playlistId) => {
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (!confirm(`Are you sure you want to delete "${playlist.name}"?`)) return;
+    
+    try {
+      await api.delete(`/playlists/${playlistId}`);
+      fetchPlaylists();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to delete playlist');
+    }
+  };
+
+  const openEditModal = (playlist, e) => {
+    e.stopPropagation(); // Prevent card click
+    setSelectedPlaylist(playlist);
+    setEditPlaylist({
+      name: playlist.name,
+      m3u_url: playlist.m3u_url,
+      description: playlist.description || ''
+    });
+    setShowEditModal(true);
+    setEditError('');
   };
 
   if (loading) {
@@ -217,17 +260,95 @@ export default function DashboardPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-                <div className="flex items-center text-sm text-tv-textMuted font-medium">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  {playlist.is_active ? 'Active' : 'Inactive'}
+                <div className="flex items-center justify-between text-sm mt-4 pt-4 border-t border-tv-borderSubtle">
+                  <div className="flex items-center text-tv-textMuted font-medium">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    {playlist.is_active ? 'Active' : 'Inactive'}
+                  </div>
+                  
+                  {/* Edit & Delete buttons - only show if user has permission */}
+                  {(user?.role === 'admin' || permissions?.can_edit_own_playlists || permissions?.can_delete_own_playlists) && (
+                    <div className="flex gap-2">
+                      {(user?.role === 'admin' || permissions?.can_edit_own_playlists) && (
+                        <button
+                          onClick={(e) => openEditModal(playlist, e)}
+                          className="px-3 py-1.5 bg-tv-bgSoft hover:bg-tv-bgHover text-tv-text rounded-lg transition-colors text-xs font-semibold"
+                        >
+                          ✏️ Edit
+                        </button>
+                      )}
+                      {(user?.role === 'admin' || permissions?.can_delete_own_playlists) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePlaylist(playlist.id);
+                          }}
+                          className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded-lg transition-colors text-xs font-semibold"
+                        >
+                          🗑️ Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </Card>
             ))}
           </div>
         )}
       </div>
+
+      {/* Edit Playlist Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditError('');
+          setSelectedPlaylist(null);
+        }}
+        title={`Edit Playlist: ${selectedPlaylist?.name}`}
+      >
+        <form onSubmit={handleEditPlaylist} className="space-y-5">
+          {editError && (
+            <div className="bg-tv-error/20 border-2 border-tv-error/40 rounded-xl p-4 text-tv-error text-sm font-medium">
+              {editError}
+            </div>
+          )}
+          
+          <Input
+            label="Playlist Name"
+            value={editPlaylist.name}
+            onChange={(e) => setEditPlaylist({...editPlaylist, name: e.target.value})}
+            placeholder="My IPTV Channels"
+            required
+          />
+          
+          <Input
+            label="M3U URL"
+            value={editPlaylist.m3u_url}
+            onChange={(e) => setEditPlaylist({...editPlaylist, m3u_url: e.target.value})}
+            placeholder="https://example.com/playlist.m3u"
+            required
+          />
+          
+          <Input
+            label="Description (Optional)"
+            value={editPlaylist.description}
+            onChange={(e) => setEditPlaylist({...editPlaylist, description: e.target.value})}
+            placeholder="Sports channels, news, etc."
+          />
+          
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)} className="flex-1">
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" className="flex-1">
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Add Playlist Modal */}
       <Modal
