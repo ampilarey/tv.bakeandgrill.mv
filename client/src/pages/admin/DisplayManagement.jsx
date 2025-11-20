@@ -185,15 +185,33 @@ export default function DisplayManagement() {
     }
   };
 
-  // Filter channels in remote control when group changes
+  // Filter channels in remote control by group AND search query
   useEffect(() => {
+    let filtered = [...channels];
+    
+    // Filter by group
     if (selectedGroupForControl && selectedGroupForControl !== '') {
-      const filtered = channels.filter(ch => ch.group && ch.group.trim() === selectedGroupForControl.trim());
-      setFilteredChannelsForControl(filtered);
-    } else {
-      setFilteredChannelsForControl(channels);
+      filtered = filtered.filter(ch => ch.group && ch.group.trim() === selectedGroupForControl.trim());
     }
-  }, [selectedGroupForControl, channels]);
+    
+    // Filter by search query
+    if (channelSearchQuery && channelSearchQuery.trim() !== '') {
+      const query = channelSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter(ch => 
+        ch.name.toLowerCase().includes(query) ||
+        (ch.group && ch.group.toLowerCase().includes(query))
+      );
+    }
+    
+    console.log('🔍 Remote channel filter:', {
+      total: channels.length,
+      searchQuery: channelSearchQuery,
+      selectedGroup: selectedGroupForControl,
+      filtered: filtered.length
+    });
+    
+    setFilteredChannelsForControl(filtered);
+  }, [selectedGroupForControl, channelSearchQuery, channels]);
 
   const handleRemoteControl = async () => {
     if (!selectedChannel) {
