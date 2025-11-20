@@ -755,24 +755,51 @@ export default function DisplayManagement() {
               {/* Channel Selector */}
               <div>
                 <label className="block text-sm font-medium text-tv-textSecondary mb-2">
-                  Select Channel ({filteredChannelsForControl.length} available)
+                  📺 Select Channel
+                  {channelSearchQuery || selectedGroupForControl ? (
+                    <span className="text-tv-accent ml-2">
+                      ({filteredChannelsForControl.length} of {channels.length} channels)
+                    </span>
+                  ) : (
+                    <span className="text-tv-textMuted ml-2">
+                      ({channels.length} total)
+                    </span>
+                  )}
                 </label>
-                <select
-                  value={selectedChannel}
-                  onChange={(e) => {
-                    console.log('Selected channel ID:', e.target.value);
-                    setSelectedChannel(e.target.value);
-                  }}
-                  className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
-                  size="12"
-                >
-                  <option value="">-- Choose a channel --</option>
-                  {filteredChannelsForControl.map(channel => (
-                    <option key={channel.id} value={channel.id}>
-                      {channel.name} {channel.group && `[${channel.group}]`}
-                    </option>
-                  ))}
-                </select>
+                
+                {filteredChannelsForControl.length === 0 ? (
+                  <div className="bg-tv-gold/10 border-2 border-tv-gold/30 rounded-lg p-4 text-center">
+                    <p className="text-tv-text text-sm">
+                      ❌ No channels match your search or filter.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setChannelSearchQuery('');
+                        setSelectedGroupForControl('');
+                      }}
+                      className="text-tv-accent text-sm mt-2 hover:underline"
+                    >
+                      Clear all filters
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedChannel}
+                    onChange={(e) => {
+                      console.log('Selected channel ID:', e.target.value);
+                      setSelectedChannel(e.target.value);
+                    }}
+                    className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
+                    size="12"
+                  >
+                    <option value="">-- Choose a channel --</option>
+                    {filteredChannelsForControl.map(channel => (
+                      <option key={channel.id} value={channel.id}>
+                        {channel.name} {channel.group && `[${channel.group}]`}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
           )}
