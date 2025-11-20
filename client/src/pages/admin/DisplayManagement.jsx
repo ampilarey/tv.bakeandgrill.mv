@@ -154,7 +154,6 @@ export default function DisplayManagement() {
   };
 
   const handleOpenControl = async (display) => {
-    console.log('Opening remote control for display:', display);
     setSelectedDisplay(display);
     setShowControlModal(true);
     setSelectedChannel('');
@@ -165,12 +164,9 @@ export default function DisplayManagement() {
     // Fetch channels from assigned playlist
     if (display.playlist_id) {
       try {
-        console.log('Fetching channels for playlist:', display.playlist_id);
         const response = await api.get(`/channels?playlistId=${display.playlist_id}`);
         const channelsList = response.data.channels || [];
         const groups = response.data.groups || [];
-        console.log('Loaded channels for remote control:', channelsList.length);
-        console.log('Groups:', groups);
         setChannels(channelsList);
         setFilteredChannelsForControl(channelsList);
         setGroupsForControl(groups);
@@ -202,13 +198,6 @@ export default function DisplayManagement() {
         (ch.group && ch.group.toLowerCase().includes(query))
       );
     }
-    
-    console.log('🔍 Remote channel filter:', {
-      total: channels.length,
-      searchQuery: channelSearchQuery,
-      selectedGroup: selectedGroupForControl,
-      filtered: filtered.length
-    });
     
     setFilteredChannelsForControl(filtered);
   }, [selectedGroupForControl, channelSearchQuery, channels]);
@@ -807,7 +796,6 @@ export default function DisplayManagement() {
                         <button
                           key={channel.id}
                           onClick={() => {
-                            console.log('Selected channel ID:', channel.id);
                             setSelectedChannel(channel.id);
                           }}
                           className={`w-full px-4 py-3 text-left transition-colors ${
