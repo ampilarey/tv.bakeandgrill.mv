@@ -139,22 +139,22 @@ export default function HistoryPage() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="h-screen flex items-center justify-center bg-tv-bg">
         <Spinner size="xl" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background md:pb-6">
+    <div className="min-h-screen bg-tv-bg md:pb-6">
       {/* Header */}
-      <div className="bg-background-light border-b border-slate-700 p-4">
+      <div className="bg-tv-bgElevated border-b border-tv-borderSubtle p-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4 flex-1">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="flex items-center gap-2 text-text-secondary hover:text-white transition-colors"
+                className="flex items-center gap-2 text-tv-textSecondary hover:text-tv-accent transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -162,8 +162,8 @@ export default function HistoryPage() {
                 <span className="hidden md:inline">Back</span>
               </button>
               <div>
-                <h1 className="text-2xl font-bold text-white">Watch History</h1>
-                <p className="text-text-secondary text-sm mt-1">
+                <h1 className="text-2xl font-bold text-tv-text">Watch History</h1>
+                <p className="text-tv-textSecondary text-sm mt-1">
                   {filteredHistory.length} {filteredHistory.length === 1 ? 'entry' : 'entries'}
                 </p>
               </div>
@@ -173,7 +173,7 @@ export default function HistoryPage() {
                 variant="ghost" 
                 size="sm"
                 onClick={handleClearHistory}
-                className="text-red-400 hover:text-red-300"
+                className="text-tv-error hover:text-tv-error/80"
               >
                 Clear All
               </Button>
@@ -188,7 +188,7 @@ export default function HistoryPage() {
               placeholder="Search channels or playlists..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg bg-background border border-slate-600 text-white placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-2 rounded-lg bg-tv-bgSoft border-2 border-tv-borderSubtle text-tv-text placeholder-tv-textMuted focus:outline-none focus:ring-2 focus:ring-tv-accent focus:border-tv-accent"
             />
 
             {/* Time Filter Buttons */}
@@ -223,7 +223,7 @@ export default function HistoryPage() {
             <div className="text-center py-12">
               <div className="text-6xl mb-4">📺</div>
               <h3 className="text-xl font-bold text-tv-text mb-2">No Watch History</h3>
-              <p className="text-text-secondary mb-4">
+              <p className="text-tv-textSecondary mb-4">
                 {searchQuery ? 'No results found for your search.' : 'Start watching channels to see your history here.'}
               </p>
               <Button onClick={() => navigate('/dashboard')}>
@@ -254,7 +254,7 @@ export default function HistoryPage() {
                             </Badge>
                           </div>
                           
-                          <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-tv-textSecondary">
                             <span>📋 {item.playlist_name || 'Unknown Playlist'}</span>
                             {item.duration_seconds > 0 && (
                               <span>⏱️ {formatDuration(item.duration_seconds)}</span>
