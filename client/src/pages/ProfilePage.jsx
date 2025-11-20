@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import api from '../services/api';
@@ -9,6 +10,7 @@ import Footer from '../components/Footer';
 import { lightTap, successFeedback, errorFeedback } from '../utils/haptics';
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
   const { user, updateUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [isEditingProfile, setIsEditingProfile] = useState(false);
