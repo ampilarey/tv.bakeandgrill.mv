@@ -92,9 +92,9 @@ export default function FirstTimeSetupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-tv-bg flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        <div className="bg-tv-bgElevated rounded-2xl p-8 border-2 border-tv-accent shadow-2xl">
+    <div className="min-h-screen bg-tv-bg flex items-start md:items-center justify-center p-4 py-8 md:py-4 overflow-y-auto" style={{ paddingBottom: 'max(2rem, calc(80px + env(safe-area-inset-bottom, 0px)))' }}>
+      <div className="max-w-2xl w-full my-auto">
+        <div className="bg-tv-bgElevated rounded-2xl p-6 md:p-8 border-2 border-tv-accent shadow-2xl">
           <div className="text-center mb-8">
             <div className="text-6xl mb-4">👋</div>
             <h1 className="text-3xl font-bold text-tv-accent mb-2">Welcome!</h1>
@@ -193,7 +193,7 @@ export default function FirstTimeSetupPage() {
               variant="primary"
               size="lg"
               loading={loading}
-              className="w-full mt-6"
+              className="w-full mt-6 min-h-[56px]"
             >
               {loading ? 'Updating...' : 'Complete Setup'}
             </Button>
