@@ -202,15 +202,17 @@ export default function DisplayManagement() {
     setFilteredChannelsForControl(filtered);
   }, [selectedGroupForControl, channelSearchQuery, channels]);
 
-  const handleRemoteControl = async () => {
-    if (!selectedChannel) {
+  const handleRemoteControl = async (channelId = null) => {
+    const targetChannelId = channelId || selectedChannel;
+    
+    if (!targetChannelId) {
       setError('Please select a channel first!');
       setTimeout(() => setError(''), 3000);
       return;
     }
     
     try {
-      const channel = channels.find(ch => ch.id === selectedChannel);
+      const channel = channels.find(ch => ch.id === targetChannelId);
       
       if (!channel) {
         setError('Channel not found!');
@@ -218,27 +220,19 @@ export default function DisplayManagement() {
         return;
       }
       
-      console.log('Sending remote control command:', {
-        displayId: selectedDisplay.id,
-        channelId: channel.id,
-        channelName: channel.name
-      });
-      
-      const response = await api.post(`/displays/${selectedDisplay.id}/control`, {
+      await api.post(`/displays/${selectedDisplay.id}/control`, {
         action: 'change_channel',
         channel_id: channel.id,
         channel_name: channel.name
       });
       
-      console.log('Command sent successfully:', response.data);
-      
-      // Don't close modal - let user send more commands
-      // Just clear the selection for next command
-      setSelectedChannel('');
-      setSelectedGroupForControl('');
-      
       // Show brief success feedback
-      console.log(`✅ Command sent! Display will switch to "${channel.name}"`);
+      setError(`✅ Switched to "${channel.name}"`);
+      setTimeout(() => setError(''), 2000);
+      
+      // Clear selection for next command
+      setSelectedChannel('');
+      
     } catch (error) {
       console.error('Remote control error:', error);
       setError(error.response?.data?.error || 'Failed to send command');
@@ -796,19 +790,14 @@ export default function DisplayManagement() {
                         <button
                           key={channel.id}
                           onClick={() => {
-                            setSelectedChannel(channel.id);
+                            // Automatically change channel when clicked
+                            handleRemoteControl(channel.id);
                           }}
-                          className={`w-full px-4 py-3 text-left transition-colors ${
-                            selectedChannel === channel.id
-                              ? 'bg-tv-accent text-white'
-                              : 'hover:bg-tv-bgSoft text-tv-text'
-                          }`}
+                          className="w-full px-4 py-3 text-left transition-colors hover:bg-tv-accent hover:text-white text-tv-text"
                         >
                           <div className="font-medium">{channel.name}</div>
                           {channel.group && (
-                            <div className={`text-xs mt-1 ${
-                              selectedChannel === channel.id ? 'text-white/80' : 'text-tv-textMuted'
-                            }`}>
+                            <div className="text-xs mt-1 text-tv-textMuted hover:text-white/80">
                               📂 {channel.group}
                             </div>
                           )}
