@@ -1877,6 +1877,14 @@ export default function PlayerPage() {
       {/* Mobile: Top banner (player-first layout) */}
       {isMobileView && (
         <div className="lg:hidden px-4 py-4 border-b-2 border-tv-borderSubtle bg-tv-bgElevated flex items-center justify-between gap-3 sticky top-0 z-20 shadow-md">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex-shrink-0 text-tv-textSecondary hover:text-tv-accent transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase text-tv-textMuted tracking-wider mb-1.5 font-semibold">Now Playing</p>
             <p className="text-tv-text font-bold truncate text-base">
@@ -1894,6 +1902,29 @@ export default function PlayerPage() {
           >
             Channels
           </Button>
+        </div>
+      )}
+      
+      {/* Desktop: Top bar with back button */}
+      {!isMobileView && (
+        <div className="hidden lg:flex items-center gap-4 px-6 py-4 bg-tv-bgElevated border-b border-tv-borderSubtle">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 text-tv-textSecondary hover:text-tv-accent transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span>Back to Dashboard</span>
+          </button>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-tv-text">
+              {currentChannel ? currentChannel.name : 'IPTV Player'}
+            </h2>
+            {currentChannel?.group && (
+              <p className="text-sm text-tv-textSecondary">{currentChannel.group}</p>
+            )}
+          </div>
         </div>
       )}
 

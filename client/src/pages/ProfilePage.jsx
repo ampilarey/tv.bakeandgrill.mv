@@ -106,8 +106,21 @@ export default function ProfilePage() {
       {/* Header */}
       <div className="bg-tv-bgElevated border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold text-tv-text">Profile Settings</h1>
-          <p className="text-tv-textSecondary text-sm mt-1">Manage your account information</p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 text-tv-textSecondary hover:text-tv-accent transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              <span className="hidden md:inline">Back</span>
+            </button>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-tv-text">Profile Settings</h1>
+              <p className="text-tv-textSecondary text-sm mt-1">Manage your account information</p>
+            </div>
+          </div>
         </div>
       </div>
 

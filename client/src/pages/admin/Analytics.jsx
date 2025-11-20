@@ -221,9 +221,20 @@ export default function Analytics() {
       <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-white">📊 Analytics Dashboard</h1>
-              <p className="text-white/90 text-sm mt-1">Platform usage and performance metrics</p>
+            <div className="flex items-center gap-4 flex-1">
+              <button
+                onClick={() => navigate('/admin/dashboard')}
+                className="flex items-center gap-2 text-white/70 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                <span className="hidden md:inline">Admin Home</span>
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-white">📊 Analytics Dashboard</h1>
+                <p className="text-white/90 text-sm mt-1">Platform usage and performance metrics</p>
+              </div>
             </div>
             <MobileMenu />
           </div>

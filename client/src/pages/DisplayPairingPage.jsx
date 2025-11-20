@@ -233,10 +233,23 @@ export default function DisplayPairingPage() {
     <div className="min-h-screen bg-tv-bg overflow-auto">
       <div className="max-w-5xl mx-auto p-4 md:p-8">
         {/* Header */}
-        <div className="text-center mb-6 md:mb-10">
-          <div className="text-6xl md:text-7xl mb-4">📺</div>
-          <h1 className="text-3xl md:text-5xl font-bold text-tv-accent mb-3">Display Setup</h1>
-          <p className="text-base md:text-lg text-tv-textSecondary">Choose a pairing method to connect this display</p>
+        <div className="mb-6 md:mb-10">
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <a
+              href="/#/login"
+              className="absolute left-4 md:left-8 top-4 md:top-8 flex items-center gap-2 text-tv-textSecondary hover:text-tv-accent transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              <span className="hidden md:inline">Back to Login</span>
+            </a>
+          </div>
+          <div className="text-center">
+            <div className="text-6xl md:text-7xl mb-4">📺</div>
+            <h1 className="text-3xl md:text-5xl font-bold text-tv-accent mb-3">Display Setup</h1>
+            <p className="text-base md:text-lg text-tv-textSecondary">Choose a pairing method to connect this display</p>
+          </div>
         </div>
 
         {/* Pairing Method Selector */}

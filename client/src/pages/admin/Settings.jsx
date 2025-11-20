@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -8,6 +9,7 @@ import Footer from '../../components/Footer';
 import { lightTap, successFeedback, errorFeedback } from '../../utils/haptics';
 
 export default function Settings() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [settings, setSettings] = useState({
@@ -62,9 +64,20 @@ export default function Settings() {
       {/* Header */}
       <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">⚙️ System Settings</h1>
-            <p className="text-white/90 text-sm mt-1">Configure platform preferences</p>
+          <div className="flex items-center gap-4 flex-1">
+            <button
+              onClick={() => navigate('/admin/dashboard')}
+              className="flex items-center gap-2 text-white/70 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              <span className="hidden md:inline">Admin Home</span>
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-white">⚙️ System Settings</h1>
+              <p className="text-white/90 text-sm mt-1">Configure platform preferences</p>
+            </div>
           </div>
           <MobileMenu />
         </div>
