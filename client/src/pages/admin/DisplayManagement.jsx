@@ -25,6 +25,7 @@ export default function DisplayManagement() {
   const [filteredChannelsForControl, setFilteredChannelsForControl] = useState([]);
   const [selectedGroupForControl, setSelectedGroupForControl] = useState('');
   const [groupsForControl, setGroupsForControl] = useState([]);
+  const [channelSearchQuery, setChannelSearchQuery] = useState('');
   const [newDisplay, setNewDisplay] = useState({ name: '', location: '', playlist_id: '' });
   const [selectedChannel, setSelectedChannel] = useState('');
   const [volumeLevel, setVolumeLevel] = useState(50);
@@ -158,6 +159,7 @@ export default function DisplayManagement() {
     setShowControlModal(true);
     setSelectedChannel('');
     setSelectedGroupForControl('');
+    setChannelSearchQuery('');
     setChannels([]); // Clear previous channels
     
     // Fetch channels from assigned playlist
@@ -680,6 +682,8 @@ export default function DisplayManagement() {
           setShowControlModal(false);
           setSelectedChannel('');
           setChannels([]);
+          setChannelSearchQuery('');
+          setSelectedGroupForControl('');
         }}
         title={`Remote Control: ${selectedDisplay?.name}`}
       >
@@ -707,10 +711,32 @@ export default function DisplayManagement() {
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Search Channels */}
+              <div>
+                <label className="block text-sm font-medium text-tv-textSecondary mb-2">
+                  🔍 Search Channels
+                </label>
+                <input
+                  type="text"
+                  placeholder="Type channel name..."
+                  value={channelSearchQuery}
+                  onChange={(e) => setChannelSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text placeholder-tv-textMuted focus:outline-none focus:ring-2 focus:ring-tv-accent focus:border-tv-accent"
+                />
+                {channelSearchQuery && (
+                  <button
+                    onClick={() => setChannelSearchQuery('')}
+                    className="text-tv-accent text-xs mt-1 hover:underline"
+                  >
+                    Clear search
+                  </button>
+                )}
+              </div>
+              
               {/* Group Filter */}
               <div>
                 <label className="block text-sm font-medium text-tv-textSecondary mb-2">
-                  Filter by Group
+                  📂 Filter by Group
                 </label>
                 <select
                   value={selectedGroupForControl}
