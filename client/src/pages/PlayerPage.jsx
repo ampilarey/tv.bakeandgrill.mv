@@ -74,44 +74,21 @@ export default function PlayerPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
 
-  // Component-level cleanup - runs when navigating away from player
+  // Simple cleanup - let browser handle most of it naturally
   useEffect(() => {
-    // Handle page visibility changes (mobile app switching, browser tab switching)
-    const handleVisibilityChange = () => {
-      if (!videoRef.current) return;
-      
-      if (document.hidden) {
-        // Page hidden - pause video to save bandwidth
-        console.log('📱 Page hidden - pausing video');
-        videoRef.current.pause();
-      } else {
-        // Page visible again
-        console.log('📱 Page visible again');
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      
-      // Clean up video when component unmounts (user navigates away)
-      if (videoRef.current) {
-        console.log('🧹 Cleaning up video on unmount');
-        const video = videoRef.current;
-        video.pause();
-        video.removeAttribute('src');
-        video.load(); // Reset video element
-      }
-      
-      // Destroy HLS.js instance if exists
-      if (hlsRef.current) {
-        console.log('🧹 Destroying HLS.js on unmount');
-        hlsRef.current.destroy();
-        hlsRef.current = null;
+      // Only clean up on actual unmount (navigating away from player completely)
+      try {
+        if (hlsRef.current) {
+          console.log('🧹 Destroying HLS.js on unmount');
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+      } catch (error) {
+        console.error('Cleanup error:', error);
       }
     };
-  }, []); // Empty deps = runs only on mount/unmount
+  }, []);
 
   const currentChannelIsHLS = currentChannel?.url?.toLowerCase().endsWith('.m3u8') || false;
   const videoElementSrc = currentChannel && (!currentChannelIsHLS || isIOS) ? currentChannel.url : undefined;
@@ -175,41 +152,8 @@ export default function PlayerPage() {
     }
   }, [playlistId]);
 
-  // Save current playing channel + playlist ID so it can resume when returning
-  useEffect(() => {
-    if (currentChannel && playlistId && typeof window !== 'undefined') {
-      localStorage.setItem('lastPlayingChannel', JSON.stringify({
-        channel: currentChannel,
-        playlistId: playlistId
-      }));
-    }
-  }, [currentChannel, playlistId]);
-
-  // Restore last playing channel when returning to player (only if same playlist)
-  useEffect(() => {
-    if (channels.length > 0 && !currentChannel && !channelIdFromUrl && typeof window !== 'undefined') {
-      const saved = localStorage.getItem('lastPlayingChannel');
-      if (saved) {
-        try {
-          const { channel, playlistId: savedPlaylistId } = JSON.parse(saved);
-          // Only restore if it's the same playlist
-          if (savedPlaylistId === playlistId) {
-            // Verify the channel still exists in current playlist
-            const channelExists = channels.find(ch => ch.id === channel.id);
-            if (channelExists) {
-              console.log('🔄 Restoring last playing channel:', channel.name);
-              setCurrentChannel(channel);
-              setIsAutoPlay(true);
-            } else {
-              console.log('⚠️ Last channel no longer available');
-            }
-          }
-        } catch (e) {
-          console.error('Error restoring channel:', e);
-        }
-      }
-    }
-  }, [channels, currentChannel, channelIdFromUrl, playlistId]);
+  // Don't auto-restore channels - let user select manually
+  // This prevents issues when navigating between tabs on mobile
 
   // Fetch channels from playlist
   useEffect(() => {
@@ -217,6 +161,8 @@ export default function PlayerPage() {
       navigate('/dashboard');
       return;
     }
+
+    setLoading(true); // Ensure loading state is set
 
     const fetchChannels = async () => {
       try {
@@ -235,8 +181,11 @@ export default function PlayerPage() {
         // User should manually select a channel to watch
       } catch (error) {
         console.error('Error fetching channels:', error);
+        // On error, still set loading to false to prevent stuck screen
+        setChannels([]);
+        setFilteredChannels([]);
       } finally {
-        setLoading(false);
+        setLoading(false); // Always clear loading state
       }
     };
 
@@ -363,14 +312,6 @@ export default function PlayerPage() {
     if (!currentChannel || !videoRef.current) return;
 
     const video = videoRef.current;
-    
-    // 🚨 CRITICAL: Reset video element completely before loading new source
-    // This prevents stuck state on mobile when navigating back to player
-    video.pause();
-    video.removeAttribute('src');
-    video.load(); // Force reset
-    console.log('🔄 Video element reset for new channel');
-    
     const isHLS = currentChannel.url.endsWith('.m3u8');
     
     // 🚨 CRITICAL: Use iOS detection from top level (already calculated)
@@ -1423,17 +1364,22 @@ export default function PlayerPage() {
   };
   
   const handleChannelClick = (channel) => {
-    setCurrentChannel(channel);
-    setIsAutoPlay(false); // Mark as user-initiated
-    setVideoError(null); // Clear any previous errors
-    setRetryCount(0); // Reset retry counter
+    try {
+      setCurrentChannel(channel);
+      setIsAutoPlay(false); // Mark as user-initiated
+      setVideoError(null); // Clear any previous errors
+      setRetryCount(0); // Reset retry counter
 
-    if (isMobileView) {
-      setIsChannelDrawerOpen(false);
-      // Gently scroll video into view once the drawer closes
-      setTimeout(() => {
-        videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 300);
+      if (isMobileView) {
+        setIsChannelDrawerOpen(false);
+        // Gently scroll video into view once the drawer closes
+        setTimeout(() => {
+          videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      }
+    } catch (error) {
+      console.error('Error setting channel:', error);
+      setVideoError('Error loading channel. Please try again.');
     }
   };
 
