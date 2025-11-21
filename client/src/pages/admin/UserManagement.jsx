@@ -8,6 +8,7 @@ import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import PermissionManager from '../../components/PermissionManager';
 import MobileMenu from '../../components/MobileMenu';
 import Footer from '../../components/Footer';
@@ -23,6 +24,15 @@ export default function UserManagement() {
   const [editUser, setEditUser] = useState({ email: '', phone_number: '', first_name: '', last_name: '', role: '' });
   const [error, setError] = useState('');
   const [userPermissions, setUserPermissions] = useState(null);
+  
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+    variant: 'danger'
+  });
   
   const { user: currentUser, logout } = useAuth();
   const navigate = useNavigate();

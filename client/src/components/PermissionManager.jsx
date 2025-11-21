@@ -60,11 +60,13 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
       // Dispatch event to notify other components
       window.dispatchEvent(new Event('permissionsUpdated'));
       
-      alert('✅ Permissions updated successfully!\n\nℹ️ The user should refresh their browser to see the changes.');
+      setSuccessMessage('✅ Permissions updated successfully!\n\nℹ️ The user should refresh their browser to see the changes.');
+      setTimeout(() => setSuccessMessage(''), 5000);
       if (onUpdate) onUpdate();
       onClose(); // Close modal after save
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to update permissions');
+      setError(error.response?.data?.error || 'Failed to update permissions');
+      setTimeout(() => setError(''), 3000);
     } finally {
       setSaving(false);
     }
@@ -91,9 +93,11 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
       });
       fetchPermissions();
       setShowAssignModal(false);
-      alert('✅ Playlist assigned!');
+      setSuccessMessage('✅ Playlist assigned!');
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to assign playlist');
+      setError(error.response?.data?.error || 'Failed to assign playlist');
+      setTimeout(() => setError(''), 3000);
     }
   };
   

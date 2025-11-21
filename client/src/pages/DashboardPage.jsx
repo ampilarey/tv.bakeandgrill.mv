@@ -100,7 +100,16 @@ export default function DashboardPage() {
 
   const handleDeletePlaylist = async (playlistId) => {
     const playlist = playlists.find(p => p.id === playlistId);
-    if (!confirm(`Are you sure you want to delete "${playlist.name}"?`)) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Playlist',
+      message: `Are you sure you want to delete "${playlist.name}"? This action cannot be undone.`,
+      variant: 'danger',
+      onConfirm: () => confirmDeletePlaylist(playlistId)
+    });
+  };
+
+  const confirmDeletePlaylist = async (playlistId) => {
     
     try {
       await api.delete(`/playlists/${playlistId}`);

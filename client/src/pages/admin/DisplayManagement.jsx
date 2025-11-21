@@ -8,6 +8,9 @@ import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
+import LoadingSkeleton from '../../components/common/LoadingSkeleton';
+import EmptyState from '../../components/common/EmptyState';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import MobileMenu from '../../components/MobileMenu';
 import PairDisplayModal from '../../components/PairDisplayModal';
 import Footer from '../../components/Footer';
@@ -45,8 +48,19 @@ export default function DisplayManagement() {
     is_active: true
   });
   
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+    variant: 'danger'
+  });
+  
   const { user, logout} = useAuth();
   const navigate = useNavigate();
+  const autoPairPinRef = useRef(null);
+  const refreshIntervalRef = useRef(null);
 
   useEffect(() => {
     // Fetch permissions first
@@ -58,11 +72,10 @@ export default function DisplayManagement() {
     
     if (autoPairPin) {
       console.log('🔍 Auto-pair PIN detected from QR code:', autoPairPin);
+      autoPairPinRef.current = autoPairPin;
       // Open pair modal with pre-filled PIN after a short delay
       setTimeout(() => {
         setShowPairModal(true);
-        // We'll pass the PIN to the modal
-        window.autoPairPin = autoPairPin;
       }, 500);
     }
   }, [user]);
@@ -95,12 +108,39 @@ export default function DisplayManagement() {
   useEffect(() => {
     if (!userPermissions) return;
 
-    // Auto-refresh displays every 5 seconds to update online status
-    const refreshInterval = setInterval(() => {
-      fetchDisplays();
-    }, 5000); // 5 seconds for faster status updates
+    const startPolling = () => {
+      refreshIntervalRef.current = setInterval(() => {
+        fetchDisplays();
+      }, 5000); // 5 seconds for faster status updates
+    };
 
-    return () => clearInterval(refreshInterval);
+    const stopPolling = () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    };
+
+    // Add visibility detection - stop polling when page hidden
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        // Resume polling when page visible
+        if (!refreshIntervalRef.current) {
+          fetchDisplays(); // Immediate fetch
+          startPolling();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    startPolling(); // Start initial polling
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [userPermissions]);
 
   const fetchDisplays = async () => {
@@ -140,7 +180,16 @@ export default function DisplayManagement() {
   };
 
   const handleDeleteDisplay = async (displayId) => {
-    if (!confirm('Are you sure you want to delete this display?')) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Display',
+      message: 'Are you sure you want to delete this display? This action cannot be undone.',
+      variant: 'danger',
+      onConfirm: () => confirmDeleteDisplay(displayId)
+    });
+  };
+
+  const confirmDeleteDisplay = async (displayId) => {
     
     try {
       await api.delete(`/displays/${displayId}`);
@@ -348,7 +397,16 @@ export default function DisplayManagement() {
   };
 
   const handleDeleteSchedule = async (scheduleId) => {
-    if (!confirm('Delete this schedule?')) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Schedule',
+      message: 'Are you sure you want to delete this schedule?',
+      variant: 'danger',
+      onConfirm: () => confirmDeleteSchedule(scheduleId)
+    });
+  };
+
+  const confirmDeleteSchedule = async (scheduleId) => {
     
     try {
       await api.delete(`/schedules/${scheduleId}`);
@@ -360,8 +418,15 @@ export default function DisplayManagement() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-tv-bg">
-        <Spinner size="xl" />
+      <div className="min-h-screen bg-tv-bg p-6">
+        <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 mb-6">
+          <LoadingSkeleton type="text" width="200px" height="32px" />
+        </div>
+        <div className="max-w-7xl mx-auto space-y-4">
+          <LoadingSkeleton type="card" />
+          <LoadingSkeleton type="card" />
+          <LoadingSkeleton type="card" />
+        </div>
       </div>
     );
   }
@@ -531,14 +596,15 @@ export default function DisplayManagement() {
         </div>
 
         {displays.length === 0 ? (
-          <Card>
-            <div className="text-center py-12">
-              <svg className="w-16 h-16 mx-auto text-tv-textMuted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <EmptyState
+            icon={
+              <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              <p className="text-tv-textSecondary">No displays configured yet</p>
-            </div>
-          </Card>
+            }
+            title="No displays configured yet"
+            description="Click 'Pair Display' to connect a TV or add one manually"
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {displays.map((display) => (
@@ -1107,6 +1173,19 @@ export default function DisplayManagement() {
           </div>
         </div>
       </Modal>
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={() => {
+          confirmModal.onConfirm?.();
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        variant={confirmModal.variant}
+      />
 
       <Footer />
     </div>

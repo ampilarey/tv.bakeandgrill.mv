@@ -5,7 +5,7 @@ import Button from './common/Button';
 import Input from './common/Input';
 import { successFeedback, errorFeedback } from '../utils/haptics';
 
-export default function PairDisplayModal({ isOpen, onClose, onSuccess }) {
+export default function PairDisplayModal({ isOpen, onClose, onSuccess, autoPairPin = null }) {
   const [method, setMethod] = useState('pin'); // pin, qr, manual
   const [pinCode, setPinCode] = useState('');
   const [displayName, setDisplayName] = useState('');
