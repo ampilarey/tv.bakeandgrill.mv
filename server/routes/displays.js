@@ -82,7 +82,7 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
  * POST /api/displays/heartbeat
  * Update display heartbeat (public endpoint for displays)
  */
-router.post('/heartbeat', verifyDisplayToken, asyncHandler(async (req, res) => {
+router.post('/heartbeat', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
   const { token, current_channel_id } = req.body;
   const db = getDatabase();
   
