@@ -44,8 +44,8 @@ export default defineConfig({
         description: 'IPTV streaming platform for Bake and Grill',
         start_url: '/?source=pwa',
         display: 'standalone',
-        background_color: '#0F172A',
-        theme_color: '#F59E0B',
+        background_color: '#FFF8EE', // Cream - matches tv-bg
+        theme_color: '#B03A48',      // Maroon - matches tv-accent
         orientation: 'any',
         categories: ['entertainment', 'lifestyle'],
         lang: 'en',
