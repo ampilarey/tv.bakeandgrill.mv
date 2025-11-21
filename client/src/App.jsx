@@ -22,6 +22,7 @@ import Settings from './pages/admin/Settings';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -159,7 +160,9 @@ function AppRouter() {
           path="/player"
           element={
             <ProtectedRoute>
-              <PlayerPage />
+              <ErrorBoundary>
+                <PlayerPage />
+              </ErrorBoundary>
             </ProtectedRoute>
           }
         />

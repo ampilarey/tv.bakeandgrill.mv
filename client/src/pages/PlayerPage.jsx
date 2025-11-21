@@ -164,6 +164,12 @@ export default function PlayerPage() {
 
     setLoading(true); // Ensure loading state is set
 
+    // Failsafe: Force loading=false after 10 seconds to prevent stuck screen
+    const loadingTimeout = setTimeout(() => {
+      console.warn('⚠️ Loading timeout - forcing loading=false');
+      setLoading(false);
+    }, 10000);
+
     const fetchChannels = async () => {
       try {
         const response = await api.get(`/channels?playlistId=${playlistId}`);
@@ -185,6 +191,7 @@ export default function PlayerPage() {
         setChannels([]);
         setFilteredChannels([]);
       } finally {
+        clearTimeout(loadingTimeout); // Clear timeout
         setLoading(false); // Always clear loading state
       }
     };
@@ -1915,6 +1922,7 @@ export default function PlayerPage() {
   };
 
   if (loading) {
+    console.log('📱 PlayerPage in loading state');
     return (
       <div className="h-screen flex flex-col lg:grid lg:grid-cols-[280px_minmax(0,1.4fr)_320px] bg-tv-bg overflow-hidden">
         {/* Left Sidebar Skeleton */}
@@ -1927,8 +1935,9 @@ export default function PlayerPage() {
         </div>
         
         {/* Center Player Skeleton */}
-        <div className="flex-1 flex items-center justify-center bg-tv-bg">
+        <div className="flex-1 flex flex-col items-center justify-center bg-tv-bg">
           <Spinner size="xl" />
+          <p className="text-tv-text mt-4">Loading channels...</p>
         </div>
         
         {/* Right Panel Skeleton */}
@@ -1941,6 +1950,8 @@ export default function PlayerPage() {
       </div>
     );
   }
+
+  console.log('📱 PlayerPage rendering main content:', { channelsCount: channels.length, currentChannel: currentChannel?.name });
 
   return (
     <div className="flex flex-col min-h-screen bg-tv-bg text-tv-text">
