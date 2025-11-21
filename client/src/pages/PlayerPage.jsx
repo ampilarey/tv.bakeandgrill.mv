@@ -2033,13 +2033,13 @@ export default function PlayerPage() {
                       </div>
                     )}
                     
-                    {/* Now Playing Overlay */}
+                    {/* Now Playing Overlay - Compact on Mobile */}
                     {showNowPlaying && currentChannel && (
-                      <div className="absolute top-4 left-4 right-4 md:top-6 md:left-6 md:right-auto md:max-w-md z-30 pointer-events-none animate-fadeIn">
-                        <div className="bg-gradient-to-br from-tv-accent/95 to-tv-accentHover/95 backdrop-blur-md rounded-2xl p-4 md:p-5 shadow-2xl border-2 border-white/20">
-                          <div className="flex items-start gap-3 md:gap-4">
-                            {/* Channel Logo */}
-                            <div className="flex-shrink-0 w-14 h-14 md:w-16 md:h-16 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden border-2 border-white/30">
+                      <div className="absolute top-3 left-3 right-3 md:top-6 md:left-6 md:right-auto md:max-w-md z-30 pointer-events-none animate-fadeIn">
+                        <div className="bg-gradient-to-br from-tv-accent/95 to-tv-accentHover/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3 md:p-5 shadow-2xl border border-white/20 md:border-2">
+                          <div className="flex items-center gap-2 md:gap-4">
+                            {/* Channel Logo - Smaller on Mobile */}
+                            <div className="flex-shrink-0 w-10 h-10 md:w-16 md:h-16 rounded-lg md:rounded-xl bg-white/20 flex items-center justify-center overflow-hidden border border-white/30 md:border-2">
                               {currentChannel.logo ? (
                                 <img 
                                   src={currentChannel.logo} 
@@ -2048,29 +2048,26 @@ export default function PlayerPage() {
                                   onError={(e) => { e.target.style.display = 'none'; }}
                                 />
                               ) : (
-                                <span className="text-2xl md:text-3xl">📺</span>
+                                <span className="text-lg md:text-3xl">📺</span>
                               )}
                             </div>
                             
-                            {/* Channel Info */}
+                            {/* Channel Info - Compact on Mobile */}
                             <div className="flex-1 min-w-0">
-                              <p className="text-white/60 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1">
+                              <p className="text-white/60 text-[10px] md:text-sm font-semibold uppercase tracking-wider mb-0.5 md:mb-1">
                                 Now Playing
                               </p>
-                              <h3 className="text-white text-lg md:text-xl font-bold line-clamp-2 leading-tight mb-1.5">
+                              <h3 className="text-white text-sm md:text-xl font-bold line-clamp-1 md:line-clamp-2 leading-tight mb-0.5 md:mb-1.5">
                                 {currentChannel.name}
                               </h3>
                               {currentChannel.group && (
-                                <p className="text-white/80 text-xs md:text-sm font-medium mb-1">
+                                <p className="text-white/80 text-[10px] md:text-sm font-medium hidden md:block">
                                   📂 {currentChannel.group}
                                 </p>
                               )}
-                              <p className="text-white/70 text-xs">
-                                🕒 {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </p>
                             </div>
                             
-                            {/* Close button */}
+                            {/* Close button - Smaller on Mobile */}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2079,9 +2076,9 @@ export default function PlayerPage() {
                                 }
                                 setShowNowPlaying(false);
                               }}
-                              className="flex-shrink-0 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors pointer-events-auto"
+                              className="flex-shrink-0 w-6 h-6 md:w-8 md:h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors pointer-events-auto"
                             >
-                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-3 h-3 md:w-4 md:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                               </svg>
                             </button>
