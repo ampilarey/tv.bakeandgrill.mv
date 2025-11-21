@@ -1,5 +1,6 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const rateLimit = require('express-rate-limit');
 const { getDatabase } = require('../database/init');
 const { verifyToken, requireAdmin, verifyDisplayToken } = require('../middleware/auth');
 const { validateDisplayCreate } = require('../middleware/validation');
@@ -9,6 +10,15 @@ const { fetch } = require('../utils/httpClient');
 const { parseM3U } = require('../utils/m3uParser');
 
 const router = express.Router();
+
+// Rate limiter for display endpoints (60 requests per minute per display)
+const displayLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute
+  message: 'Too many requests from this display, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 /**
  * POST /api/displays/verify
