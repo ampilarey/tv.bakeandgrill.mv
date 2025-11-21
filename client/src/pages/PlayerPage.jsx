@@ -28,6 +28,7 @@ export default function PlayerPage() {
   
   const [searchParams] = useSearchParams();
   const playlistId = searchParams.get('playlistId');
+  const channelIdFromUrl = searchParams.get('channelId'); // From history click
   
   const [channels, setChannels] = useState([]);
   const [filteredChannels, setFilteredChannels] = useState([]);
@@ -165,6 +166,18 @@ export default function PlayerPage() {
 
     fetchChannels();
   }, [playlistId, navigate]);
+
+  // Auto-play channel from history click
+  useEffect(() => {
+    if (channelIdFromUrl && channels.length > 0 && !currentChannel) {
+      const channel = channels.find(ch => ch.id === channelIdFromUrl);
+      if (channel) {
+        console.log('🎬 Auto-playing channel from history:', channel.name);
+        setCurrentChannel(channel);
+        setIsAutoPlay(true);
+      }
+    }
+  }, [channelIdFromUrl, channels, currentChannel]);
 
   // Fetch favorites
   useEffect(() => {
