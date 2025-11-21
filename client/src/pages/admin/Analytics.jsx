@@ -274,10 +274,10 @@ export default function Analytics() {
               <button
                 key={value}
                 onClick={() => setTimeRange(value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${
                   timeRange === value
-                    ? 'bg-white/20 text-white'
-                    : 'bg-tv-bgSoft text-tv-textSecondary hover:bg-tv-bgHover'
+                    ? 'bg-white/20 text-white border-2 border-white/30'
+                    : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white border-2 border-white/20'
                 }`}
               >
                 {label}
