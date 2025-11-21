@@ -34,7 +34,7 @@ export default function PlayerPage() {
   const [channels, setChannels] = useState([]);
   const [filteredChannels, setFilteredChannels] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [currentChannel, setCurrentChannel] = useState(null);
+  const [currentChannel, setCurrentChannel] = useState(null); // Will be restored via useEffect
   const [favorites, setFavorites] = useState([]);
   const [recentlyWatched, setRecentlyWatched] = useState([]);
   const [showAllRecent, setShowAllRecent] = useState(false);
@@ -174,6 +174,42 @@ export default function PlayerPage() {
       window.localStorage.setItem('lastPlaylistId', playlistId);
     }
   }, [playlistId]);
+
+  // Save current playing channel + playlist ID so it can resume when returning
+  useEffect(() => {
+    if (currentChannel && playlistId && typeof window !== 'undefined') {
+      localStorage.setItem('lastPlayingChannel', JSON.stringify({
+        channel: currentChannel,
+        playlistId: playlistId
+      }));
+    }
+  }, [currentChannel, playlistId]);
+
+  // Restore last playing channel when returning to player (only if same playlist)
+  useEffect(() => {
+    if (channels.length > 0 && !currentChannel && !channelIdFromUrl && typeof window !== 'undefined') {
+      const saved = localStorage.getItem('lastPlayingChannel');
+      if (saved) {
+        try {
+          const { channel, playlistId: savedPlaylistId } = JSON.parse(saved);
+          // Only restore if it's the same playlist
+          if (savedPlaylistId === playlistId) {
+            // Verify the channel still exists in current playlist
+            const channelExists = channels.find(ch => ch.id === channel.id);
+            if (channelExists) {
+              console.log('🔄 Restoring last playing channel:', channel.name);
+              setCurrentChannel(channel);
+              setIsAutoPlay(true);
+            } else {
+              console.log('⚠️ Last channel no longer available');
+            }
+          }
+        } catch (e) {
+          console.error('Error restoring channel:', e);
+        }
+      }
+    }
+  }, [channels, currentChannel, channelIdFromUrl, playlistId]);
 
   // Fetch channels from playlist
   useEffect(() => {
