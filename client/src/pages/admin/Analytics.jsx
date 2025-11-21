@@ -274,10 +274,10 @@ export default function Analytics() {
               <button
                 key={value}
                 onClick={() => setTimeRange(value)}
-                className={`px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                className={`px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition-colors border-2 ${
                   timeRange === value
-                    ? 'bg-white/20 text-white border-2 border-white/30'
-                    : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white border-2 border-white/20'
+                    ? 'bg-white text-tv-accent border-white shadow-md'
+                    : 'bg-transparent text-white border-white/40 hover:bg-white/10 hover:border-white'
                 }`}
               >
                 {label}
@@ -414,11 +414,11 @@ export default function Analytics() {
                     <select
                       value={selectedUserId}
                       onChange={(e) => setSelectedUserId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border-2 border-tv-borderSubtle bg-tv-bgElevated text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
+                      className="w-full px-3 py-2 rounded-lg border-2 border-tv-borderSubtle bg-tv-bgElevated text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent [&>option]:text-tv-text [&>option]:bg-tv-bgElevated"
                     >
-                      <option value="">All Users</option>
+                      <option value="" className="text-tv-text bg-tv-bgElevated">All Users</option>
                       {allUsers.map(user => (
-                        <option key={user.id} value={user.id}>{user.email}</option>
+                        <option key={user.id} value={user.id} className="text-tv-text bg-tv-bgElevated">{user.email}</option>
                       ))}
                     </select>
                   </div>
@@ -453,12 +453,12 @@ export default function Analytics() {
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border-2 border-tv-borderSubtle bg-tv-bgElevated text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
+                      className="w-full px-3 py-2 rounded-lg border-2 border-tv-borderSubtle bg-tv-bgElevated text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent [&>option]:text-tv-text [&>option]:bg-tv-bgElevated"
                     >
-                      <option value="watchTime">Watch Time (High to Low)</option>
-                      <option value="sessions">Sessions (High to Low)</option>
-                      <option value="channels">Channels (High to Low)</option>
-                      <option value="name">Name (A to Z)</option>
+                      <option value="watchTime" className="text-tv-text bg-tv-bgElevated">Watch Time (High to Low)</option>
+                      <option value="sessions" className="text-tv-text bg-tv-bgElevated">Sessions (High to Low)</option>
+                      <option value="channels" className="text-tv-text bg-tv-bgElevated">Channels (High to Low)</option>
+                      <option value="name" className="text-tv-text bg-tv-bgElevated">Name (A to Z)</option>
                     </select>
                   </div>
 
