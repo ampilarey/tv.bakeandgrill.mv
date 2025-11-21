@@ -219,7 +219,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1 w-full pb-0 md:pb-6">
+      <div className="p-6 max-w-7xl mx-auto flex-1 w-full pb-32 md:pb-6">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-3xl font-bold text-tv-text">
             {user?.role === 'user' ? 'Available Playlists' : 'Your Playlists'}

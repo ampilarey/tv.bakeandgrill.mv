@@ -126,7 +126,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto p-4 space-y-6 md:pb-6 w-full flex-1">
+      <div className="max-w-4xl mx-auto p-4 space-y-6 pb-32 md:pb-6 w-full flex-1">
         {/* Message Display */}
         {message.text && (
           <div className={`p-4 rounded-lg ${

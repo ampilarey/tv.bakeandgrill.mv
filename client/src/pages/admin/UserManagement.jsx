@@ -210,7 +210,7 @@ export default function UserManagement() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1 md:pb-6 w-full">
+      <div className="p-6 max-w-7xl mx-auto flex-1 pb-32 md:pb-6 w-full">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-tv-text">All Users ({users.length})</h2>
           <Button variant="primary" onClick={() => setShowCreateModal(true)}>

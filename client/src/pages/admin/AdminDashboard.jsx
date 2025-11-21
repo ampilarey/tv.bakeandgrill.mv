@@ -78,7 +78,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="p-6 max-w-7xl mx-auto flex-1 md:pb-6 w-full">
+      <div className="p-6 max-w-7xl mx-auto flex-1 pb-32 md:pb-6 w-full">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
