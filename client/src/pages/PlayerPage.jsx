@@ -794,9 +794,29 @@ export default function PlayerPage() {
       video.addEventListener('click', handleVideoClick);
       video.addEventListener('tap', handleVideoClick);
       
+      // Set up history logging timer (for iOS HLS path)
+      console.log('⏰ Setting up history timer (5 seconds) - iOS HLS path');
+      const historyTimerIOS = setTimeout(async () => {
+        console.log('📊 History timer fired:', { hasStartedPlaying, playlistId });
+        if (!hasStartedPlaying || !playlistId) return;
+        try {
+          console.log('📤 POST /api/history...');
+          await api.post('/history', {
+            playlist_id: parseInt(playlistId),
+            channel_id: currentChannel.id,
+            channel_name: currentChannel.name,
+            duration_seconds: Math.floor(video.currentTime || 0)
+          });
+          console.log('✅ History logged');
+        } catch (error) {
+          console.error('❌ History error:', error.message);
+        }
+      }, 5000);
+      
       return () => {
         // Clear timeout on cleanup
         clearPlaybackTimeout();
+        clearTimeout(historyTimerIOS);
         
         video.removeEventListener('loadstart', handleLoadStart);
         video.removeEventListener('error', handleError);
@@ -1107,9 +1127,36 @@ export default function PlayerPage() {
         }
       });
       
+      // Set up history logging timer (for HLS.js path)
+      console.log('⏰ Setting up history timer (5 seconds) - HLS.js path');
+      const historyTimer = setTimeout(async () => {
+        console.log('📊 History timer fired:', { hasStartedPlaying, playlistId });
+        if (!hasStartedPlaying) {
+          console.log('⏭️ Skipping - video never started');
+          return;
+        }
+        if (!playlistId) {
+          console.error('❌ Missing playlistId');
+          return;
+        }
+        try {
+          console.log('📤 POST /api/history...');
+          const response = await api.post('/history', {
+            playlist_id: parseInt(playlistId),
+            channel_id: currentChannel.id,
+            channel_name: currentChannel.name,
+            duration_seconds: Math.floor(video.currentTime || 0)
+          });
+          console.log('✅ History logged:', response.data);
+        } catch (error) {
+          console.error('❌ History error:', error.response?.data || error.message);
+        }
+      }, 5000);
+      
       // Cleanup function for HLS.js path
       return () => {
         clearPlaybackTimeout();
+        clearTimeout(historyTimer); // Clear history timer
         // Remove event listeners
         if (video) {
           if (storedHandlers.handlePlaying) {
@@ -1160,8 +1207,28 @@ export default function PlayerPage() {
         // Don't clear timeout - user may need to interact
       });
       
+      // Set up history logging timer (for native HLS path)
+      console.log('⏰ Setting up history timer (5 seconds) - native HLS path');
+      const historyTimerNativeHLS = setTimeout(async () => {
+        console.log('📊 History timer fired:', { hasStartedPlaying, playlistId });
+        if (!hasStartedPlaying || !playlistId) return;
+        try {
+          console.log('📤 POST /api/history...');
+          await api.post('/history', {
+            playlist_id: parseInt(playlistId),
+            channel_id: currentChannel.id,
+            channel_name: currentChannel.name,
+            duration_seconds: Math.floor(video.currentTime || 0)
+          });
+          console.log('✅ History logged');
+        } catch (error) {
+          console.error('❌ History error:', error.message);
+        }
+      }, 5000);
+      
       return () => {
         clearPlaybackTimeout();
+        clearTimeout(historyTimerNativeHLS);
         video.removeEventListener('playing', handleNativePlaying);
       };
       
@@ -1198,81 +1265,33 @@ export default function PlayerPage() {
         // Don't clear timeout - user may need to interact
       });
       
+      // Set up history logging timer (for non-HLS path)
+      console.log('⏰ Setting up history timer (5 seconds) - non-HLS path');
+      const historyTimerNonHLS = setTimeout(async () => {
+        console.log('📊 History timer fired:', { hasStartedPlaying, playlistId });
+        if (!hasStartedPlaying) return;
+        if (!playlistId) return;
+        try {
+          console.log('📤 POST /api/history...');
+          await api.post('/history', {
+            playlist_id: parseInt(playlistId),
+            channel_id: currentChannel.id,
+            channel_name: currentChannel.name,
+            duration_seconds: Math.floor(video.currentTime || 0)
+          });
+          console.log('✅ History logged');
+        } catch (error) {
+          console.error('❌ History error:', error.message);
+        }
+      }, 5000);
+      
       return () => {
         clearPlaybackTimeout();
+        clearTimeout(historyTimerNonHLS);
         video.removeEventListener('playing', handleNativePlaying);
       };
     }
 
-    // Log watch history (only if video started playing)
-    const logHistory = async () => {
-      console.log('📊 logHistory called:', { 
-        hasStartedPlaying, 
-        playlistId, 
-        channelId: currentChannel?.id,
-        channelName: currentChannel?.name 
-      });
-      
-      if (!hasStartedPlaying) {
-        console.log('⏭️ Skipping history log - video never started playing');
-        return;
-      }
-      
-      if (!playlistId) {
-        console.error('❌ Cannot log history - playlistId is missing');
-        return;
-      }
-      
-      try {
-        console.log('📤 Posting to /api/history...');
-        const response = await api.post('/history', {
-          playlist_id: parseInt(playlistId),
-          channel_id: currentChannel.id,
-          channel_name: currentChannel.name,
-          duration_seconds: Math.floor(video.currentTime || 0)
-        });
-        console.log('✅ History logged successfully:', response.data);
-      } catch (error) {
-        console.error('❌ Error logging history:', error);
-        console.error('Error details:', error.response?.data);
-      }
-    };
-
-    // Log on channel change (after 5 seconds, only if playing)
-    console.log('⏰ Setting up history timer (5 seconds)');
-    const timer = setTimeout(logHistory, 5000);
-
-    // Final cleanup - this runs when the effect is cleaned up or dependencies change
-    return () => {
-      clearPlaybackTimeout();
-      clearTimeout(timer);
-      // Remove event listeners using stored handlers
-      if (video) {
-        if (storedHandlers.handlePlaying) {
-          video.removeEventListener('playing', storedHandlers.handlePlaying);
-        }
-        if (storedHandlers.handleMetadata) {
-          video.removeEventListener('loadedmetadata', storedHandlers.handleMetadata);
-        }
-        // Remove iOS-specific handlers
-        if (storedHandlers.iosCanPlayHandler) {
-          video.removeEventListener('canplay', storedHandlers.iosCanPlayHandler);
-        }
-        if (storedHandlers.iosMetadataHandler) {
-          video.removeEventListener('loadedmetadata', storedHandlers.iosMetadataHandler);
-        }
-        if (storedHandlers.iosDataHandler) {
-          video.removeEventListener('loadeddata', storedHandlers.iosDataHandler);
-        }
-        if (storedHandlers.iosPlayingHandler) {
-          video.removeEventListener('playing', storedHandlers.iosPlayingHandler);
-        }
-      }
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-    };
   }, [currentChannel, playlistId]);
 
   // Show Now Playing overlay when channel changes
