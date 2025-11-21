@@ -108,7 +108,7 @@ router.post('/heartbeat', verifyDisplayToken, asyncHandler(async (req, res) => {
  * GET /api/displays/commands/:token
  * Poll for pending commands (public endpoint for displays)
  */
-router.get('/commands/:token', asyncHandler(async (req, res) => {
+router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => {
   const { token } = req.params;
   const db = getDatabase();
   

@@ -4,6 +4,7 @@ const { getDatabase } = require('../database/init');
 const { verifyToken } = require('../middleware/auth');
 const { parseM3U, extractGroups, searchChannels, filterByGroup, sortChannels } = require('../utils/m3uParser');
 const { asyncHandler } = require('../middleware/errorHandler');
+const m3uCache = require('../utils/m3uCache');
 
 const router = express.Router();
 
@@ -42,16 +43,26 @@ router.get('/', asyncHandler(async (req, res) => {
   const playlist = playlists[0];
   
   try {
-    // Fetch M3U file using lightweight HTTP client (no WebAssembly)
-    const response = await fetch(playlist.m3u_url, {
-      timeout: 10000,
-      headers: {
-        'User-Agent': 'BakeGrillTV/1.0'
-      }
-    });
+    // Check cache first
+    let channels = m3uCache.get(playlistId, playlist.m3u_url);
     
-    // Parse M3U
-    let channels = parseM3U(response.data);
+    if (!channels) {
+      // Cache miss - fetch from URL
+      const response = await fetch(playlist.m3u_url, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'BakeGrillTV/1.0'
+        }
+      });
+      
+      // Parse M3U
+      channels = parseM3U(response.data);
+      
+      // Store in cache
+      if (channels && channels.length > 0) {
+        m3uCache.set(playlistId, playlist.m3u_url, channels);
+      }
+    }
     
     if (channels.length === 0) {
       return res.status(500).json({
