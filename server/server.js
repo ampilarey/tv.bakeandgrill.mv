@@ -25,6 +25,17 @@ const notificationsRoutes = require('./routes/notifications');
 const pairingRoutes = require('./routes/pairing');
 const reconnectRoutes = require('./routes/reconnect');
 
+// Phase 1: New feature routes
+const featuresRoutes = require('./routes/features');
+const playlistItemsRoutes = require('./routes/playlistItems');
+const tickerRoutes = require('./routes/ticker');
+const scenesRoutes = require('./routes/scenes');
+const templatesRoutes = require('./routes/templates');
+const announcementsRoutes = require('./routes/announcements');
+
+// Phase 2: Uploads
+const uploadsRoutes = require('./routes/uploads');
+
 // Initialize database
 console.log('🚀 Starting Bake & Grill TV Server...');
 
@@ -169,6 +180,18 @@ app.use('/api/permissions', permissionsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/pairing', pairingRoutes); // Must be before catch-all schedules route
 app.use('/api/reconnect', reconnectRoutes);
+
+// Phase 1: Feature flag & new content routes
+app.use('/api/features', featuresRoutes);
+app.use('/api/playlist-items', playlistItemsRoutes);
+app.use('/api/ticker', tickerRoutes);
+app.use('/api/scenes', scenesRoutes);
+app.use('/api/templates', templatesRoutes);
+app.use('/api/announcements', announcementsRoutes);
+
+// Phase 2: File uploads
+app.use('/api/uploads', uploadsRoutes);
+
 app.use('/api', schedulesRoutes); // Includes /api/schedules/* routes - KEEP THIS LAST
 
 // Serve static frontend in production
