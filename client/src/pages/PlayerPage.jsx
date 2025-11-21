@@ -29,6 +29,7 @@ export default function PlayerPage() {
   const [searchParams] = useSearchParams();
   const playlistId = searchParams.get('playlistId');
   const channelIdFromUrl = searchParams.get('channelId'); // From history click
+  const channelNameFromUrl = searchParams.get('channelName'); // From history click (fallback)
   
   const [channels, setChannels] = useState([]);
   const [filteredChannels, setFilteredChannels] = useState([]);
@@ -169,15 +170,28 @@ export default function PlayerPage() {
 
   // Auto-play channel from history click
   useEffect(() => {
-    if (channelIdFromUrl && channels.length > 0 && !currentChannel) {
-      const channel = channels.find(ch => ch.id === channelIdFromUrl);
+    if ((channelIdFromUrl || channelNameFromUrl) && channels.length > 0 && !currentChannel) {
+      // Try to find by ID first
+      let channel = channels.find(ch => ch.id === channelIdFromUrl);
+      
+      // If not found by ID, try to find by name (fallback for when channel IDs change)
+      if (!channel && channelNameFromUrl) {
+        channel = channels.find(ch => ch.name && ch.name.toLowerCase() === decodeURIComponent(channelNameFromUrl).toLowerCase());
+        if (channel) {
+          console.log('🎬 Auto-playing channel from history (by name):', channel.name);
+        }
+      } else if (channel) {
+        console.log('🎬 Auto-playing channel from history (by ID):', channel.name);
+      }
+      
       if (channel) {
-        console.log('🎬 Auto-playing channel from history:', channel.name);
         setCurrentChannel(channel);
         setIsAutoPlay(true);
+      } else {
+        console.warn('⚠️ Channel from history not found:', { channelIdFromUrl, channelNameFromUrl });
       }
     }
-  }, [channelIdFromUrl, channels, currentChannel]);
+  }, [channelIdFromUrl, channelNameFromUrl, channels, currentChannel]);
 
   // Fetch favorites
   useEffect(() => {

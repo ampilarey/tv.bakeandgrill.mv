@@ -97,8 +97,9 @@ export default function HistoryPage() {
 
   const handlePlayChannel = (item) => {
     lightTap();
-    // Pass both playlistId and channelId so player auto-plays the correct channel
-    navigate(`/player?playlistId=${item.playlist_id}&channelId=${item.channel_id}`);
+    // Pass playlist, channelId, and channelName for more reliable auto-play
+    // Channel name is used as fallback if ID doesn't match
+    navigate(`/player?playlistId=${item.playlist_id}&channelId=${encodeURIComponent(item.channel_id)}&channelName=${encodeURIComponent(item.channel_name)}`);
   };
 
   const formatDate = (dateString) => {
