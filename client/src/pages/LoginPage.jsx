@@ -236,7 +236,7 @@ export default function LoginPage() {
                 <div>
                   <h4 className="text-tv-text font-bold text-sm mb-2">🚀 Quick Setup (2 minutes):</h4>
                   <ol className="text-tv-textSecondary text-sm space-y-2 list-decimal list-inside">
-                    <li><strong>On TV:</strong> Open <code className="bg-tv-accent/10 text-tv-accent px-1.5 py-0.5 rounded text-xs">tv.bakeandgrill.mv/#/pair</code></li>
+                    <li><strong>On TV:</strong> Open <code className="bg-tv-accent/10 text-tv-accent px-1.5 py-0.5 rounded text-xs">tv.bakeandgrill.mv/pair</code></li>
                     <li><strong>Choose method:</strong> PIN Code (easy) or QR Code (fastest)</li>
                     <li><strong>On Phone:</strong> Login → Displays → Pair Display</li>
                     <li><strong>Enter PIN or scan QR</strong> shown on TV</li>
@@ -248,7 +248,7 @@ export default function LoginPage() {
             
             <div className="flex flex-col sm:flex-row gap-3">
               <a
-                href="/#/pair"
+                href="/pair"
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-tv-goldDark hover:bg-tv-gold text-white font-semibold rounded-lg transition-all shadow-md hover:shadow-lg"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
