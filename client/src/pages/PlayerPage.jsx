@@ -1206,21 +1206,40 @@ export default function PlayerPage() {
 
     // Log watch history (only if video started playing)
     const logHistory = async () => {
-      if (!hasStartedPlaying) return; // Don't log if video never started
+      console.log('📊 logHistory called:', { 
+        hasStartedPlaying, 
+        playlistId, 
+        channelId: currentChannel?.id,
+        channelName: currentChannel?.name 
+      });
+      
+      if (!hasStartedPlaying) {
+        console.log('⏭️ Skipping history log - video never started playing');
+        return;
+      }
+      
+      if (!playlistId) {
+        console.error('❌ Cannot log history - playlistId is missing');
+        return;
+      }
       
       try {
-        await api.post('/history', {
+        console.log('📤 Posting to /api/history...');
+        const response = await api.post('/history', {
           playlist_id: parseInt(playlistId),
           channel_id: currentChannel.id,
           channel_name: currentChannel.name,
           duration_seconds: Math.floor(video.currentTime || 0)
         });
+        console.log('✅ History logged successfully:', response.data);
       } catch (error) {
-        console.error('Error logging history:', error);
+        console.error('❌ Error logging history:', error);
+        console.error('Error details:', error.response?.data);
       }
     };
 
     // Log on channel change (after 5 seconds, only if playing)
+    console.log('⏰ Setting up history timer (5 seconds)');
     const timer = setTimeout(logHistory, 5000);
 
     // Final cleanup - this runs when the effect is cleaned up or dependencies change
