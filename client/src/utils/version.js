@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.0.6'; // Semantic versioning - updated for Android/iOS/PWA fixes
+export const APP_VERSION = '1.0.7'; // Semantic versioning - forces cache refresh for history fix
 
 export function checkVersion() {
   try {
