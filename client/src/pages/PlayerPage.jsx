@@ -74,6 +74,45 @@ export default function PlayerPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
 
+  // Component-level cleanup - runs when navigating away from player
+  useEffect(() => {
+    // Handle page visibility changes (mobile app switching, browser tab switching)
+    const handleVisibilityChange = () => {
+      if (!videoRef.current) return;
+      
+      if (document.hidden) {
+        // Page hidden - pause video to save bandwidth
+        console.log('📱 Page hidden - pausing video');
+        videoRef.current.pause();
+      } else {
+        // Page visible again
+        console.log('📱 Page visible again');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      
+      // Clean up video when component unmounts (user navigates away)
+      if (videoRef.current) {
+        console.log('🧹 Cleaning up video on unmount');
+        const video = videoRef.current;
+        video.pause();
+        video.removeAttribute('src');
+        video.load(); // Reset video element
+      }
+      
+      // Destroy HLS.js instance if exists
+      if (hlsRef.current) {
+        console.log('🧹 Destroying HLS.js on unmount');
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, []); // Empty deps = runs only on mount/unmount
+
   const currentChannelIsHLS = currentChannel?.url?.toLowerCase().endsWith('.m3u8') || false;
   const videoElementSrc = currentChannel && (!currentChannelIsHLS || isIOS) ? currentChannel.url : undefined;
 
@@ -288,6 +327,14 @@ export default function PlayerPage() {
     if (!currentChannel || !videoRef.current) return;
 
     const video = videoRef.current;
+    
+    // 🚨 CRITICAL: Reset video element completely before loading new source
+    // This prevents stuck state on mobile when navigating back to player
+    video.pause();
+    video.removeAttribute('src');
+    video.load(); // Force reset
+    console.log('🔄 Video element reset for new channel');
+    
     const isHLS = currentChannel.url.endsWith('.m3u8');
     
     // 🚨 CRITICAL: Use iOS detection from top level (already calculated)
