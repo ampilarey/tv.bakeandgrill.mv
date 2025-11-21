@@ -6,6 +6,7 @@ import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
 import Spinner from '../components/common/Spinner';
 import Footer from '../components/Footer';
+import ConfirmModal from '../components/common/ConfirmModal';
 import { lightTap } from '../utils/haptics';
 
 export default function HistoryPage() {
@@ -16,6 +17,7 @@ export default function HistoryPage() {
   const [filter, setFilter] = useState('all'); // all, today, week, month
   const [groupBy, setGroupBy] = useState('date'); // date, playlist, channel
   const [searchQuery, setSearchQuery] = useState('');
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
   useEffect(() => {
     fetchHistory();
@@ -69,9 +71,16 @@ export default function HistoryPage() {
     setFilteredHistory(filtered);
   };
 
-  const handleClearHistory = async () => {
-    if (!confirm('Are you sure you want to clear all watch history?')) return;
-    
+  const handleClearHistory = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Clear All History',
+      message: 'Are you sure you want to clear all watch history? This action cannot be undone.',
+      onConfirm: confirmClearHistory
+    });
+  };
+
+  const confirmClearHistory = async () => {
     lightTap();
     setLoading(true);
 
@@ -280,6 +289,19 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        variant="danger"
+        onConfirm={() => {
+          confirmModal.onConfirm();
+          setConfirmModal({ ...confirmModal, isOpen: false });
+        }}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
 
       <Footer />
     </div>

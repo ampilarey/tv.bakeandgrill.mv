@@ -36,7 +36,7 @@ export default function DisplayPairingPage() {
     setQrCodeLoading(true);
     try {
       // Create pairing URL with PIN code for admin to pair this display
-      const pairingUrl = `${window.location.origin}/#/admin/displays?autoPairPin=${pinCode}`;
+      const pairingUrl = `${window.location.origin}/admin/displays?autoPairPin=${pinCode}`;
       
       // Generate QR code
       const qrDataUrl = await QRCode.toDataURL(pairingUrl, {

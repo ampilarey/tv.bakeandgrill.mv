@@ -8,6 +8,7 @@ import Spinner from '../components/common/Spinner';
 import Modal from '../components/common/Modal';
 import Input from '../components/common/Input';
 import Footer from '../components/Footer';
+import ConfirmModal from '../components/common/ConfirmModal';
 
 export default function DashboardPage() {
   const [playlists, setPlaylists] = useState([]);
@@ -20,6 +21,7 @@ export default function DashboardPage() {
   const [permissions, setPermissions] = useState(null);
   const [error, setError] = useState('');
   const [editError, setEditError] = useState('');
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null, variant: 'danger' });
   
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -409,6 +411,19 @@ export default function DashboardPage() {
           </div>
         </form>
       </Modal>
+      
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        variant={confirmModal.variant}
+        onConfirm={() => {
+          confirmModal.onConfirm();
+          setConfirmModal({ ...confirmModal, isOpen: false });
+        }}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
       
       <Footer />
     </div>

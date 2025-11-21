@@ -24,16 +24,7 @@ export default function PlayerPage() {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   );
   
-  // 🚨 VERSION CHECK: Log to verify new code is running
-  debugLog('📱 PlayerPage.jsx loaded - Version: 2025-01-15-ios-native-hls-fix-v3');
-  debugLog('🔍 Device:', userAgent);
-  debugLog('🍎 iOS Detected:', isIOS);
-  
-  // 🚨 CRITICAL: If iOS, NEVER use HLS.js - disable it completely
-  if (isIOS && typeof Hls !== 'undefined') {
-    // Override HLS.js to prevent it from being used on iOS
-    console.warn('🚫 iOS DETECTED - HLS.js DISABLED for iOS');
-  }
+  // Device detection logged only once via useEffect below
   
   const [searchParams] = useSearchParams();
   const playlistId = searchParams.get('playlistId');
@@ -83,6 +74,19 @@ export default function PlayerPage() {
 
   const currentChannelIsHLS = currentChannel?.url?.toLowerCase().endsWith('.m3u8') || false;
   const videoElementSrc = currentChannel && (!currentChannelIsHLS || isIOS) ? currentChannel.url : undefined;
+
+  // One-time device detection logging (only on mount)
+  useEffect(() => {
+    if (isDev) {
+      console.log('📱 PlayerPage.jsx loaded - Version: 2025-01-15-ios-native-hls-fix-v3');
+      console.log('🔍 Device:', userAgent);
+      console.log('🍎 iOS Detected:', isIOS);
+      
+      if (isIOS && typeof Hls !== 'undefined') {
+        console.warn('🚫 iOS DETECTED - HLS.js DISABLED for iOS');
+      }
+    }
+  }, []); // Empty array = run only once on mount
 
   // Track viewport width for responsive/mobile layouts
   useEffect(() => {
@@ -219,51 +223,25 @@ export default function PlayerPage() {
   useEffect(() => {
     let result = [...channels]; // Create copy to avoid mutation
 
-    debugLog('Filtering channels:', {
-      total: channels.length,
-      selectedGroup,
-      showFavoritesOnly,
-      searchQuery
-    });
-
     // Favorites filter (apply first if active)
     if (showFavoritesOnly) {
       const favChannelIds = favorites.map(f => f.channel_id);
       result = result.filter(ch => favChannelIds.includes(ch.id));
-      debugLog('After favorites filter:', result.length);
     }
 
     // Group filter
     if (selectedGroup && selectedGroup !== '') {
-      const beforeFilter = result.length;
       result = result.filter(ch => {
         // Handle null/undefined groups
-        if (!ch.group) {
-          debugLog('Channel without group:', ch.name);
-          return false;
-        }
+        if (!ch.group) return false;
         
         // Normalize both values for comparison
         const channelGroup = ch.group.trim();
         const filterGroup = selectedGroup.trim();
         
         // Exact match (case-sensitive)
-        const match = channelGroup === filterGroup;
-        
-        if (!match) {
-          debugLog(`No match: "${channelGroup}" !== "${filterGroup}" for channel:`, ch.name);
-        }
-        
-        return match;
+        return channelGroup === filterGroup;
       });
-      debugLog(`After group filter "${selectedGroup}": ${beforeFilter} -> ${result.length} channels`);
-      
-      // If no results, log sample channel groups for debugging
-      if (result.length === 0 && channels.length > 0) {
-        debugLog('No channels matched! Sample channel groups:', 
-          channels.slice(0, 5).map(ch => ({ name: ch.name, group: ch.group }))
-        );
-      }
     }
 
     // Search filter (apply last)
@@ -273,10 +251,8 @@ export default function PlayerPage() {
         (ch.name && ch.name.toLowerCase().includes(query)) ||
         (ch.group && ch.group.toLowerCase().includes(query))
       );
-      debugLog('After search filter:', result.length);
     }
 
-    debugLog('Final filtered channels:', result.length);
     setFilteredChannels(result);
   }, [searchQuery, selectedGroup, showFavoritesOnly, channels, favorites]);
 
