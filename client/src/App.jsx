@@ -19,6 +19,7 @@ import UserManagement from './pages/admin/UserManagement';
 import DisplayManagement from './pages/admin/DisplayManagement';
 import Analytics from './pages/admin/Analytics';
 import Settings from './pages/admin/Settings';
+import TickerManagement from './pages/admin/TickerManagement';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -221,6 +222,14 @@ function AppRouter() {
           element={
             <AdminRoute>
               <Settings />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/ticker"
+          element={
+            <AdminRoute>
+              <TickerManagement />
             </AdminRoute>
           }
         />
