@@ -20,6 +20,8 @@ import DisplayManagement from './pages/admin/DisplayManagement';
 import Analytics from './pages/admin/Analytics';
 import Settings from './pages/admin/Settings';
 import TickerManagement from './pages/admin/TickerManagement';
+import ScheduleManagement from './pages/admin/ScheduleManagement';
+import SceneManagement from './pages/admin/SceneManagement';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -230,6 +232,22 @@ function AppRouter() {
           element={
             <AdminRoute>
               <TickerManagement />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/schedules"
+          element={
+            <AdminRoute>
+              <ScheduleManagement />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/scenes"
+          element={
+            <AdminRoute>
+              <SceneManagement />
             </AdminRoute>
           }
         />

@@ -192,6 +192,10 @@ app.use('/api/announcements', announcementsRoutes);
 // Phase 2: File uploads
 app.use('/api/uploads', uploadsRoutes);
 
+// Phase 6: Scene Activation
+const sceneActivationRoutes = require('./routes/sceneActivation');
+app.use('/api', sceneActivationRoutes);
+
 app.use('/api', schedulesRoutes); // Includes /api/schedules/* routes - KEEP THIS LAST
 
 // Serve static frontend in production
