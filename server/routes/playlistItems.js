@@ -10,17 +10,42 @@ const { getDatabase } = require('../database/init');
 
 /**
  * GET /api/playlist-items/:playlistId
- * Get all items for a playlist
+ * Get all items for a playlist (Phase 7: with upsell logic)
  */
 router.get('/:playlistId', authenticateToken, async (req, res) => {
   try {
     const db = getDatabase();
-    const [items] = await db.query(
-      `SELECT * FROM playlist_items 
-       WHERE playlist_id = ? 
-       ORDER BY sort_order ASC, created_at DESC`,
-      [req.params.playlistId]
-    );
+    const { upsellFrequency, kidsMode } = req.query;
+    
+    // Check if upsell logic should be applied
+    if (upsellFrequency && parseInt(upsellFrequency) > 0) {
+      const { getPlaylistWithUpsells } = require('../utils/upsellLogic');
+      const items = await getPlaylistWithUpsells(
+        req.params.playlistId,
+        parseInt(upsellFrequency),
+        kidsMode === 'true'
+      );
+      
+      return res.json({
+        success: true,
+        items,
+        upsellLogic: true,
+        frequency: parseInt(upsellFrequency)
+      });
+    }
+    
+    // Regular query without upsell logic
+    let query = `SELECT * FROM playlist_items WHERE playlist_id = ?`;
+    const params = [req.params.playlistId];
+    
+    // Filter for kids-friendly if kids mode
+    if (kidsMode === 'true') {
+      query += ' AND is_kids_friendly = TRUE';
+    }
+    
+    query += ' ORDER BY sort_order ASC, created_at ASC';
+    
+    const [items] = await db.query(query, params);
 
     res.json({
       success: true,
