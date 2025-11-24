@@ -1,6 +1,6 @@
 {
   "name": "bake-grill-tv-server",
-  "version": "1.0.0",
+  "version": "1.0.7",
   "description": "Backend server for Bake & Grill TV - IPTV streaming platform",
   "main": "server.js",
   "scripts": {
