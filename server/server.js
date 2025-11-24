@@ -139,7 +139,7 @@ app.get('/api/health', async (req, res) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
-      version: '1.0.7',
+      version: '1.0.8',
       database: 'connected',
       stats: {
         users: userCount[0].count,
@@ -151,7 +151,7 @@ app.get('/api/health', async (req, res) => {
     res.status(500).json({
       status: 'error',
       timestamp: new Date().toISOString(),
-      version: '1.0.7',
+      version: '1.0.8',
       database: 'unavailable',
       error: 'Database connection failed'
     });
