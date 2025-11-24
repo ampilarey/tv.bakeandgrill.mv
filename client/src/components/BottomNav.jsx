@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { APP_VERSION } from '../utils/version';
 
 export default function BottomNav() {
   const navigate = useNavigate();
@@ -111,6 +112,7 @@ export default function BottomNav() {
       <div className="border-t border-tv-borderSubtle py-1.5 px-4">
         <p className="text-tv-textMuted text-[9px] text-center leading-tight">
           © {currentYear} <span className="text-tv-accent font-semibold">Bake & Grill</span>
+          <span className="text-tv-textMuted ml-1.5">v{APP_VERSION}</span>
         </p>
       </div>
     </nav>

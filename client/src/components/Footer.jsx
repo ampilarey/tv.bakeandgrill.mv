@@ -1,3 +1,5 @@
+import { APP_VERSION } from '../utils/version';
+
 export default function Footer() {
   const currentYear = new Date().getFullYear();
   
@@ -7,6 +9,7 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-1 md:gap-2">
           <p className="text-tv-textMuted text-[10px] md:text-sm text-center md:text-left leading-tight">
             © {currentYear} <span className="text-tv-accent font-semibold">Bake & Grill</span>
+            <span className="text-tv-textMuted ml-2">v{APP_VERSION}</span>
           </p>
           <p className="text-tv-textMuted text-[9px] md:text-xs leading-tight hidden md:block">
             Powered by Bake & Grill TV Platform
