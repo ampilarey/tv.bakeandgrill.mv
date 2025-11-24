@@ -62,22 +62,55 @@ if (typeof window !== 'undefined') {
           
           console.log('✅ Service worker registered:', registration.scope);
           
+          // Function to check for updates
+          const checkForUpdates = async () => {
+            try {
+              await registration.update();
+              console.log('🔄 Checked for service worker updates');
+            } catch (error) {
+              console.error('❌ Update check error:', error);
+            }
+          };
+          
           // Check for updates immediately
-          await registration.update();
+          await checkForUpdates();
+          
+          // Check for updates every 5 minutes (mobile PWAs need frequent checks)
+          const updateInterval = setInterval(checkForUpdates, 5 * 60 * 1000);
+          
+          // Check for updates when app comes to foreground (mobile)
+          document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+              console.log('📱 App visible - checking for updates...');
+              checkForUpdates();
+            }
+          });
+          
+          // Check for updates when window gains focus
+          window.addEventListener('focus', () => {
+            console.log('👁️ Window focused - checking for updates...');
+            checkForUpdates();
+          });
           
           // Listen for updates
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;
             if (newWorker) {
               newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  console.log('🔄 New service worker installed - reloading...');
-                  newWorker.postMessage({ type: 'SKIP_WAITING' });
-                  // Give user a moment, then reload
-                  setTimeout(() => {
-                    localStorage.setItem('tv_app_version', APP_VERSION);
-                    window.location.reload();
-                  }, 500);
+                if (newWorker.state === 'installed') {
+                  if (navigator.serviceWorker.controller) {
+                    // There's a new service worker available
+                    console.log('🔄 New service worker installed - activating...');
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    // Reload after a short delay
+                    setTimeout(() => {
+                      localStorage.setItem('tv_app_version', APP_VERSION);
+                      window.location.reload();
+                    }, 1000);
+                  } else {
+                    // First time installation
+                    console.log('✅ Service worker installed for first time');
+                  }
                 }
               });
             }
@@ -86,9 +119,13 @@ if (typeof window !== 'undefined') {
           // Also listen for controller change (service worker activated)
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             console.log('🔄 Service worker controller changed - reloading...');
+            clearInterval(updateInterval); // Clean up interval
             localStorage.setItem('tv_app_version', APP_VERSION);
             window.location.reload();
           });
+          
+          // Store registration globally for manual refresh
+          window.swRegistration = registration;
           
         } catch (error) {
           console.error('❌ Service worker registration error:', error);
