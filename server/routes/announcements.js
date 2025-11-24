@@ -5,7 +5,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth');
 const { getDatabase } = require('../database/init');
 
 /**
@@ -41,7 +41,7 @@ router.get('/:displayId', async (req, res) => {
  * POST /api/announcements
  * Create a new announcement (authenticated users only)
  */
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
   try {
     const {
       display_id,
@@ -111,7 +111,7 @@ router.post('/', authenticateToken, async (req, res) => {
  * DELETE /api/announcements/:id
  * Delete an announcement
  */
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const db = getDatabase();
     
@@ -149,7 +149,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
  * DELETE /api/announcements/display/:displayId/clear
  * Clear all announcements for a display
  */
-router.delete('/display/:displayId/clear', authenticateToken, async (req, res) => {
+router.delete('/display/:displayId/clear', verifyToken, async (req, res) => {
   try {
     const db = getDatabase();
     

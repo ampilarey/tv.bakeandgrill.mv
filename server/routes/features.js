@@ -4,7 +4,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { getDatabase } = require('../database/init');
 
 /**
@@ -76,7 +76,7 @@ router.get('/check/:flagName', async (req, res) => {
  * PUT /api/features/:flagName
  * Toggle a feature flag (admin only)
  */
-router.put('/:flagName', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/:flagName', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { flagName } = req.params;
     const { enabled } = req.body;
@@ -122,7 +122,7 @@ router.put('/:flagName', authenticateToken, requireAdmin, async (req, res) => {
  * POST /api/features
  * Create a new feature flag (admin only)
  */
-router.post('/', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { flagName, description, enabled = false } = req.body;
 
@@ -167,7 +167,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
  * DELETE /api/features/:flagName
  * Delete a feature flag (admin only)
  */
-router.delete('/:flagName', authenticateToken, requireAdmin, async (req, res) => {
+router.delete('/:flagName', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { flagName } = req.params;
     const db = getDatabase();

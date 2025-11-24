@@ -5,14 +5,14 @@
  */
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth');
 const { getDatabase } = require('../database/init');
 
 /**
  * POST /api/displays/:displayId/activate-scene/:sceneId
  * Activate a scene on a display
  */
-router.post('/displays/:displayId/activate-scene/:sceneId', authenticateToken, async (req, res) => {
+router.post('/displays/:displayId/activate-scene/:sceneId', verifyToken, async (req, res) => {
   try {
     const { displayId, sceneId } = req.params;
     const db = getDatabase();
@@ -83,7 +83,7 @@ router.post('/displays/:displayId/activate-scene/:sceneId', authenticateToken, a
  * Set display mode (normal, kids, training)
  * Phase 6: Scenes & Modes
  */
-router.post('/displays/:displayId/set-mode', authenticateToken, async (req, res) => {
+router.post('/displays/:displayId/set-mode', verifyToken, async (req, res) => {
   try {
     const { displayId } = req.params;
     const { mode } = req.body; // 'normal', 'kids', 'training'

@@ -5,7 +5,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { getDatabase } = require('../database/init');
 
 /**
@@ -53,7 +53,7 @@ router.get('/', async (req, res) => {
  * POST /api/ticker
  * Create a new ticker message (admin only)
  */
-router.post('/', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/', verifyToken, requireAdmin, async (req, res) => {
   try {
     const {
       text,
@@ -97,7 +97,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
  * PUT /api/ticker/:id
  * Update a ticker message (admin only)
  */
-router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -136,7 +136,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
  * DELETE /api/ticker/:id
  * Delete a ticker message (admin only)
  */
-router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const db = getDatabase();
     const [result] = await db.query(

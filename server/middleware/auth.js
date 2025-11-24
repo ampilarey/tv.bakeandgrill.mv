@@ -76,9 +76,7 @@ function requireRole(roles) {
 /**
  * Require admin role
  */
-function requireAdmin(req, res, next) {
-  return requireRole('admin')(req, res, next);
-}
+const requireAdmin = requireRole('admin');
 
 /**
  * Verify display token from request body

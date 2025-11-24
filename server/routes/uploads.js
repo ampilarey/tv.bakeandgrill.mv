@@ -8,7 +8,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
-const { authenticateToken } = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth');
 const { 
   optimizeImage, 
   createThumbnail, 
@@ -83,7 +83,7 @@ const videoUpload = multer({
  * POST /api/uploads/image
  * Upload and optimize an image
  */
-router.post('/image', authenticateToken, upload.single('image'), async (req, res) => {
+router.post('/image', verifyToken, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -146,7 +146,7 @@ router.post('/image', authenticateToken, upload.single('image'), async (req, res
  * POST /api/uploads/images
  * Upload multiple images
  */
-router.post('/images', authenticateToken, upload.array('images', 10), async (req, res) => {
+router.post('/images', verifyToken, upload.array('images', 10), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
@@ -207,7 +207,7 @@ router.post('/images', authenticateToken, upload.array('images', 10), async (req
  * DELETE /api/uploads/image/:filename
  * Delete an uploaded image
  */
-router.delete('/image/:filename', authenticateToken, async (req, res) => {
+router.delete('/image/:filename', verifyToken, async (req, res) => {
   try {
     const { filename } = req.params;
     
@@ -243,7 +243,7 @@ router.delete('/image/:filename', authenticateToken, async (req, res) => {
  * POST /api/uploads/video
  * Upload a video file
  */
-router.post('/video', authenticateToken, videoUpload.single('video'), async (req, res) => {
+router.post('/video', verifyToken, videoUpload.single('video'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -283,7 +283,7 @@ router.post('/video', authenticateToken, videoUpload.single('video'), async (req
  * DELETE /api/uploads/video/:filename
  * Delete an uploaded video
  */
-router.delete('/video/:filename', authenticateToken, async (req, res) => {
+router.delete('/video/:filename', verifyToken, async (req, res) => {
   try {
     const { filename } = req.params;
     

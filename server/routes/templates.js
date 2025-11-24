@@ -5,14 +5,14 @@
  */
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth');
 const { getDatabase } = require('../database/init');
 
 /**
  * GET /api/templates
  * Get all templates (system + user-created)
  */
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
   try {
     const db = getDatabase();
     const [templates] = await db.query(
@@ -39,7 +39,7 @@ router.get('/', authenticateToken, async (req, res) => {
  * GET /api/templates/:id
  * Get a specific template
  */
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', verifyToken, async (req, res) => {
   try {
     const db = getDatabase();
     const [templates] = await db.query(
@@ -71,7 +71,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
  * POST /api/templates
  * Create a new template
  */
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
   try {
     const {
       name,
@@ -128,7 +128,7 @@ router.post('/', authenticateToken, async (req, res) => {
  * PUT /api/templates/:id
  * Update a template
  */
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -173,7 +173,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
  * DELETE /api/templates/:id
  * Delete a template (user templates only)
  */
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const db = getDatabase();
     const [result] = await db.query(

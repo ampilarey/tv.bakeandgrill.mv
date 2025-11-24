@@ -5,14 +5,14 @@
  */
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth');
 const { getDatabase } = require('../database/init');
 
 /**
  * GET /api/scenes
  * Get all scenes for the current user
  */
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
   try {
     const db = getDatabase();
     const [scenes] = await db.query(
@@ -41,7 +41,7 @@ router.get('/', authenticateToken, async (req, res) => {
  * POST /api/scenes
  * Create a new scene
  */
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
   try {
     const {
       name,
@@ -93,7 +93,7 @@ router.post('/', authenticateToken, async (req, res) => {
  * PUT /api/scenes/:id
  * Update a scene
  */
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -137,7 +137,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
  * DELETE /api/scenes/:id
  * Delete a scene
  */
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const db = getDatabase();
     const [result] = await db.query(
@@ -169,7 +169,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
  * POST /api/scenes/:id/activate
  * Activate a scene on a display
  */
-router.post('/:id/activate', authenticateToken, async (req, res) => {
+router.post('/:id/activate', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { displayId } = req.body;

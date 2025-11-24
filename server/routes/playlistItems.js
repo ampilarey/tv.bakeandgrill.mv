@@ -5,14 +5,14 @@
  */
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth');
 const { getDatabase } = require('../database/init');
 
 /**
  * GET /api/playlist-items/:playlistId
  * Get all items for a playlist (Phase 7: with upsell logic)
  */
-router.get('/:playlistId', authenticateToken, async (req, res) => {
+router.get('/:playlistId', verifyToken, async (req, res) => {
   try {
     const db = getDatabase();
     const { upsellFrequency, kidsMode } = req.query;
@@ -64,7 +64,7 @@ router.get('/:playlistId', authenticateToken, async (req, res) => {
  * POST /api/playlist-items
  * Create a new playlist item
  */
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
   try {
     const {
       playlist_id,
@@ -128,7 +128,7 @@ router.post('/', authenticateToken, async (req, res) => {
  * PUT /api/playlist-items/:id
  * Update a playlist item
  */
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -167,7 +167,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
  * DELETE /api/playlist-items/:id
  * Delete a playlist item
  */
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const db = getDatabase();
     const [result] = await db.query(
