@@ -3,8 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import Hls from 'hls.js';
 import Spinner from '../components/common/Spinner';
-import TickerBar from '../components/TickerBar';
-import AnnouncementOverlay from '../components/AnnouncementOverlay';
+// Temporarily disabled to prevent crashes
+// import TickerBar from '../components/TickerBar';
+// import AnnouncementOverlay from '../components/AnnouncementOverlay';
 
 // Detect if we're on mobile/network access and need to use IP address
 const getDisplayApiBaseURL = () => {
@@ -909,17 +910,17 @@ export default function KioskModePage() {
         </div>
       )}
 
-      {/* Info Ticker - Phase 3 */}
-      {display?.id && (
+      {/* Info Ticker - Phase 3 - TEMPORARILY DISABLED */}
+      {/* {display?.id && (
         <div className="absolute bottom-0 left-0 right-0 z-30">
           <TickerBar displayId={display.id} />
         </div>
-      )}
+      )} */}
 
-      {/* Announcements Overlay - Phase 3 */}
-      {display?.id && (
+      {/* Announcements Overlay - Phase 3 - TEMPORARILY DISABLED */}
+      {/* {display?.id && (
         <AnnouncementOverlay displayId={display.id} />
-      )}
+      )} */}
     </div>
   );
 }
