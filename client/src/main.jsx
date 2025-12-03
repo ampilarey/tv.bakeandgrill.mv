@@ -4,6 +4,10 @@ import { ThemeProvider } from './context/ThemeContext.jsx';
 import App from './App.jsx';
 import './index.css';
 import { APP_VERSION, checkVersion } from './utils/version.js';
+import { setupGlobalErrorHandlers } from './utils/errorTracking.js';
+
+// Setup global error tracking
+setupGlobalErrorHandlers();
 
 // Store version for debugging
 if (typeof window !== 'undefined') {

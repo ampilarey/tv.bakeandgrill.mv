@@ -141,6 +141,7 @@ function PermissionRoute({ children, requiredPermissions = [] }) {
 function AppRouter() {
   return (
     <Router>
+      <ErrorBoundary>
       <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
@@ -257,6 +258,7 @@ function AppRouter() {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
       <BottomNav />
+      </ErrorBoundary>
     </Router>
   );
 }
