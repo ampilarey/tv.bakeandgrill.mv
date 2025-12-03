@@ -49,6 +49,8 @@ function TickerBar({
       }
     } catch (error) {
       console.error('Error fetching ticker messages:', error);
+      // Don't crash - just show no messages
+      setMessages([]);
     } finally {
       setIsLoading(false);
     }

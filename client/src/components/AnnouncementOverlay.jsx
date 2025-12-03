@@ -51,6 +51,8 @@ function AnnouncementOverlay({ displayId, onDismiss }) {
       }
     } catch (error) {
       console.error('Error fetching announcement:', error);
+      // Don't crash - just don't show announcements
+      setAnnouncement(null);
     }
   };
 

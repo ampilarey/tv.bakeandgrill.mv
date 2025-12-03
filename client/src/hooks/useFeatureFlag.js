@@ -39,13 +39,24 @@ export function useFeatureFlag(flagName) {
         }
       } catch (error) {
         console.error('Error checking feature flag:', error);
-        setIsEnabled(false); // Default to disabled on error
+        // Default to disabled on error - don't crash the app
+        setIsEnabled(false);
+        // Set empty cache to prevent repeated failures
+        featureFlagsCache = {};
+        cacheTimestamp = Date.now();
       } finally {
         setIsLoading(false);
       }
     };
 
-    checkFeature();
+    // Wrap in try-catch for safety
+    try {
+      checkFeature();
+    } catch (error) {
+      console.error('useFeatureFlag error:', error);
+      setIsEnabled(false);
+      setIsLoading(false);
+    }
   }, [flagName]);
 
   return isEnabled;
