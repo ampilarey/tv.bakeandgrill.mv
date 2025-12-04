@@ -32,8 +32,8 @@ const scenesRoutes = require('./routes/scenes');
 const templatesRoutes = require('./routes/templates');
 const announcementsRoutes = require('./routes/announcements');
 
-// Phase 2: Uploads
-const uploadsRoutes = require('./routes/uploads');
+// Phase 2: Uploads - TEMPORARILY DISABLED (requires multer/sharp)
+// const uploadsRoutes = require('./routes/uploads');
 
 // Initialize database
 console.log('🚀 Starting Bake & Grill TV Server...');
@@ -192,8 +192,8 @@ app.use('/api/scenes', scenesRoutes);
 app.use('/api/templates', templatesRoutes);
 app.use('/api/announcements', announcementsRoutes);
 
-// Phase 2: File uploads
-app.use('/api/uploads', uploadsRoutes);
+// Phase 2: File uploads - TEMPORARILY DISABLED (missing multer/sharp packages)
+// app.use('/api/uploads', uploadsRoutes);
 
 // Phase 6: Scene Activation
 const sceneActivationRoutes = require('./routes/sceneActivation');
