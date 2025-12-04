@@ -123,6 +123,11 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// Public routes (BEFORE rate limiter)
+// Feature flags must be public for frontend to check
+const featuresRoutes = require('./routes/features');
+app.use('/api/features', featuresRoutes);
+
 app.use('/api/auth', authLimiter);
 app.use('/api/', apiLimiter);
 
@@ -181,8 +186,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/pairing', pairingRoutes); // Must be before catch-all schedules route
 app.use('/api/reconnect', reconnectRoutes);
 
-// Phase 1: Feature flag & new content routes
-app.use('/api/features', featuresRoutes);
+// Phase 1: Content routes (features already mounted above as public route)
 app.use('/api/playlist-items', playlistItemsRoutes);
 app.use('/api/ticker', tickerRoutes);
 app.use('/api/scenes', scenesRoutes);
