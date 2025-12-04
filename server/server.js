@@ -164,7 +164,7 @@ app.get('/api/health', async (req, res) => {
 
 app.get('/api/version', (req, res) => {
   res.json({
-    version: '1.0.0',
+    version: '1.0.8',
     name: 'Bake & Grill TV',
     node: process.version
   });
