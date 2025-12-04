@@ -25,8 +25,7 @@ const notificationsRoutes = require('./routes/notifications');
 const pairingRoutes = require('./routes/pairing');
 const reconnectRoutes = require('./routes/reconnect');
 
-// Phase 1: New feature routes
-const featuresRoutes = require('./routes/features');
+// Phase 1: New content routes (featuresRoutes already declared above)
 const playlistItemsRoutes = require('./routes/playlistItems');
 const tickerRoutes = require('./routes/ticker');
 const scenesRoutes = require('./routes/scenes');
