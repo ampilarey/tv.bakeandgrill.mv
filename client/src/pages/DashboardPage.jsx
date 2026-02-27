@@ -22,6 +22,8 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [editError, setEditError] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null, variant: 'danger' });
+  const [addLoading, setAddLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
   
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -67,6 +69,7 @@ export default function DashboardPage() {
   const handleAddPlaylist = async (e) => {
     e.preventDefault();
     setError('');
+    setAddLoading(true);
     
     try {
       await api.post('/playlists', newPlaylist);
@@ -75,6 +78,8 @@ export default function DashboardPage() {
       fetchPlaylists();
     } catch (error) {
       setError(error.response?.data?.error || 'Failed to add playlist');
+    } finally {
+      setAddLoading(false);
     }
   };
 
@@ -88,6 +93,7 @@ export default function DashboardPage() {
   const handleEditPlaylist = async (e) => {
     e.preventDefault();
     setEditError('');
+    setEditLoading(true);
     
     try {
       await api.put(`/playlists/${selectedPlaylist.id}`, editPlaylist);
@@ -97,6 +103,8 @@ export default function DashboardPage() {
       fetchPlaylists();
     } catch (error) {
       setEditError(error.response?.data?.error || 'Failed to update playlist');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -351,11 +359,11 @@ export default function DashboardPage() {
           />
           
           <div className="flex gap-3 pt-4">
-            <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)} className="flex-1">
+            <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)} className="flex-1" disabled={editLoading}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" className="flex-1">
-              Save Changes
+            <Button type="submit" variant="primary" className="flex-1" disabled={editLoading}>
+              {editLoading ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </form>
@@ -402,11 +410,11 @@ export default function DashboardPage() {
           />
           
           <div className="flex gap-3 pt-4">
-            <Button type="button" variant="secondary" onClick={() => setShowAddModal(false)} className="flex-1">
+            <Button type="button" variant="secondary" onClick={() => setShowAddModal(false)} className="flex-1" disabled={addLoading}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" className="flex-1">
-              Add Playlist
+            <Button type="submit" variant="primary" className="flex-1" disabled={addLoading}>
+              {addLoading ? 'Adding...' : 'Add Playlist'}
             </Button>
           </div>
         </form>

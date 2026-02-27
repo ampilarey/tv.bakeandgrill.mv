@@ -60,8 +60,7 @@ api.interceptors.response.use(
       );
       
       if (!isPublicPage) {
-        // Use hash routing since we're using HashRouter
-        window.location.href = '/#/login';
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);

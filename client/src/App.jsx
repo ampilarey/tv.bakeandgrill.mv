@@ -120,7 +120,7 @@ function PermissionRoute({ children, requiredPermissions = [] }) {
     if (isAuthenticated) {
       checkAccess();
     }
-  }, [user, isAuthenticated]);
+  }, [user, isAuthenticated, requiredPermissions]);
 
   if (loading || hasAccess === null) {
     return (
