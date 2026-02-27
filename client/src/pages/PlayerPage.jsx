@@ -71,6 +71,7 @@ export default function PlayerPage() {
   
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
+  const searchDebounceRef = useRef(null);
   const navigate = useNavigate();
   const { logout } = useAuth();
 
@@ -90,7 +91,9 @@ export default function PlayerPage() {
     };
   }, []);
 
-  const currentChannelIsHLS = currentChannel?.url?.toLowerCase().endsWith('.m3u8') || false;
+  const currentChannelIsHLS = currentChannel?.url
+    ? (() => { try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); } catch { return currentChannel.url.toLowerCase().includes('.m3u8'); } })()
+    : false;
   const videoElementSrc = currentChannel && (!currentChannelIsHLS || isIOS) ? currentChannel.url : undefined;
 
   // One-time device detection logging (only on mount)
@@ -319,7 +322,7 @@ export default function PlayerPage() {
     if (!currentChannel || !videoRef.current) return;
 
     const video = videoRef.current;
-    const isHLS = currentChannel.url.endsWith('.m3u8');
+    const isHLS = (() => { try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); } catch { return currentChannel.url.toLowerCase().includes('.m3u8'); } })();
     
     // 🚨 CRITICAL: Use iOS detection from top level (already calculated)
     // Re-check iOS detection to be absolutely sure
@@ -1738,7 +1741,11 @@ export default function PlayerPage() {
   };
 
   const handleSearch = (value) => {
-    setSearchQuery(value);
+    // Update search query with 250ms debounce for better performance with large channel lists
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setSearchQuery(value);
+    }, 250);
     
     // Save to search history if not empty and different from last search
     if (value.trim() && value !== searchHistory[0]) {

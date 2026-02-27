@@ -14,18 +14,29 @@ router.use(verifyToken);
  */
 router.get('/', asyncHandler(async (req, res) => {
   const db = getDatabase();
-  const { limit = 50, offset = 0 } = req.query;
+  const { limit = 50, offset = 0, playlistId } = req.query;
   
   // Validate and sanitize limit and offset
   const safeLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 500); // Max 500
   const safeOffset = Math.max(parseInt(offset) || 0, 0);
   
+  const params = [req.user.id];
+  let whereClause = 'user_id = ?';
+
+  if (playlistId) {
+    whereClause += ' AND playlist_id = ?';
+    params.push(parseInt(playlistId));
+  }
+
   const [history] = await db.query(
-    'SELECT * FROM watch_history WHERE user_id = ? ORDER BY watched_at DESC LIMIT ? OFFSET ?',
-    [req.user.id, safeLimit, safeOffset]
+    `SELECT * FROM watch_history WHERE ${whereClause} ORDER BY watched_at DESC LIMIT ? OFFSET ?`,
+    [...params, safeLimit, safeOffset]
   );
   
-  const [countResult] = await db.query('SELECT COUNT(*) as count FROM watch_history WHERE user_id = ?', [req.user.id]);
+  const [countResult] = await db.query(
+    `SELECT COUNT(*) as count FROM watch_history WHERE ${whereClause}`,
+    params
+  );
   
   res.json({
     success: true,

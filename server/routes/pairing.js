@@ -244,7 +244,7 @@ router.get('/locations', asyncHandler(async (req, res) => {
   const db = getDatabase();
   
   const [displays] = await db.query(
-    'SELECT id, name, location, location_pin FROM displays WHERE is_active = 1 ORDER BY name'
+    'SELECT id, name, location FROM displays WHERE is_active = 1 ORDER BY name'
   );
 
   res.json({

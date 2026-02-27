@@ -41,6 +41,21 @@ router.get('/', asyncHandler(async (req, res) => {
   }
   
   const playlist = playlists[0];
+
+  // Verify user has access to this playlist (admin bypasses)
+  if (req.user.role !== 'admin') {
+    const [access] = await db.query(
+      'SELECT 1 FROM user_assigned_playlists WHERE user_id = ? AND playlist_id = ?',
+      [req.user.id, playlistId]
+    );
+    if (access.length === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have access to this playlist',
+        code: 'PLAYLIST_ACCESS_DENIED'
+      });
+    }
+  }
   
   try {
     // Check cache first

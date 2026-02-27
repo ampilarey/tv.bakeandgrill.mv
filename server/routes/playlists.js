@@ -68,11 +68,14 @@ router.post('/',
   const { name, m3u_url, description } = req.body;
   const db = getDatabase();
   
-  // Check max playlists limit (optional)
+  // Check max playlists limit per user (optional)
   const [settings] = await db.query('SELECT setting_value FROM app_settings WHERE setting_key = ?', ['max_playlists_per_user']);
   const maxPlaylists = settings[0] ? parseInt(settings[0].setting_value) : 10;
   
-  const [countResult] = await db.query('SELECT COUNT(*) as count FROM playlists');
+  const [countResult] = await db.query(
+    'SELECT COUNT(*) as count FROM user_assigned_playlists WHERE user_id = ?',
+    [req.user.id]
+  );
   
   if (countResult[0].count >= maxPlaylists && req.user.role !== 'admin') {
     return res.status(400).json({
