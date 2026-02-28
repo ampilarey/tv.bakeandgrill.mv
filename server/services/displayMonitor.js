@@ -56,6 +56,10 @@ async function runCheck() {
         `📺 ${label} is offline`,
         `Last heartbeat: ${ago}. Display may need attention.`
       );
+      db.query(
+        'INSERT INTO display_uptime_events (display_id, event_type) VALUES (?, ?)',
+        [d.id, 'offline']
+      ).catch(() => {});
     } else if (!isOffline && wasOffline) {
       offlineSet.delete(d.id);
       await createNotification(db, adminIds,
@@ -63,6 +67,10 @@ async function runCheck() {
         `✅ ${label} is back online`,
         'Display reconnected and is now sending heartbeats.'
       );
+      db.query(
+        'INSERT INTO display_uptime_events (display_id, event_type) VALUES (?, ?)',
+        [d.id, 'online']
+      ).catch(() => {});
     }
   }
 }

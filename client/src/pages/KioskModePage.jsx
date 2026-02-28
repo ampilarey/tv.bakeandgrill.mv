@@ -91,6 +91,8 @@ export default function KioskModePage() {
   const startTimeRef        = useRef(Date.now());
   const normalPlaylistRef   = useRef(null);
   const rebootTimerRef      = useRef(null);
+  const failoverTimerRef    = useRef(null);
+  const failoverActiveRef   = useRef(false);
 
   // ── Kiosk lockdown ──────────────────────────────────────────────────────
 
@@ -332,11 +334,7 @@ export default function KioskModePage() {
           } else if (cmd.command_type === 'refresh_playlist') {
             verifyDisplay();
           } else if (cmd.command_type === 'refresh_overlays') {
-            // Immediately re-fetch overlays (used by broadcasts)
-            if (overlayFetchRef.current) {
-              clearInterval(overlayFetchRef.current);
-            }
-            // fetch inline
+            if (overlayFetchRef.current) clearInterval(overlayFetchRef.current);
             try {
               const { data } = await displayApi.get(`/overlays/for-display?token=${displayToken}`);
               if (data.success) setOverlayData(data);
@@ -344,6 +342,30 @@ export default function KioskModePage() {
             overlayFetchRef.current = setInterval(async () => {
               try { const { data } = await displayApi.get(`/overlays/for-display?token=${displayToken}`); if (data.success) setOverlayData(data); } catch { /* ignore */ }
             }, 5 * 60 * 1000);
+          } else if (cmd.command_type === 'screenshot') {
+            // Capture current screen frame and upload
+            try {
+              let imageData = null;
+              if (videoRef.current && videoRef.current.readyState >= 2) {
+                const canvas = document.createElement('canvas');
+                canvas.width  = videoRef.current.videoWidth  || 1280;
+                canvas.height = videoRef.current.videoHeight || 720;
+                canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
+                imageData = canvas.toDataURL('image/jpeg', 0.6);
+              } else {
+                // Slideshow — grab first visible img
+                const img = document.querySelector('img[data-slide]');
+                if (img && img.complete) {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = img.naturalWidth || 1280; canvas.height = img.naturalHeight || 720;
+                  canvas.getContext('2d').drawImage(img, 0, 0);
+                  imageData = canvas.toDataURL('image/jpeg', 0.6);
+                }
+              }
+              if (imageData) {
+                await displayApi.post('/displays/screenshot', { token: displayToken, imageData });
+              }
+            } catch { /* ignore screenshot errors */ }
           }
 
           await displayApi.patch(`/displays/commands/${cmd.id}/execute`).catch(() => {});
@@ -435,6 +457,36 @@ export default function KioskModePage() {
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     };
   }, [currentChannel]);
+
+  // ── Auto-failover: switch to media playlist when stream fails too long ───
+
+  useEffect(() => {
+    const failoverId    = display?.failoverPlaylistId;
+    const failoverMins  = display?.failoverAfterMinutes ?? 5;
+    const isStreamMode  = display?.displayType !== 'media';
+
+    // Only arm failover for stream mode with a fallback playlist configured
+    if (!failoverId || !isStreamMode || failoverActiveRef.current) return;
+
+    // If video is playing, disarm any pending failover
+    const videoEl = videoRef.current;
+    if (videoEl && !videoEl.paused && !videoEl.ended && videoEl.readyState >= 3) {
+      clearTimeout(failoverTimerRef.current);
+      return;
+    }
+
+    // Arm: if we're still not playing after failoverMins, switch to media slideshow
+    clearTimeout(failoverTimerRef.current);
+    failoverTimerRef.current = setTimeout(() => {
+      if (!videoRef.current || videoRef.current.paused || videoRef.current.readyState < 3) {
+        console.log('[Kiosk] Stream failing — switching to failover playlist', failoverId);
+        failoverActiveRef.current = true;
+        setDisplay(prev => prev ? { ...prev, displayType: 'media', mediaPlaylistId: failoverId } : prev);
+      }
+    }, failoverMins * 60_000);
+
+    return () => clearTimeout(failoverTimerRef.current);
+  }, [display, currentChannel]);
 
   // ── Start overlay (tap to enter fullscreen) ──────────────────────────────
 

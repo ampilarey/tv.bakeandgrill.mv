@@ -1,4 +1,6 @@
 const express = require('express');
+const path    = require('path');
+const fs      = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const rateLimit = require('express-rate-limit');
 const { getDatabase } = require('../database/init');
@@ -122,12 +124,14 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
       showBrandOverlay:  display.show_brand_overlay !== 0,
       overlayMode:       display.overlay_mode       || 'none',
       overlaySafeArea:   display.overlay_safe_area  || 'standard',
-      showWifiQr:        display.show_wifi_qr === 1,
-      wifiSsid:          display.wifi_ssid          || null,
-      wifiPassword:      display.wifi_password      || null,
-      wifiSecurity:      display.wifi_security      || 'WPA',
-      wifiQrPosition:    display.wifi_qr_position   || 'bottom-right',
-      autoRebootTime:    display.auto_reboot_time   || null,
+      showWifiQr:           display.show_wifi_qr === 1,
+      wifiSsid:             display.wifi_ssid          || null,
+      wifiPassword:         display.wifi_password      || null,
+      wifiSecurity:         display.wifi_security      || 'WPA',
+      wifiQrPosition:       display.wifi_qr_position   || 'bottom-right',
+      autoRebootTime:       display.auto_reboot_time   || null,
+      failoverPlaylistId:   display.failover_playlist_id   || null,
+      failoverAfterMinutes: display.failover_after_minutes ?? 5,
     },
     playlist,
     channels
@@ -175,6 +179,49 @@ router.post('/heartbeat', displayLimiter, verifyDisplayToken, asyncHandler(async
   );
 
   res.json({ success: true, message: 'Heartbeat updated' });
+}));
+
+/**
+ * POST /api/displays/screenshot
+ * Body: { token, imageData }  imageData = base64 JPEG from kiosk canvas capture
+ */
+router.post('/screenshot', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
+  const { token, imageData } = req.body;
+  if (!imageData) return res.status(400).json({ success: false, error: 'No imageData' });
+
+  const db = getDatabase();
+  const [rows] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);
+  if (!rows.length) return res.status(404).json({ success: false });
+
+  const displayId = rows[0].id;
+  const screenshotsDir = path.join(__dirname, '../uploads/screenshots');
+  fs.mkdirSync(screenshotsDir, { recursive: true });
+
+  const filename  = `display-${displayId}.jpg`;
+  const filepath  = path.join(screenshotsDir, filename);
+  const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+  fs.writeFileSync(filepath, Buffer.from(base64Data, 'base64'));
+
+  const url = `/uploads/screenshots/${filename}`;
+  await db.query(
+    'UPDATE displays SET last_screenshot_url = ?, last_screenshot_at = NOW() WHERE id = ?',
+    [url, displayId]
+  );
+  res.json({ success: true, url });
+}));
+
+/**
+ * GET /api/displays/:id/screenshot
+ * Returns latest screenshot info for a display
+ */
+router.get('/:id/screenshot', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const [rows] = await db.query(
+    'SELECT last_screenshot_url, last_screenshot_at FROM displays WHERE id = ?',
+    [req.params.id]
+  );
+  if (!rows.length) return res.status(404).json({ success: false });
+  res.json({ success: true, url: rows[0].last_screenshot_url, taken_at: rows[0].last_screenshot_at });
 }));
 
 /**
@@ -413,6 +460,9 @@ router.put('/:id', asyncHandler(async (req, res) => {
   if (req.body.wifi_qr_position !== undefined) { updates.push('wifi_qr_position = ?'); params.push(req.body.wifi_qr_position || 'bottom-right'); }
   // Auto-reboot
   if (req.body.auto_reboot_time !== undefined) { updates.push('auto_reboot_time = ?'); params.push(req.body.auto_reboot_time || null); }
+  // Auto-failover
+  if (req.body.failover_playlist_id   !== undefined) { updates.push('failover_playlist_id = ?');   params.push(req.body.failover_playlist_id   || null); }
+  if (req.body.failover_after_minutes !== undefined) { updates.push('failover_after_minutes = ?'); params.push(req.body.failover_after_minutes ?? 5); }
   if (is_active !== undefined) {
     updates.push('is_active = ?');
     params.push(is_active ? 1 : 0);

@@ -236,6 +236,22 @@ export default function AdminDashboard() {
               Emergency Override
             </Button>
 
+            {/* Analytics */}
+            <Button variant="primary" size="lg" onClick={() => navigate('/admin/analytics')} className="justify-start">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Analytics
+            </Button>
+
+            {/* Overlay Scheduler */}
+            <Button variant="primary" size="lg" onClick={() => navigate('/admin/overlay-schedule')} className="justify-start">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Overlay Scheduler
+            </Button>
+
             {/* Test Checklist */}
             <Button variant="primary" size="lg" onClick={() => navigate('/admin/test-checklist')} className="justify-start">
               <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

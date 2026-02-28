@@ -17,9 +17,19 @@ function DurationBadge({ seconds }) {
   return <span className="text-xs text-tv-textMuted">{m > 0 ? `${m}m ${s}s` : `${s}s`}</span>;
 }
 
-function ItemRow({ item, onUp, onDown, onRemove, onEdit, isFirst, isLast }) {
+function ItemRow({ item, idx, dragFrom, onDragStart, onDragOver, onDrop, onRemove, onEdit }) {
+  const isDragging = dragFrom === idx;
   return (
-    <div className="flex items-center gap-3 px-3 py-2 bg-tv-bgSoft rounded-lg border border-tv-borderSubtle">
+    <div
+      draggable
+      onDragStart={() => onDragStart(idx)}
+      onDragOver={e => { e.preventDefault(); onDragOver(idx); }}
+      onDrop={() => onDrop(idx)}
+      className={`flex items-center gap-3 px-3 py-2 bg-tv-bgSoft rounded-lg border transition-all cursor-grab active:cursor-grabbing select-none
+        ${isDragging ? 'opacity-40 border-tv-accent' : 'border-tv-borderSubtle hover:border-tv-accent/40'}`}
+    >
+      {/* Drag handle */}
+      <div className="text-tv-textMuted/50 shrink-0 text-base leading-none">⋮⋮</div>
       {/* Thumbnail */}
       <div className="w-16 h-10 bg-black rounded overflow-hidden flex-shrink-0">
         {item.type === 'video' ? (
@@ -47,8 +57,6 @@ function ItemRow({ item, onUp, onDown, onRemove, onEdit, isFirst, isLast }) {
             <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
           </svg>
         </button>
-        <button onClick={onUp} disabled={isFirst} className="text-tv-textMuted hover:text-tv-accent p-1 rounded disabled:opacity-30">↑</button>
-        <button onClick={onDown} disabled={isLast} className="text-tv-textMuted hover:text-tv-accent p-1 rounded disabled:opacity-30">↓</button>
         <button onClick={() => onRemove(item.id)} className="text-tv-textMuted hover:text-red-400 p-1 rounded" title="Remove">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -93,6 +101,9 @@ export default function MediaPlaylistManagement() {
   // Preview modal
   const [showPreview, setShowPreview] = useState(false);
   const [previewIdx, setPreviewIdx]   = useState(0);
+
+  // Drag-and-drop state
+  const [dragFrom, setDragFrom] = useState(null);
 
   const [err, setErr] = useState('');
 
@@ -180,13 +191,20 @@ export default function MediaPlaylistManagement() {
   };
 
   const moveItem = async (fromIdx, toIdx) => {
-    if (toIdx < 0 || toIdx >= items.length) return;
+    if (toIdx < 0 || toIdx >= items.length || fromIdx === toIdx) return;
     const next = [...items];
     const [moved] = next.splice(fromIdx, 1);
     next.splice(toIdx, 0, moved);
     const order = next.map((it, i) => ({ id: it.id, sort_order: i }));
     setItems(next.map((it, i) => ({ ...it, sort_order: i })));
     await api.post(`/media-playlists/${activePlaylist.id}/items/reorder`, { order }).catch(() => {});
+  };
+
+  const handleDragStart = (idx) => setDragFrom(idx);
+  const handleDragOver  = (_idx) => {}; // handled by CSS class on dragFrom
+  const handleDrop      = async (toIdx) => {
+    if (dragFrom !== null) await moveItem(dragFrom, toIdx);
+    setDragFrom(null);
   };
 
   const saveItemEdit = async () => {
@@ -286,15 +304,17 @@ export default function MediaPlaylistManagement() {
                       <p>No items yet. Click "Add Media" to get started.</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2" onDragEnd={() => setDragFrom(null)}>
+                      <p className="text-xs text-tv-textMuted mb-1">Drag ⋮⋮ to reorder</p>
                       {items.map((item, i) => (
                         <ItemRow
                           key={item.id}
                           item={item}
-                          isFirst={i === 0}
-                          isLast={i === items.length - 1}
-                          onUp={() => moveItem(i, i - 1)}
-                          onDown={() => moveItem(i, i + 1)}
+                          idx={i}
+                          dragFrom={dragFrom}
+                          onDragStart={handleDragStart}
+                          onDragOver={handleDragOver}
+                          onDrop={handleDrop}
                           onRemove={removeItem}
                           onEdit={it => { setEditItem(it); setEditDur(it.image_duration_seconds || 8); setEditFull(!!it.play_video_full); }}
                         />

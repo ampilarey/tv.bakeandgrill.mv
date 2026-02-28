@@ -212,6 +212,8 @@ export default function DisplayManagement() {
       wifi_security:       display.wifi_security    || 'WPA',
       wifi_qr_position:    display.wifi_qr_position || 'bottom-right',
       auto_reboot_time:    display.auto_reboot_time || '',
+      failover_playlist_id:   display.failover_playlist_id   || '',
+      failover_after_minutes: display.failover_after_minutes ?? 5,
     });
     fetchMediaPlaylists();
     fetchZones();
@@ -243,7 +245,9 @@ export default function DisplayManagement() {
         wifi_password:     settingsForm.wifi_password     || null,
         wifi_security:     settingsForm.wifi_security     || 'WPA',
         wifi_qr_position:  settingsForm.wifi_qr_position  || 'bottom-right',
-        auto_reboot_time:  settingsForm.auto_reboot_time  || null,
+        auto_reboot_time:        settingsForm.auto_reboot_time        || null,
+        failover_playlist_id:    settingsForm.failover_playlist_id    || null,
+        failover_after_minutes:  Number(settingsForm.failover_after_minutes) || 5,
       };
       await api.put(`/displays/${selectedDisplay.id}`, body);
       setShowSettingsModal(false);
@@ -1616,6 +1620,27 @@ export default function DisplayManagement() {
             <p className="text-xs text-tv-textMuted mb-2">Display silently reloads at this time daily (clears memory leaks). Leave empty to disable.</p>
             <input type="time" className="rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={settingsForm.auto_reboot_time || ''} onChange={e => setSettingsForm(f => ({...f, auto_reboot_time: e.target.value || null}))} />
             {settingsForm.auto_reboot_time && <p className="text-xs text-yellow-400 mt-1">⚠ Display will briefly go dark at {settingsForm.auto_reboot_time} daily</p>}
+          </section>
+
+          {/* Auto-failover */}
+          <section>
+            <h4 className="text-xs font-semibold text-tv-textMuted uppercase tracking-wider mb-2">Auto-Failover</h4>
+            <p className="text-xs text-tv-textMuted mb-2">If the stream fails for longer than the timeout, switch to this media playlist automatically.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-tv-textMuted mb-1">Failover Playlist</label>
+                <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={settingsForm.failover_playlist_id || ''} onChange={e => setSettingsForm(f => ({...f, failover_playlist_id: e.target.value || null}))}>
+                  <option value="">Disabled</option>
+                  {mediaPlaylists.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              {settingsForm.failover_playlist_id && (
+                <div>
+                  <label className="block text-xs font-medium text-tv-textMuted mb-1">Trigger after (minutes)</label>
+                  <input type="number" min={1} max={60} className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={settingsForm.failover_after_minutes} onChange={e => setSettingsForm(f => ({...f, failover_after_minutes: e.target.value}))} />
+                </div>
+              )}
+            </div>
           </section>
 
           <div className="flex gap-3 justify-end pt-2 border-t border-tv-borderSubtle">

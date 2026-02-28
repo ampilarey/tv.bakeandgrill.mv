@@ -23,6 +23,8 @@ import TickerManagement from './pages/admin/TickerManagement';
 import ScheduleManagement from './pages/admin/ScheduleManagement';
 import SceneManagement from './pages/admin/SceneManagement';
 import TestChecklist from './pages/admin/TestChecklist';
+import DisplayAnalytics from './pages/admin/DisplayAnalytics';
+import OverlaySchedule from './pages/admin/OverlaySchedule';
 import ZoneManagement from './pages/admin/ZoneManagement';
 import MediaLibrary from './pages/admin/MediaLibrary';
 import MediaPlaylistManagement from './pages/admin/MediaPlaylistManagement';
@@ -267,6 +269,22 @@ function AppRouter() {
           element={
             <AdminRoute>
               <TestChecklist />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/analytics"
+          element={
+            <AdminRoute>
+              <DisplayAnalytics />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/overlay-schedule"
+          element={
+            <AdminRoute>
+              <OverlaySchedule />
             </AdminRoute>
           }
         />

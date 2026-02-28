@@ -93,9 +93,11 @@ export default function MonitoringDashboard() {
   const [displays, setDisplays]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
-  const [selected, setSelected]   = useState(null);  // display quick-action panel
-  const [cmdResult, setCmdResult] = useState('');
+  const [selected, setSelected]     = useState(null);
+  const [cmdResult, setCmdResult]   = useState('');
   const [cmdSending, setCmdSending] = useState(false);
+  const [screenshot, setScreenshot] = useState(null); // { url, taken_at } | null
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
   const intervalRef = useRef(null);
 
   const fetchDisplays = async () => {
@@ -212,7 +214,7 @@ export default function MonitoringDashboard() {
       <Footer />
 
       {/* Quick-action drawer */}
-      <Modal isOpen={!!selected} onClose={() => { setSelected(null); setCmdResult(''); }} title={`Quick Actions — ${selected?.name}`}>
+      <Modal isOpen={!!selected} onClose={() => { setSelected(null); setCmdResult(''); setScreenshot(null); }} title={`Quick Actions — ${selected?.name}`}>
         {selected && (
           <div className="space-y-4">
             {/* Status */}
@@ -245,6 +247,46 @@ export default function MonitoringDashboard() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Screenshot */}
+            <div>
+              <p className="text-xs text-tv-textMuted font-medium uppercase tracking-wider mb-2">Screenshot</p>
+              <button
+                onClick={async () => {
+                  setScreenshotLoading(true);
+                  setScreenshot(null);
+                  // Send screenshot command to TV
+                  await sendCmd('screenshot');
+                  // Poll for result (TV needs ~3s to capture + upload)
+                  setTimeout(async () => {
+                    try {
+                      const { data } = await api.get(`/displays/${selected.id}/screenshot`);
+                      if (data.success && data.url) setScreenshot(data);
+                    } catch { /* ignore */ }
+                    setScreenshotLoading(false);
+                  }, 4000);
+                }}
+                disabled={cmdSending || screenshotLoading || !isOnline(selected)}
+                className="w-full bg-tv-bgSoft border border-tv-borderSubtle text-tv-text text-sm px-3 py-2 rounded-lg hover:border-tv-accent/50 disabled:opacity-50 transition-colors"
+              >
+                {screenshotLoading ? '⏳ Capturing…' : '📷 Capture Screenshot'}
+              </button>
+              {screenshot?.url && (
+                <div className="mt-2 rounded-lg overflow-hidden border border-tv-borderSubtle">
+                  <img
+                    src={screenshot.url}
+                    alt="Screenshot"
+                    className="w-full object-contain max-h-48 bg-black"
+                    onError={e => { e.target.style.display = 'none'; }}
+                  />
+                  <p className="text-xs text-tv-textMuted text-center py-1">
+                    Taken {new Date(screenshot.taken_at).toLocaleTimeString()}
+                    {' · '}
+                    <a href={screenshot.url} target="_blank" rel="noreferrer" className="text-tv-accent underline">Open full</a>
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Quick links */}
