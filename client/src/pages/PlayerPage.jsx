@@ -784,8 +784,10 @@ export default function PlayerPage() {
       };
       
       const handleLoadStart = () => {
+        // Don't set videoLoading here — we already set it when the channel was selected.
+        // Re-setting it on loadstart causes the spinner to reappear mid-playback when HLS
+        // internally reloads (quality switches, retries, etc.).
         console.log('Video load started', { readyState: video.readyState, networkState: video.networkState });
-        setVideoLoading(true);
       };
       
       const handleLoadedMetadata = () => {
