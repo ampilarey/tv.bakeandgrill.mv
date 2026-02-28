@@ -349,6 +349,12 @@ export default function PlayerPage() {
       return;
     }
 
+    // Clear any buffering timer from the previous channel before starting a new one
+    if (bufferingTimerRef.current) {
+      clearTimeout(bufferingTimerRef.current);
+      bufferingTimerRef.current = null;
+    }
+
     const video = videoRef.current;
     const isHLS = (() => { try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); } catch { return currentChannel.url?.toLowerCase().includes('.m3u8') ?? false; } })();
     
@@ -835,12 +841,13 @@ export default function PlayerPage() {
       
       const handleWaiting = () => {
         console.log('Video waiting for data');
-        // Debounce: only show loading spinner after 1.5s of sustained buffering
-        // This prevents the spinner from flashing on every HLS segment load
+        // Debounce: only show loading spinner after 3s of sustained buffering.
+        // Normal HLS segment fetches resolve in < 3s; only genuinely stalled
+        // streams will trigger the spinner.
         if (!bufferingTimerRef.current) {
           bufferingTimerRef.current = setTimeout(() => {
             setVideoLoading(true);
-          }, 1500);
+          }, 3000);
         }
       };
       
@@ -861,7 +868,7 @@ export default function PlayerPage() {
         if (!bufferingTimerRef.current) {
           bufferingTimerRef.current = setTimeout(() => {
             setVideoLoading(true);
-          }, 1500);
+          }, 3000);
         }
       };
       
