@@ -1,12 +1,13 @@
 # Root .gitignore for Bake & Grill TV
 
-# Environment variables (CRITICAL - Never commit!)
+# Environment variables & secrets (CRITICAL - Never commit!)
 .env
 .env.local
 .env.production
 .env.*.local
 server/.env
 server/.env.local
+ADMIN-PASSWORD.md
 
 # Dependencies
 node_modules/

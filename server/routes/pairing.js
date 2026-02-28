@@ -8,24 +8,40 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 
-// Store active PINs in memory (with expiration)
-const activePins = new Map(); // pin -> { displayId, expiresAt }
-const activeQRs = new Map(); // qrToken -> { displayData, expiresAt }
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-// Clean up expired PINs every minute
-setInterval(() => {
-  const now = Date.now();
-  for (const [pin, data] of activePins.entries()) {
-    if (data.expiresAt < now) {
-      activePins.delete(pin);
-    }
-  }
-  for (const [qr, data] of activeQRs.entries()) {
-    if (data.expiresAt < now) {
-      activeQRs.delete(qr);
-    }
-  }
-}, 60000);
+async function createSession(db, type, token, displayId = null, ttlMs = 5 * 60 * 1000) {
+  const expiresAt = new Date(Date.now() + ttlMs);
+  await db.query(
+    `INSERT INTO pairing_sessions (type, token, display_id, expires_at)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE display_id = VALUES(display_id), expires_at = VALUES(expires_at)`,
+    [type, token, displayId, expiresAt]
+  );
+}
+
+async function getSession(db, token) {
+  const [rows] = await db.query(
+    `SELECT * FROM pairing_sessions WHERE token = ? AND expires_at > NOW()`,
+    [token]
+  );
+  return rows[0] || null;
+}
+
+async function deleteSession(db, token) {
+  await db.query('DELETE FROM pairing_sessions WHERE token = ?', [token]);
+}
+
+// Purge expired sessions (called lazily on each request — cheap at small scale)
+async function purgeExpired(db) {
+  await db.query('DELETE FROM pairing_sessions WHERE expires_at <= NOW()').catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
+// Routes
+// ---------------------------------------------------------------------------
 
 /**
  * POST /api/pairing/request-pin
@@ -33,23 +49,19 @@ setInterval(() => {
  */
 router.post('/request-pin', asyncHandler(async (req, res) => {
   logger.debug('🔢 PIN request received');
-  
-  // Generate 6-digit PIN
+
+  const db = getDatabase();
+  await purgeExpired(db);
+
   const pin = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = Date.now() + (5 * 60 * 1000); // 5 minutes
+  await createSession(db, 'pin', pin, null, 5 * 60 * 1000);
 
-  activePins.set(pin, {
-    displayId: null,
-    requestedAt: Date.now(),
-    expiresAt
-  });
-
-  logger.debug('✅ Generated PIN:', pin);
+  logger.debug('✅ Generated PIN (stored in DB)');
 
   res.json({
     success: true,
     pin,
-    expiresIn: 300 // seconds
+    expiresIn: 300
   });
 }));
 
@@ -59,10 +71,11 @@ router.post('/request-pin', asyncHandler(async (req, res) => {
  */
 router.post('/check-pin', asyncHandler(async (req, res) => {
   const { pin } = req.body;
+  const db = getDatabase();
 
-  const pinData = activePins.get(pin);
-  
-  if (!pinData) {
+  const session = await getSession(db, pin);
+
+  if (!session) {
     return res.json({
       success: false,
       paired: false,
@@ -70,17 +83,11 @@ router.post('/check-pin', asyncHandler(async (req, res) => {
     });
   }
 
-  if (pinData.displayId) {
-    // PIN has been paired!
-    const db = getDatabase();
-    const [displays] = await db.query(
-      'SELECT * FROM displays WHERE id = ?',
-      [pinData.displayId]
-    );
+  if (session.display_id) {
+    const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [session.display_id]);
 
     if (displays.length > 0) {
-      // Remove PIN from active list
-      activePins.delete(pin);
+      await deleteSession(db, pin);
 
       return res.json({
         success: true,
@@ -105,22 +112,20 @@ router.post('/admin-pair-pin', verifyToken, checkPermission('can_manage_displays
   const db = getDatabase();
   const { pin, name, location, playlist_id } = req.body;
 
-  // Validate PIN exists and not expired
-  const pinData = activePins.get(pin);
-  
-  if (!pinData) {
+  const session = await getSession(db, pin);
+
+  if (!session) {
     return res.status(400).json({
       success: false,
       error: 'Invalid or expired PIN'
     });
   }
 
-  // Create display user (for tracking history/favorites)
   const bcrypt = require('bcrypt');
   const displayEmail = `display_${Date.now()}@internal.system`;
   const displayPassword = crypto.randomBytes(32).toString('hex');
   const passwordHash = await bcrypt.hash(displayPassword, 10);
-  
+
   logger.debug('🔧 Creating display user with role "display"...');
   let userResult;
   try {
@@ -132,16 +137,12 @@ router.post('/admin-pair-pin', verifyToken, checkPermission('can_manage_displays
     logger.debug('✅ Display user created successfully');
   } catch (error) {
     logger.error('❌ Error creating display user:', error.message);
-    logger.error('❌ Error code:', error.code);
-    logger.error('❌ SQL state:', error.sqlState);
     throw error;
   }
-  
-  const displayUserId = userResult.insertId;
 
-  // Create display
+  const displayUserId = userResult.insertId;
   const token = crypto.randomBytes(32).toString('hex');
-  const locationPin = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit
+  const locationPin = Math.floor(1000 + Math.random() * 9000).toString();
 
   const [result] = await db.query(
     `INSERT INTO displays (name, location, token, playlist_id, location_pin, created_by, user_id)
@@ -149,8 +150,11 @@ router.post('/admin-pair-pin', verifyToken, checkPermission('can_manage_displays
     [name, location || null, token, playlist_id, locationPin, req.user.id, displayUserId]
   );
 
-  // Update PIN data with display ID
-  pinData.displayId = result.insertId;
+  // Mark session as paired
+  await db.query(
+    'UPDATE pairing_sessions SET display_id = ? WHERE token = ?',
+    [result.insertId, pin]
+  );
 
   const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [result.insertId]);
 
@@ -169,7 +173,6 @@ router.post('/generate-qr', verifyToken, checkPermission('can_manage_displays'),
   const db = getDatabase();
   const { name, location, playlist_id } = req.body;
 
-  // Create display first
   const token = crypto.randomBytes(32).toString('hex');
   const qrToken = crypto.randomBytes(16).toString('hex');
   const locationPin = Math.floor(1000 + Math.random() * 9000).toString();
@@ -180,12 +183,7 @@ router.post('/generate-qr', verifyToken, checkPermission('can_manage_displays'),
     [name, location || null, token, playlist_id, locationPin, req.user.id]
   );
 
-  // Store QR token
-  activeQRs.set(qrToken, {
-    displayId: result.insertId,
-    token,
-    expiresAt: Date.now() + (10 * 60 * 1000) // 10 minutes
-  });
+  await createSession(db, 'qr', qrToken, result.insertId, 10 * 60 * 1000);
 
   const baseUrl = process.env.CLIENT_URL || 'http://localhost:4173';
   const qrUrl = `${baseUrl}/pair?qr=${qrToken}`;
@@ -204,21 +202,18 @@ router.post('/generate-qr', verifyToken, checkPermission('can_manage_displays'),
  */
 router.post('/pair-with-qr', asyncHandler(async (req, res) => {
   const { qr_token } = req.body;
+  const db = getDatabase();
 
-  const qrData = activeQRs.get(qr_token);
-  
-  if (!qrData) {
+  const session = await getSession(db, qr_token);
+
+  if (!session) {
     return res.status(400).json({
       success: false,
       error: 'Invalid or expired QR code'
     });
   }
 
-  const db = getDatabase();
-  const [displays] = await db.query(
-    'SELECT * FROM displays WHERE id = ?',
-    [qrData.displayId]
-  );
+  const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [session.display_id]);
 
   if (displays.length === 0) {
     return res.status(404).json({
@@ -227,8 +222,7 @@ router.post('/pair-with-qr', asyncHandler(async (req, res) => {
     });
   }
 
-  // Remove QR from active list
-  activeQRs.delete(qr_token);
+  await deleteSession(db, qr_token);
 
   res.json({
     success: true,
@@ -242,7 +236,7 @@ router.post('/pair-with-qr', asyncHandler(async (req, res) => {
  */
 router.get('/locations', asyncHandler(async (req, res) => {
   const db = getDatabase();
-  
+
   const [displays] = await db.query(
     'SELECT id, name, location FROM displays WHERE is_active = 1 ORDER BY name'
   );
@@ -287,7 +281,6 @@ router.post('/auto-pair', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const clientIp = req.ip || req.connection.remoteAddress;
 
-  // Try to find display by IP or last seen IP
   const [displays] = await db.query(
     'SELECT * FROM displays WHERE last_ip = ? AND is_active = 1 LIMIT 1',
     [clientIp]
@@ -308,4 +301,3 @@ router.post('/auto-pair', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router;
-

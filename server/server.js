@@ -1,4 +1,6 @@
 require('dotenv').config();
+const validateEnv = require('./utils/validateEnv');
+validateEnv();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -41,18 +43,6 @@ const channelChecker = require('./services/channelChecker');
 // Initialize database
 console.log('🚀 Starting Bake & Grill TV Server...');
 
-// 🚨 CRITICAL: Validate required environment variables
-if (!process.env.JWT_SECRET) {
-  console.error('🚨 CRITICAL: JWT_SECRET environment variable is not set!');
-  console.error('🚨 The application will NOT be secure without this.');
-  if (process.env.NODE_ENV === 'production') {
-    console.error('🚨 Failing in production mode for security.');
-    process.exit(1); // Fail fast in production
-  } else {
-    console.warn('⚠️  Continuing in development mode, but this MUST be fixed before production!');
-  }
-}
-
 initDatabase();
 
 // Create Express app
@@ -82,22 +72,28 @@ const corsOptions = {
 };
 
 // Security & performance middleware
+const isProd = process.env.NODE_ENV === 'production';
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // unsafe-eval needed for HLS.js
+      // unsafe-eval required by HLS.js; unsafe-inline kept for inline event handlers in legacy code
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:", "http:"],
+      // Allow HTTPS channel thumbnails; restrict plain HTTP in production
+      imgSrc: ["'self'", "data:", "https:", ...(isProd ? [] : ["http:"])],
+      // HLS streams may be HTTP or HTTPS; blob: needed for MSE
       mediaSrc: ["'self'", "https:", "http:", "blob:"],
-      connectSrc: ["'self'", "https:", "http:"],
+      // API + WebSocket calls; restrict plain HTTP in production
+      connectSrc: ["'self'", "https:", ...(isProd ? [] : ["http:"])],
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       frameSrc: ["'none'"],
       baseUri: ["'self'"],
-      formAction: ["'self'"]
+      formAction: ["'self'"],
+      ...(isProd ? { upgradeInsecureRequests: [] } : {})
     }
   }
 }));

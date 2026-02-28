@@ -14,7 +14,7 @@ router.post('/request', asyncHandler(async (req, res) => {
   const { token } = req.body;
   const clientIp = req.ip || req.connection.remoteAddress;
   
-  console.log('🔄 Reconnection request received for token:', token?.substring(0, 16) + '...');
+  console.log('🔄 Reconnection request received');
   
   // Verify display exists and token is valid
   const [displays] = await db.query('SELECT * FROM displays WHERE token = ? AND is_active = 1', [token]);
