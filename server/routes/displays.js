@@ -120,6 +120,8 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
       isOutdoor:         display.is_outdoor === 1,
       showClockOverlay:  display.show_clock_overlay === 1,
       showBrandOverlay:  display.show_brand_overlay !== 0,
+      overlayMode:       display.overlay_mode       || 'none',
+      overlaySafeArea:   display.overlay_safe_area  || 'standard',
     },
     playlist,
     channels
@@ -395,6 +397,8 @@ router.put('/:id', asyncHandler(async (req, res) => {
   if (night_start_time   !== undefined) { updates.push('night_start_time = ?');   params.push(night_start_time); }
   if (show_clock_overlay !== undefined) { updates.push('show_clock_overlay = ?'); params.push(show_clock_overlay ? 1 : 0); }
   if (show_brand_overlay !== undefined) { updates.push('show_brand_overlay = ?'); params.push(show_brand_overlay ? 1 : 0); }
+  if (req.body.overlay_mode      !== undefined) { updates.push('overlay_mode = ?');      params.push(req.body.overlay_mode); }
+  if (req.body.overlay_safe_area !== undefined) { updates.push('overlay_safe_area = ?'); params.push(req.body.overlay_safe_area); }
   if (is_active !== undefined) {
     updates.push('is_active = ?');
     params.push(is_active ? 1 : 0);

@@ -3,6 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import Hls from 'hls.js';
 import SlideshowPlayer from '../components/SlideshowPlayer';
+import BottomBarOverlay  from '../components/overlays/BottomBarOverlay';
+import PopupCardOverlay  from '../components/overlays/PopupCardOverlay';
+import SplitRightPanel   from '../components/overlays/SplitRightPanel';
 
 const APP_VERSION = '1.1.0';
 const HEARTBEAT_INTERVAL_MS   = 25_000; // every 25 s
@@ -73,6 +76,8 @@ export default function KioskModePage() {
   const [retryIn, setRetryIn]               = useState(0);
   const [activeOverride, setActiveOverride] = useState(null);
   const [nowPlaying, setNowPlaying]         = useState(null); // for slideshow heartbeat
+  const [overlayData, setOverlayData]       = useState(null); // { messages, cards }
+  const overlayFetchRef                     = useRef(null);
 
   const videoRef            = useRef(null);
   const hlsRef              = useRef(null);
@@ -237,7 +242,22 @@ export default function KioskModePage() {
     send();
     heartbeatRef.current = setInterval(send, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(heartbeatRef.current);
-  }, [displayToken, display, currentChannel, showFallback]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayToken, currentChannel, showFallback, nowPlaying]);
+
+  // ── Overlay data fetch ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!displayToken) return;
+    const fetch = () => {
+      displayApi.get(`/overlays/for-display?token=${displayToken}`)
+        .then(r => { if (r.data?.success) setOverlayData(r.data); })
+        .catch(() => {});
+    };
+    fetch();
+    overlayFetchRef.current = setInterval(fetch, 5 * 60 * 1000); // refresh every 5 min
+    return () => clearInterval(overlayFetchRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayToken]);
 
   // ── Command + override polling ───────────────────────────────────────────
 
@@ -455,28 +475,62 @@ export default function KioskModePage() {
         </div>
       )}
 
-      {/* ── Content area — stream or media slideshow ─────────────── */}
-      {display?.displayType === 'media' && display?.mediaPlaylistId ? (
-        <SlideshowPlayer
-          playlistId={display.mediaPlaylistId}
-          muteAudio={display.muteAudio}
-          showBrandOverlay={display.showBrandOverlay !== false}
-          showClockOverlay={display.showClockOverlay}
-          onNowPlaying={setNowPlaying}
-        />
-      ) : display?.displayType === 'media' ? (
-        <FallbackScreen retryIn={0} message="No playlist assigned — check display settings" />
-      ) : currentChannel ? (
-        <video
-          ref={videoRef}
-          className="w-full h-full object-contain"
-          autoPlay
-          playsInline
-          controls={false}
-        />
-      ) : (
-        <FallbackScreen retryIn={retryIn} message={fallbackMsg || 'No channel assigned'} />
-      )}
+      {/* ── Content area — overlay-aware wrapper ─────────────────── */}
+      {(() => {
+        const overlayMode = display?.overlayMode || overlayData?.overlayMode || 'none';
+        const safeArea    = display?.overlaySafeArea || overlayData?.safeArea || 'standard';
+        const msgs        = overlayData?.messages || [];
+        const cards       = overlayData?.cards    || [];
+
+        // Core content (video or slideshow or fallback)
+        const coreContent = display?.displayType === 'media' && display?.mediaPlaylistId ? (
+          <SlideshowPlayer
+            playlistId={display.mediaPlaylistId}
+            muteAudio={display.muteAudio}
+            showBrandOverlay={overlayMode === 'none' && display.showBrandOverlay !== false}
+            showClockOverlay={display.showClockOverlay}
+            onNowPlaying={setNowPlaying}
+          />
+        ) : display?.displayType === 'media' ? (
+          <FallbackScreen retryIn={0} message="No playlist assigned — check display settings" />
+        ) : currentChannel ? (
+          <video
+            ref={videoRef}
+            className="w-full h-full object-contain"
+            autoPlay
+            playsInline
+            controls={false}
+          />
+        ) : (
+          <FallbackScreen retryIn={retryIn} message={fallbackMsg || 'No channel assigned'} />
+        );
+
+        // split_right gets its own layout
+        if (overlayMode === 'split_right') {
+          return (
+            <div className="absolute inset-0">
+              <SplitRightPanel messages={msgs} cards={cards}>
+                {coreContent}
+              </SplitRightPanel>
+            </div>
+          );
+        }
+
+        // All other modes: full-screen content + layered overlays
+        return (
+          <div className="absolute inset-0">
+            {coreContent}
+            {/* Bottom bar (bottom_bar and bottom_bar_popup both show it) */}
+            {(overlayMode === 'bottom_bar' || overlayMode === 'bottom_bar_popup') && (
+              <BottomBarOverlay messages={msgs} safeArea={safeArea} />
+            )}
+            {/* Popup card (bottom_bar_popup only) */}
+            {overlayMode === 'bottom_bar_popup' && (
+              <PopupCardOverlay cards={cards} safeArea={safeArea} />
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Command toast ─────────────────────────────────────────── */}
       {lastCommand && (
