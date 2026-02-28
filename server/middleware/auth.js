@@ -17,13 +17,28 @@ function verifyToken(req, res, next) {
     
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
     
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+    // Try strict verification first; fall back for legacy tokens without iss/aud
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET, {
+        issuer:   'bakeandgrill-tv',
+        audience: 'bakeandgrill-tv-client'
+      });
+    } catch (strictErr) {
+      if (strictErr.name === 'JsonWebTokenError') {
+        // Legacy token — accept but don't enforce iss/aud
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+      } else {
+        throw strictErr;
+      }
+    }
+
     // Attach user info to request
     req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      role: decoded.role
+      id:           decoded.id,
+      email:        decoded.email,
+      role:         decoded.role,
+      tokenVersion: decoded.tv || 0
     };
     
     next();

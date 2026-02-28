@@ -93,16 +93,15 @@ router.put('/password', verifyToken, asyncHandler(async (req, res) => {
     return res.status(401).json({ success: false, error: 'Current password is incorrect' });
   }
 
-  // Hash new password
   const newPasswordHash = await bcrypt.hash(new_password, 10);
 
-  // Update password
-  await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newPasswordHash, userId]);
+  // Bump token_version to invalidate all existing JWTs for this user
+  await db.query(
+    'UPDATE users SET password_hash = ?, token_version = token_version + 1, last_password_change_at = NOW() WHERE id = ?',
+    [newPasswordHash, userId]
+  );
 
-  res.json({
-    success: true,
-    message: 'Password changed successfully'
-  });
+  res.json({ success: true, message: 'Password changed successfully' });
 }));
 
 /**
@@ -528,16 +527,12 @@ router.patch('/:id/password', asyncHandler(async (req, res) => {
     }
   }
   
-  // Hash new password
   const password_hash = await bcrypt.hash(new_password, 10);
-  
-  // Update password
-  await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash, id]);
-  
-  res.json({
-    success: true,
-    message: 'Password updated successfully'
-  });
+  await db.query(
+    'UPDATE users SET password_hash = ?, token_version = token_version + 1, last_password_change_at = NOW() WHERE id = ?',
+    [password_hash, id]
+  );
+  res.json({ success: true, message: 'Password updated successfully' });
 }));
 
 /**

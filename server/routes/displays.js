@@ -62,19 +62,67 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
     }
   }
   
+  // Resolve active media playlist via content schedule
+  let resolvedMediaPlaylistId = display.media_playlist_id || null;
+  try {
+    const now      = new Date();
+    const dayIdx   = now.getDay();
+    const nowTime  = now.toTimeString().slice(0, 8);
+    const zoneId   = display.zone_id || -1;
+    const [scheds] = await db.query(`
+      SELECT playlist_id FROM content_schedules
+      WHERE enabled = 1
+        AND ( (target_type='display' AND target_id=?) OR (target_type='zone' AND target_id=?) )
+        AND FIND_IN_SET(?, REPLACE(days_of_week, ', ', ',')) > 0
+        AND start_time <= ? AND end_time >= ?
+      ORDER BY CASE target_type WHEN 'display' THEN 1 ELSE 0 END DESC, priority DESC
+      LIMIT 1
+    `, [display.id, zoneId, dayIdx, nowTime, nowTime]);
+    if (scheds.length) resolvedMediaPlaylistId = scheds[0].playlist_id;
+
+    // Outdoor day/night override
+    if (display.is_outdoor) {
+      const dayStart   = (display.day_start_time   || '07:00:00');
+      const nightStart = (display.night_start_time || '18:00:00');
+      const isNight = nowTime >= nightStart || nowTime < dayStart;
+      if (isNight  && display.night_playlist_id) resolvedMediaPlaylistId = display.night_playlist_id;
+      else if (display.day_playlist_id)           resolvedMediaPlaylistId = display.day_playlist_id;
+    }
+  } catch { /* content_schedules may not exist yet */ }
+
+  // Active emergency override
+  let activeOverridePlaylistId = null;
+  try {
+    const [ovrs] = await db.query(
+      `SELECT COALESCE(media_playlist_id, playlist_id) AS pid
+       FROM emergency_overrides
+       WHERE is_active=1 AND expires_at > NOW()
+         AND (display_id=? OR zone_id=? OR target_type='all')
+       ORDER BY started_at DESC LIMIT 1`,
+      [display.id, display.zone_id || -1]
+    );
+    if (ovrs.length && ovrs[0].pid) activeOverridePlaylistId = ovrs[0].pid;
+  } catch { /* ignore */ }
+
   res.json({
     success: true,
     display: {
-      id: display.id,
-      name: display.name,
-      location: display.location,
-      playlistId: display.playlist_id,
-      currentChannelId: display.current_channel_id,
-      autoPlay: display.auto_play === 1,
-      scheduleEnabled: display.schedule_enabled === 1
+      id:                display.id,
+      name:              display.name,
+      location:          display.location,
+      playlistId:        display.playlist_id,
+      currentChannelId:  display.current_channel_id,
+      autoPlay:          display.auto_play === 1,
+      scheduleEnabled:   display.schedule_enabled === 1,
+      displayType:       display.display_type || 'stream',
+      mediaPlaylistId:   activeOverridePlaylistId || resolvedMediaPlaylistId,
+      muteAudio:         display.mute_audio === 1,
+      isOutdoor:         display.is_outdoor === 1,
+      showClockOverlay:  display.show_clock_overlay === 1,
+      showBrandOverlay:  display.show_brand_overlay !== 0,
     },
     playlist,
-    channels // Include channels in response
+    channels
   });
 }));
 
@@ -313,7 +361,10 @@ router.get('/:id', asyncHandler(async (req, res) => {
 router.put('/:id', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
-  const { name, location, playlist_id, current_channel_id, is_active, auto_play, schedule_enabled } = req.body;
+  const { name, location, playlist_id, current_channel_id, is_active, auto_play, schedule_enabled,
+          zone_id, media_playlist_id, display_type, is_outdoor, mute_audio,
+          day_playlist_id, night_playlist_id, day_start_time, night_start_time,
+          show_clock_overlay, show_brand_overlay } = req.body;
   
   const [existing] = await db.query('SELECT id FROM displays WHERE id = ?', [id]);
   
@@ -329,26 +380,21 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const updates = [];
   const params = [];
   
-  if (name !== undefined) {
-    updates.push('name = ?');
-    params.push(name);
-  }
-  
-  if (location !== undefined) {
-    updates.push('location = ?');
-    params.push(location);
-  }
-  
-  if (playlist_id !== undefined) {
-    updates.push('playlist_id = ?');
-    params.push(playlist_id);
-  }
-  
-  if (current_channel_id !== undefined) {
-    updates.push('current_channel_id = ?');
-    params.push(current_channel_id);
-  }
-  
+  if (name               !== undefined) { updates.push('name = ?');               params.push(name); }
+  if (location           !== undefined) { updates.push('location = ?');           params.push(location); }
+  if (playlist_id        !== undefined) { updates.push('playlist_id = ?');        params.push(playlist_id); }
+  if (current_channel_id !== undefined) { updates.push('current_channel_id = ?'); params.push(current_channel_id); }
+  if (zone_id            !== undefined) { updates.push('zone_id = ?');            params.push(zone_id); }
+  if (media_playlist_id  !== undefined) { updates.push('media_playlist_id = ?'); params.push(media_playlist_id); }
+  if (display_type       !== undefined) { updates.push('display_type = ?');       params.push(display_type); }
+  if (is_outdoor         !== undefined) { updates.push('is_outdoor = ?');         params.push(is_outdoor ? 1 : 0); }
+  if (mute_audio         !== undefined) { updates.push('mute_audio = ?');         params.push(mute_audio ? 1 : 0); }
+  if (day_playlist_id    !== undefined) { updates.push('day_playlist_id = ?');    params.push(day_playlist_id); }
+  if (night_playlist_id  !== undefined) { updates.push('night_playlist_id = ?');  params.push(night_playlist_id); }
+  if (day_start_time     !== undefined) { updates.push('day_start_time = ?');     params.push(day_start_time); }
+  if (night_start_time   !== undefined) { updates.push('night_start_time = ?');   params.push(night_start_time); }
+  if (show_clock_overlay !== undefined) { updates.push('show_clock_overlay = ?'); params.push(show_clock_overlay ? 1 : 0); }
+  if (show_brand_overlay !== undefined) { updates.push('show_brand_overlay = ?'); params.push(show_brand_overlay ? 1 : 0); }
   if (is_active !== undefined) {
     updates.push('is_active = ?');
     params.push(is_active ? 1 : 0);

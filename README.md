@@ -1,459 +1,308 @@
-# 🔥 Bake and Grill TV - Complete IPTV Platform
+# Bake & Grill TV — Café Digital Signage System
 
-A professional IPTV streaming platform built for Bake and Grill cafe, featuring:
-- 🎯 Multiple M3U playlist support
-- 📺 HLS video streaming with auto-retry
-- ⭐ Favorites system
-- 📊 Watch history & analytics
-- 🖥️ Cafe display (kiosk) mode
-- 🎮 Remote display control
-- 📅 Channel scheduling
-- 📱 Progressive Web App (installable)
-- 👤 User & admin management
-- 🎨 Beautiful dark theme UI
+Full-stack digital signage platform for café/restaurant displays.  
+Built with **React + Vite** (client) and **Express + MySQL** (server).
 
 ---
 
-## 🏗️ Tech Stack
+## Table of Contents
 
-### Backend
-- Node.js 18+ + Express
-- **MySQL Database** (mysql2)
-- JWT Authentication
-- bcrypt password hashing
-
-### Frontend
-- React 18 + Vite
-- Tailwind CSS
-- HLS.js for video streaming
-- React Router
-- PWA support
+1. [Quick Start](#quick-start)
+2. [Environment Variables](#environment-variables)
+3. [Database Setup](#database-setup)
+4. [Creating the First Admin](#creating-the-first-admin)
+5. [How to Use](#how-to-use)
+6. [Kiosk Mode](#kiosk-mode)
+7. [Outdoor Display Setup](#outdoor-display-setup)
+8. [Zones & Schedules](#zones--schedules)
+9. [Emergency Override](#emergency-override)
+10. [Production Checklist](#production-checklist)
+11. [API Reference](#api-reference)
+12. [New Tables & Migrations](#new-tables--migrations)
 
 ---
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 18 or higher
-- npm or yarn
-
-### 1. Backend Setup
+## Quick Start
 
 ```bash
-# Navigate to server folder
-cd server
+# 1. Clone
+git clone git@github.com:ampilarey/tv.bakeandgrill.mv.git
+cd tv.bakeandgrill.mv
 
-# Install dependencies
-npm install
+# 2. Server deps
+cd server && npm install
 
-# Create environment file
+# 3. Copy and fill env
 cp .env.example .env
+# Edit server/.env with your values
 
-# Edit .env and add your MySQL database credentials
-# Required: DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
-# Required: JWT_SECRET (use a random 64-character string)
+# 4. Run DB migrations (auto on server start)
+node server.js
 
-# Initialize MySQL database (creates tables and admin user)
-node database/init.js
+# 5. Create first admin
+node scripts/create-admin.js --email=admin@bakegrill.mv
 
-# Start development server
-npm run dev
+# 6. Client (development)
+cd ../client && npm install && npm run dev
+
+# 7. Production build
+cd client && npm run build
+# dist/ is served as static files by Express
 ```
 
-**Default Admin Credentials:**
-- Email: `admin@bakeandgrill.mv` (configured in `.env`)
-- Password: `BakeGrill2025!` (configured in `.env`)
-- ⚠️ **CHANGE THESE IMMEDIATELY AFTER FIRST LOGIN!**
+---
 
-### 2. Frontend Setup
+## Environment Variables
+
+Copy `server/.env.example` → `server/.env` and set:
+
+| Variable              | Required | Description                              |
+|-----------------------|----------|------------------------------------------|
+| `JWT_SECRET`          | ✅        | ≥ 32 random chars (use `openssl rand -hex 32`) |
+| `DB_HOST`             | ✅        | MySQL host                               |
+| `DB_PORT`             | ✅        | MySQL port (default 3306)                |
+| `DB_USER`             | ✅        | MySQL user                               |
+| `DB_PASS`             | ✅        | MySQL password                           |
+| `DB_NAME`             | ✅        | Database name                            |
+| `PORT`                |           | Server port (default 4000)               |
+| `NODE_ENV`            |           | `production` on server                   |
+| `CORS_ORIGINS`        | ✅ prod   | Comma-separated allowed origins          |
+| `MAX_UPLOAD_MB`       |           | Max image upload in MB (default 20)      |
+| `MAX_VIDEO_MB`        |           | Max video upload in MB (default 200)     |
+| `SESSION_TIMEOUT_DAYS`|           | JWT expiry in days (default 7)           |
+
+**Never commit `.env`** — only `.env.example` is in the repo.
+
+---
+
+## Database Setup
+
+Migrations run **automatically** on server start via `server/database/init.js`.  
+They are idempotent — safe to re-run.
+
+### Manual migration (if needed)
 
 ```bash
-# In a new terminal, navigate to client folder
-cd client
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
+# In MySQL:
+mysql -u root -p bakegrill_tv < server/database/schema.sql
+# Then apply migration files in order:
+mysql -u root -p bakegrill_tv < server/database/migrations/2026-02-28-add-channel-health.sql
+mysql -u root -p bakegrill_tv < server/database/migrations/2026-02-28-b-add-pairing-sessions.sql
+mysql -u root -p bakegrill_tv < server/database/migrations/2026-02-28-c-add-zones-overrides.sql
+mysql -u root -p bakegrill_tv < server/database/migrations/2026-02-28-d-media-library-schedules.sql
 ```
-
-### 3. Access Application
-
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:4000/api/health
 
 ---
 
-## 📦 Production Deployment (cPanel)
-
-### Step 1: Build Frontend
+## Creating the First Admin
 
 ```bash
-cd client
-npm install
-npm run build
+node server/scripts/create-admin.js --email=admin@bakegrill.mv --phone=1234567
+# You will be prompted for a password (not echoed)
 ```
 
-This creates optimized files in `client/dist/`
+Never set `DEFAULT_ADMIN_PASSWORD` in production — the server will crash if it detects this.
 
-### Step 2: Prepare for Upload
+---
 
-Upload these folders to your cPanel server:
-- `server/` (entire folder)
-- `client/dist/` (built frontend)
+## How to Use
 
-Recommended path: `/home/USERNAME/tv/`
+### 1. Upload Media
+- Admin → **Media Library** → Upload images (JPG/PNG/WebP) and videos (MP4)
+- Thumbnails are auto-generated for images
 
-### Step 3: Configure cPanel Node.js App
+### 2. Create a Media Playlist
+- Admin → **Media Playlists** → New Playlist
+- Add images/videos, set display duration for images
+- Reorder with ↑↓ arrows
+- Enable shuffle if desired
 
-1. Login to cPanel
-2. Navigate to **"Setup Node.js App"**
-3. Click **"Create Application"**
-4. Configure:
-   - **Node.js version**: 18 or higher
-   - **Application mode**: Production
-   - **Application root**: `/home/USERNAME/tv/server`
-   - **Application URL**: Your subdomain (e.g., `tv.bakeandgrill.mv`)
-   - **Application startup file**: `server.js`
+### 3. Create a Display
+- Admin → **Displays** → Add Display
+- Set **Display Type**:
+  - `stream` — plays IPTV/HLS channels from an M3U playlist
+  - `media` — loops your media playlist as a slideshow
+- Assign the media playlist
+- Copy the display token (used to pair the TV)
 
-5. Click **"Create"**
+### 4. Pair the TV
+- Open `https://your-domain.com/display?token=YOUR_TOKEN` on the TV browser
+- Or use QR code / PIN pairing from the admin panel
 
-### Step 4: Configure Environment Variables
+### 5. Schedules
+- Admin → **Zones & Overrides** → Schedules
+- Set a media playlist, target (display or zone), days of week, time range, and priority
+- The display automatically picks the highest-priority active schedule
 
-Create `.env` file in `/home/USERNAME/tv/server/.env`:
+---
+
+## Kiosk Mode
+
+The `/display?token=...` route runs in full kiosk mode:
+
+- **Fullscreen**: prompts on first tap/click
+- **Cursor hidden** after 2 seconds of inactivity
+- **Right-click disabled**, common keyboard shortcuts blocked (F5, F11, F12, Ctrl+R)
+- **Heartbeat** every 25 seconds to monitor online/offline
+- **Fail-safe**: if network/content fails → branded "Bake & Grill TV — Back soon" screen, auto-retry every 10 s
+- **Local cache**: last-known playlist stored in `localStorage` for 24 h
+
+### Android TV Box (ATV/Box running Android)
+
+1. Install **Fully Kiosk Browser** (best option) or **Chromium**
+2. Set start URL: `https://tv.bakeandgrill.mv/display?token=YOUR_TOKEN`
+3. In Fully Kiosk: enable "Start on Boot", "Keep Screen On", disable address bar
+
+### Windows Chrome Kiosk
+
+```batch
+"C:\Program Files\Google\Chrome\Application\chrome.exe" ^
+  --kiosk ^
+  --no-first-run ^
+  --disable-translate ^
+  --disable-infobars ^
+  --noerrdialogs ^
+  "https://tv.bakeandgrill.mv/display?token=YOUR_TOKEN"
+```
+
+Add to Windows startup for auto-launch.
+
+### Raspberry Pi (Chromium)
 
 ```bash
-cd /home/USERNAME/tv/server
-cat > .env << 'EOF'
-PORT=4000
-NODE_ENV=production
-JWT_SECRET=[Your-64-char-random-string-here]
-
-# MySQL Database - Get from cPanel → MySQL Databases
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=yourusername_tv
-DB_PASSWORD=your_mysql_password
-DB_NAME=yourusername_tv
-
-# Admin credentials
-DEFAULT_ADMIN_EMAIL=admin@yourdomain.com
-DEFAULT_ADMIN_PASSWORD=BakeGrill2025!
-EOF
+# In ~/.config/lxsession/LXDE-pi/autostart:
+@chromium-browser --kiosk --noerrdialogs --disable-infobars \
+  https://tv.bakeandgrill.mv/display?token=YOUR_TOKEN
 ```
 
-### Step 5: Install Dependencies & Initialize Database
+---
 
-In cPanel Terminal or SSH:
+## Outdoor Display Setup
+
+Outdoor displays show content to customers outside the café.
+
+1. Create display → enable **Outdoor** toggle
+2. Set **Day playlist** (shown from e.g. 07:00–18:00) and **Night playlist**
+3. Enable **Mute audio** (customers can't hear it anyway)
+4. Enable **Brand watermark** so your logo is always visible
+5. **Pairing is disabled by default** for outdoor — admin must click "Enable Pairing" from the display management panel (opens a 10-minute window)
+
+---
+
+## Zones & Schedules
+
+### Zones
+Group displays together (e.g., "Dining Room", "Outdoor", "Bar").
+
+- Admin → **Zones & Overrides** → Create Zone
+- Assign displays to zones in Display settings (`zone_id`)
+
+### Content Schedules
+Automatically switch playlists based on time of day.
+
+```
+Example:
+- Breakfast (06:00-11:00) Mon-Sun → "Breakfast Menu" playlist
+- Lunch (11:00-15:00) Mon-Fri → "Lunch Specials" playlist  
+- Evening (18:00-22:00) Daily → "Dinner Ambience" playlist
+```
+
+Display-level schedules have priority over zone-level schedules.
+
+---
+
+## Emergency Override
+
+Override all TVs in a zone (or a single display) instantly.
+
+1. Admin → **Zones & Overrides** → Emergency Override
+2. Select target: Zone / Display / All TVs
+3. Select playlist and duration (e.g., 30 minutes)
+4. Click "Activate Override"
+5. TVs switch immediately; revert automatically after duration
+
+Use case: "Happy Hour starting now — show promo for 1 hour"
+
+---
+
+## Production Checklist
+
+- [ ] `JWT_SECRET` rotated and is ≥ 32 chars
+- [ ] `CORS_ORIGINS` set to exact frontend domain (no wildcard)
+- [ ] `NODE_ENV=production` in env
+- [ ] `DEFAULT_ADMIN_PASSWORD` NOT in env
+- [ ] Admin created via `node scripts/create-admin.js`
+- [ ] DB backed up (set up cron for `mysqldump`)
+- [ ] HTTPS enabled (required for Fullscreen API and service worker)
+- [ ] `uploads/` directory writable by Node.js process
+- [ ] cPanel: Node.js app set to start with `server.js`, restart after pull
+
+### cPanel Pull Command
 
 ```bash
-cd /home/USERNAME/tv/server
-source /home/USERNAME/nodevenv/tv/server/18/bin/activate
-npm install
-node database/init.js
-deactivate
-```
-
-### Step 6: Start Application
-
-In cPanel Node.js App interface:
-- Click **"Restart"** button
-- Check status shows **"Running"**
-
-### Step 7: Enable SSL (Highly Recommended)
-
-1. cPanel → **SSL/TLS Status**
-2. Select your subdomain
-3. Click **"Run AutoSSL"**
-4. Wait for certificate installation
-
-### Step 8: Test
-
-Visit: `https://tv.bakeandgrill.mv`
-
-You should see the login page!
-
-**For complete deployment guide including Git workflow, see:** [`DEPLOYMENT-GUIDE.md`](DEPLOYMENT-GUIDE.md)
-
----
-
-## 🖥️ Setting Up Cafe Displays
-
-### 1. Create Display Token (Admin Panel)
-
-Once you have admin features (optional to build later), or create manually in database:
-
-```sql
--- Example: Create a display manually
-INSERT INTO displays (name, location, playlist_id, token)
-VALUES ('Wall Display 1', 'Main Cafe Wall', 1, 'your-secure-random-token-here');
-```
-
-### 2. Access Display URL
-
-On the cafe TV/tablet browser:
-```
-https://tv.bakeandgrill.mv/display?token=your-secure-random-token-here
-```
-
-### 3. Kiosk Mode Setup
-
-**Chrome Kiosk Mode (Recommended for cafe displays):**
-
-```bash
-# Windows
-chrome.exe --kiosk "https://tv.bakeandgrill.mv/display?token=TOKEN"
-
-# Mac
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --kiosk "https://tv.bakeandgrill.mv/display?token=TOKEN"
-
-# Linux
-google-chrome --kiosk "https://tv.bakeandgrill.mv/display?token=TOKEN"
-```
-
-The display will:
-- ✅ Auto-login with token
-- ✅ Auto-play first channel
-- ✅ Send heartbeat every 30s
-- ✅ Poll for remote control commands every 10s
-- ✅ Auto-retry on stream failure
-- ✅ Run fullscreen with minimal UI
-
----
-
-## 📚 API Documentation
-
-### Health Check
-```bash
-curl https://tv.bakeandgrill.mv/api/health
-```
-
-### Login
-```bash
-curl -X POST https://tv.bakeandgrill.mv/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@bakegrill.com","password":"BakeGrill2025!"}'
-```
-
-### Add Playlist
-```bash
-curl -X POST https://tv.bakeandgrill.mv/api/playlists \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"My Channels","m3u_url":"https://example.com/playlist.m3u"}'
-```
-
-Full API documentation: See `docs/03-API-ENDPOINTS.md`
-
----
-
-## 🎨 Features Overview
-
-### User Features
-- ✅ Login with email/password
-- ✅ Add unlimited M3U playlists
-- ✅ Browse channels with search & filter
-- ✅ Favorite channels
-- ✅ Watch history tracking
-- ✅ HLS video streaming (. m3u8 support)
-- ✅ Responsive mobile/desktop UI
-- ✅ PWA installable app
-
-### Cafe Display Features
-- ✅ Token-based auto-login
-- ✅ Fullscreen kiosk mode
-- ✅ 24/7 operation
-- ✅ Auto-reconnect on failure
-- ✅ Heartbeat monitoring
-- ✅ Remote control (admin can change channel)
-- ✅ Channel scheduling (time-based)
-
-### Admin Features (API Available, UI Optional)
-- ✅ User management (create, edit, delete)
-- ✅ Display management
-- ✅ Remote display control
-- ✅ Analytics & statistics
-- ✅ Settings management
-
----
-
-## 🔐 Security
-
-### Default Credentials
-```
-Email: admin@bakeandgrill.mv (configured in .env)
-Password: BakeGrill2025! (configured in .env)
-```
-
-**⚠️ CRITICAL: Change immediately after first login!**
-
-### Security Best Practices
-- ✅ Strong JWT_SECRET (64+ random characters)
-- ✅ HTTPS enabled (SSL certificate)
-- ✅ bcrypt password hashing (10 rounds)
-- ✅ Protected API routes
-- ✅ SQL injection prevention
-- ✅ XSS protection
-- ✅ Secure display tokens
-
----
-
-## 📱 PWA Installation
-
-### Mobile (iOS/Android)
-1. Visit site in browser
-2. Tap browser menu → "Add to Home Screen"
-3. Launch from home screen icon
-
-### Desktop (Chrome/Edge)
-1. Look for install icon in address bar
-2. Click "Install"
-3. App appears in Start Menu/Applications
-
----
-
-## 🛠️ Troubleshooting
-
-### Backend won't start
-- Check Node.js version: `node -v` (must be 18+)
-- Verify `.env` file exists with MySQL credentials
-- Check database initialized: `node database/init.js`
-- Test MySQL connection: `mysql -u yourusername_tv -p`
-- View logs in cPanel or `tail -50 server.log`
-
-### Can't login / 503 Error
-- Verify MySQL database credentials in `.env`
-- Check backend is running: `ps aux | grep server.js`
-- Test API: `curl http://localhost:4000/api/health`
-- Check server logs for database connection errors
-- Restart Node.js app in cPanel
-
-### Blank page after deployment
-- Clear browser cache completely (Ctrl+Shift+Delete)
-- Open DevTools → Application → Clear Storage
-- Unregister Service Workers
-- Hard reload: Ctrl+Shift+R (Cmd+Shift+R on Mac)
-- After ONE-TIME clear, auto-reload will work
-
-### Video won't play
-- Verify M3U URL is accessible
-- Check stream URL format (.m3u8 for HLS)
-- Test stream URL directly in VLC player
-- Check browser console for errors
-
-### Display offline
-- Verify display token is correct
-- Check network connection
-- Check browser is on kiosk URL
-- View heartbeat in database
-
-**For detailed troubleshooting, see:** [`DEPLOYMENT-GUIDE.md`](DEPLOYMENT-GUIDE.md)
-
----
-
-## 📊 Database Schema (MySQL)
-
-Tables:
-- `users` - User accounts with roles and permissions
-- `user_permissions` - Granular permissions per user
-- `user_assigned_playlists` - Playlist assignments
-- `playlists` - M3U playlist URLs with ownership
-- `favorites` - User's favorite channels
-- `watch_history` - Viewing sessions and analytics
-- `displays` - Cafe display configurations with ownership
-- `display_schedules` - Time-based channel scheduling
-- `display_commands` - Remote control command queue
-- `app_settings` - System configuration
-
-Full schema: See `server/database/schema.sql`
-
----
-
-## 🗂️ Project Structure
-
-```
-tv/
-├── server/              # Backend (Node.js + Express)
-│   ├── server.js       # Main entry point
-│   ├── .env           # Environment variables (MySQL, JWT)
-│   ├── database/       # MySQL schema, init & migrations
-│   ├── middleware/     # Auth, validation, permissions, errors
-│   ├── routes/         # API endpoints
-│   ├── utils/          # M3U parser, helpers
-│   └── uploads/        # File uploads (PWA icons)
-│
-├── client/              # Frontend (React + Vite)
-│   ├── src/
-│   │   ├── components/ # Reusable components
-│   │   ├── pages/      # Page components (Dashboard, Player, Admin)
-│   │   ├── services/   # API client
-│   │   ├── context/    # React context (Auth)
-│   │   ├── utils/      # Version check, haptics
-│   │   └── App.jsx     # Main app component
-│   ├── public/         # Static assets, PWA icons
-│   └── dist/           # Production build (generated)
-│
-├── docs/                # Documentation
-├── DEPLOYMENT-GUIDE.md  # Complete deployment & Git workflow
-└── README.md           # This file
+cd ~/tv.bakeandgrill.mv && \
+  GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main && \
+  cd client && npm run build && cd .. && \
+  touch tmp/restart.txt
 ```
 
 ---
 
-## 🎯 Next Steps (Optional Enhancements)
+## API Reference
 
-The core app is fully functional! Optional admin UI features you can add:
+### New Endpoints (Phase 3–9)
 
-1. **Admin Dashboard UI** - Visual interface for:
-   - User management (currently via API only)
-   - Display management with status cards
-   - Schedule management UI
-   - Analytics charts
-
-2. **Enhanced Features**:
-   - Export/import favorites
-   - Grid view for channels
-   - Picture-in-Picture mode
-   - Keyboard shortcuts (Space, F, M, arrows)
-   - Recently watched list
-
-3. **Advanced**:
-   - WebSocket for real-time display control
-   - EPG (Electronic Program Guide)
-   - Multi-language support
-   - Native mobile apps
-
----
-
-## 📝 License
-
-Proprietary - Bake and Grill
-
----
-
-## 🤝 Support
-
-For issues or questions:
-1. Check documentation in `/docs/` folder
-2. Review troubleshooting section above
-3. Check browser console for errors
-4. Review backend logs
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/uploads` | Upload image or video (field: `file`) |
+| `GET`  | `/api/uploads?type=image&page=1` | List media assets |
+| `DELETE` | `/api/uploads/:id` | Delete asset by ID |
+| `GET`  | `/api/media-playlists` | List media playlists |
+| `POST` | `/api/media-playlists` | Create playlist |
+| `GET`  | `/api/media-playlists/:id` | Get playlist + items |
+| `PUT`  | `/api/media-playlists/:id` | Update playlist |
+| `DELETE` | `/api/media-playlists/:id` | Delete playlist |
+| `GET`  | `/api/media-playlists/:id/items` | Get items |
+| `POST` | `/api/media-playlists/:id/items` | Add item |
+| `PUT`  | `/api/media-playlists/:id/items/:itemId` | Update item settings |
+| `DELETE` | `/api/media-playlists/:id/items/:itemId` | Remove item |
+| `POST` | `/api/media-playlists/:id/items/reorder` | Reorder items |
+| `GET`  | `/api/content-schedules` | List schedules |
+| `POST` | `/api/content-schedules` | Create schedule |
+| `PUT`  | `/api/content-schedules/:id` | Update schedule |
+| `DELETE` | `/api/content-schedules/:id` | Delete schedule |
+| `GET`  | `/api/content-schedules/resolve?display_id=N` | Resolve active playlist for display now |
+| `GET`  | `/api/zones` | List zones with display counts |
+| `POST` | `/api/zones` | Create zone |
+| `PUT`  | `/api/zones/:id` | Update zone |
+| `DELETE` | `/api/zones/:id` | Delete zone |
+| `GET`  | `/api/zones/:id/displays` | List displays in zone |
+| `POST` | `/api/zones/:id/command` | Push command to all displays in zone |
+| `GET`  | `/api/zones/overrides/active` | Active emergency overrides |
+| `POST` | `/api/zones/override` | Create emergency override |
+| `DELETE` | `/api/zones/override/:id` | Cancel override |
+| `POST` | `/api/displays/:id/enable-pairing` | Enable 10-min pairing window |
+| `GET`  | `/api/health` | `{ status, version, database }` |
 
 ---
 
-## 🎉 Credits
+## New Tables & Migrations
 
-Built with:
-- [React](https://react.dev/)
-- [Vite](https://vitejs.dev/)
-- [Tailwind CSS](https://tailwindcss.com/)
-- [Express](https://expressjs.com/)
-- [HLS.js](https://github.com/video-dev/hls.js/)
-- [mysql2](https://github.com/sidorares/node-mysql2)
+| Table | Migration File | Purpose |
+|-------|---------------|---------|
+| `media_assets` | `2026-02-28-d-…` | Uploaded images and videos |
+| `media_playlists` | `2026-02-28-d-…` | Named photo/video playlists |
+| `media_playlist_items` | `2026-02-28-d-…` | Items in each playlist, with ordering |
+| `content_schedules` | `2026-02-28-d-…` | Time-based playlist rules (display/zone) |
+| `pairing_sessions` | `2026-02-28-b-…` | DB-backed pairing (no in-memory maps) |
+| `zones` | `2026-02-28-c-…` | Display groupings |
+| `emergency_overrides` | `2026-02-28-c-…` | Zone/display content overrides |
+| `channel_health` | `2026-02-28-a-…` | HLS stream health monitoring |
 
----
+### New columns added to existing tables
 
-**Made with 🔥 for Bake and Grill**
+**`displays`**: `zone_id`, `pairing_enabled_until`, `last_status`, `now_playing`, `app_version`, `uptime_seconds`, `media_playlist_id`, `is_outdoor`, `mute_audio`, `day_playlist_id`, `night_playlist_id`, `day_start_time`, `night_start_time`, `show_clock_overlay`, `show_brand_overlay`, `display_type`
 
-Enjoy your TV! 📺
+**`users`**: `token_version`, `last_password_change_at`
+
+**`emergency_overrides`**: `media_playlist_id`, `target_type`

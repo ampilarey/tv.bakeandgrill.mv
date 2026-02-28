@@ -23,6 +23,8 @@ import TickerManagement from './pages/admin/TickerManagement';
 import ScheduleManagement from './pages/admin/ScheduleManagement';
 import SceneManagement from './pages/admin/SceneManagement';
 import ZoneManagement from './pages/admin/ZoneManagement';
+import MediaLibrary from './pages/admin/MediaLibrary';
+import MediaPlaylistManagement from './pages/admin/MediaPlaylistManagement';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -258,6 +260,22 @@ function AppRouter() {
           element={
             <AdminRoute>
               <ZoneManagement />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/media"
+          element={
+            <AdminRoute>
+              <MediaLibrary />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/media-playlists"
+          element={
+            <AdminRoute>
+              <MediaPlaylistManagement />
             </AdminRoute>
           }
         />

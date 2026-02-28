@@ -45,15 +45,18 @@ router.post('/login', validateLogin, asyncHandler(async (req, res) => {
   // Update last_login
   await db.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
   
-  // Generate JWT token
+  // Generate JWT token (tv = token_version for invalidation on password change)
   const tokenPayload = {
-    id: user.id,
+    id:    user.id,
     email: user.email,
-    role: user.role
+    role:  user.role,
+    tv:    user.token_version || 0
   };
-  
+
   const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-    expiresIn: `${process.env.SESSION_TIMEOUT_DAYS || 7}d`
+    expiresIn: `${process.env.SESSION_TIMEOUT_DAYS || 7}d`,
+    issuer:   'bakeandgrill-tv',
+    audience: 'bakeandgrill-tv-client'
   });
   
   // Return user info (without password) and token
@@ -82,15 +85,16 @@ router.get('/verify', verifyToken, asyncHandler(async (req, res) => {
   // Get fresh user data
   const [users] = await db.query('SELECT * FROM users WHERE id = ? AND is_active = TRUE', [req.user.id]);
   const user = users[0];
-  
+
   if (!user) {
-    return res.status(401).json({
-      success: false,
-      error: 'User not found or inactive',
-      code: 'AUTH_USER_NOT_FOUND'
-    });
+    return res.status(401).json({ success: false, error: 'User not found or inactive', code: 'AUTH_USER_NOT_FOUND' });
   }
-  
+
+  // Token version check — forces re-login after password change
+  if ((user.token_version || 0) !== (req.user.tokenVersion || 0)) {
+    return res.status(401).json({ success: false, error: 'Token invalidated. Please log in again.', code: 'AUTH_TOKEN_INVALIDATED' });
+  }
+
   res.json({
     success: true,
     valid: true,

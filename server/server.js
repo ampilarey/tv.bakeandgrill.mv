@@ -24,9 +24,12 @@ const settingsRoutes = require('./routes/settings');
 const analyticsRoutes = require('./routes/analytics');
 const permissionsRoutes = require('./routes/permissions');
 const notificationsRoutes = require('./routes/notifications');
-const pairingRoutes = require('./routes/pairing');
-const reconnectRoutes = require('./routes/reconnect');
-const zonesRoutes = require('./routes/zones');
+const pairingRoutes          = require('./routes/pairing');
+const reconnectRoutes        = require('./routes/reconnect');
+const zonesRoutes            = require('./routes/zones');
+const uploadsRoutes          = require('./routes/uploads');
+const mediaPlaylistsRoutes   = require('./routes/mediaPlaylists');
+const contentSchedulesRoutes = require('./routes/contentSchedules');
 
 // Phase 1: New content routes (featuresRoutes already declared above)
 const playlistItemsRoutes = require('./routes/playlistItems');
@@ -199,9 +202,12 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/permissions', permissionsRoutes);
 app.use('/api/notifications', notificationsRoutes);
-app.use('/api/pairing', pairingRoutes);
-app.use('/api/reconnect', reconnectRoutes);
-app.use('/api/zones', zonesRoutes);
+app.use('/api/pairing',           pairingRoutes);
+app.use('/api/reconnect',         reconnectRoutes);
+app.use('/api/zones',             zonesRoutes);
+app.use('/api/uploads',           uploadsRoutes);
+app.use('/api/media-playlists',   mediaPlaylistsRoutes);
+app.use('/api/content-schedules', contentSchedulesRoutes);
 
 // Phase 1: Content routes (features already mounted above as public route)
 app.use('/api/playlist-items', playlistItemsRoutes);

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import Hls from 'hls.js';
+import SlideshowPlayer from '../components/SlideshowPlayer';
 
 const APP_VERSION = '1.1.0';
 const HEARTBEAT_INTERVAL_MS   = 25_000; // every 25 s
@@ -57,20 +58,21 @@ export default function KioskModePage() {
   const [searchParams] = useSearchParams();
   const displayToken = searchParams.get('token');
 
-  const [display, setDisplay]           = useState(null);
-  const [channels, setChannels]         = useState([]);
+  const [display, setDisplay]               = useState(null);
+  const [channels, setChannels]             = useState([]);
   const [currentChannel, setCurrentChannel] = useState(null);
-  const [error, setError]               = useState('');
-  const [loading, setLoading]           = useState(true);
-  const [isMuted, setIsMuted]           = useState(false);
-  const [lastCommand, setLastCommand]   = useState(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [error, setError]                   = useState('');
+  const [loading, setLoading]               = useState(true);
+  const [isMuted, setIsMuted]               = useState(false);
+  const [lastCommand, setLastCommand]       = useState(null);
+  const [isFullscreen, setIsFullscreen]     = useState(false);
   const [showStartOverlay, setShowStartOverlay] = useState(true);
-  const [cursorVisible, setCursorVisible] = useState(true);
-  const [showFallback, setShowFallback]  = useState(false);
-  const [fallbackMsg, setFallbackMsg]    = useState('Back soon');
-  const [retryIn, setRetryIn]           = useState(0);
+  const [cursorVisible, setCursorVisible]   = useState(true);
+  const [showFallback, setShowFallback]     = useState(false);
+  const [fallbackMsg, setFallbackMsg]       = useState('Back soon');
+  const [retryIn, setRetryIn]               = useState(0);
   const [activeOverride, setActiveOverride] = useState(null);
+  const [nowPlaying, setNowPlaying]         = useState(null); // for slideshow heartbeat
 
   const videoRef            = useRef(null);
   const hlsRef              = useRef(null);
@@ -200,7 +202,9 @@ export default function KioskModePage() {
       setDisplay(d);
       setChannels(ch || []);
       normalPlaylistRef.current = ch || [];
-      if (ch && ch.length) setCurrentChannel(ch[0]);
+      // Auto-mute if display setting requires it
+      if (d?.muteAudio) setIsMuted(true);
+      if (ch && ch.length && d?.displayType !== 'media') setCurrentChannel(ch[0]);
       saveToCache(d, ch || []);
       setShowFallback(false);
       clearInterval(retryCountdownRef.current);
@@ -224,7 +228,7 @@ export default function KioskModePage() {
         token: displayToken,
         current_channel_id: currentChannel?.id || null,
         status: showFallback ? 'fallback' : 'playing',
-        nowPlaying: currentChannel?.name || null,
+        nowPlaying: nowPlaying || currentChannel?.name || null,
         uptime: Math.round((Date.now() - startTimeRef.current) / 1000),
         appVersion: APP_VERSION
       }).catch(() => {});
@@ -451,8 +455,18 @@ export default function KioskModePage() {
         </div>
       )}
 
-      {/* ── Video ────────────────────────────────────────────────── */}
-      {currentChannel ? (
+      {/* ── Content area — stream or media slideshow ─────────────── */}
+      {display?.displayType === 'media' && display?.mediaPlaylistId ? (
+        <SlideshowPlayer
+          playlistId={display.mediaPlaylistId}
+          muteAudio={display.muteAudio}
+          showBrandOverlay={display.showBrandOverlay !== false}
+          showClockOverlay={display.showClockOverlay}
+          onNowPlaying={setNowPlaying}
+        />
+      ) : display?.displayType === 'media' ? (
+        <FallbackScreen retryIn={0} message="No playlist assigned — check display settings" />
+      ) : currentChannel ? (
         <video
           ref={videoRef}
           className="w-full h-full object-contain"
