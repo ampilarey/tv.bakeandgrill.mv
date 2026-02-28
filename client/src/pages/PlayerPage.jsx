@@ -53,7 +53,12 @@ export default function PlayerPage() {
   const [displayedChannels, setDisplayedChannels] = useState(50); // Show 50 initially
   const [searchHistory, setSearchHistory] = useState(() => {
     if (typeof window !== 'undefined') {
-      return JSON.parse(localStorage.getItem('searchHistory') || '[]');
+      try {
+        return JSON.parse(localStorage.getItem('searchHistory') || '[]');
+      } catch {
+        localStorage.removeItem('searchHistory');
+        return [];
+      }
     }
     return [];
   });
@@ -72,6 +77,7 @@ export default function PlayerPage() {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const searchDebounceRef = useRef(null);
+  const bufferingTimerRef = useRef(null);
   const navigate = useNavigate();
   const { logout } = useAuth();
 
@@ -80,6 +86,10 @@ export default function PlayerPage() {
     return () => {
       // Only clean up on actual unmount (navigating away from player completely)
       try {
+        if (bufferingTimerRef.current) {
+          clearTimeout(bufferingTimerRef.current);
+          bufferingTimerRef.current = null;
+        }
         if (hlsRef.current) {
           console.log('🧹 Destroying HLS.js on unmount');
           hlsRef.current.destroy();
@@ -769,6 +779,10 @@ export default function PlayerPage() {
       
       const handleCanPlay = () => {
         console.log('Video can play - readyState:', video.readyState);
+        if (bufferingTimerRef.current) {
+          clearTimeout(bufferingTimerRef.current);
+          bufferingTimerRef.current = null;
+        }
         setVideoLoading(false);
         // Try to play again if not already playing
         if (video.paused && !video.ended) {
@@ -784,24 +798,43 @@ export default function PlayerPage() {
       
       const handleCanPlayThrough = () => {
         console.log('Video can play through - readyState:', video.readyState);
+        if (bufferingTimerRef.current) {
+          clearTimeout(bufferingTimerRef.current);
+          bufferingTimerRef.current = null;
+        }
         setVideoLoading(false);
       };
       
       const handleWaiting = () => {
         console.log('Video waiting for data');
-        setVideoLoading(true);
+        // Debounce: only show loading spinner after 1.5s of sustained buffering
+        // This prevents the spinner from flashing on every HLS segment load
+        if (!bufferingTimerRef.current) {
+          bufferingTimerRef.current = setTimeout(() => {
+            setVideoLoading(true);
+          }, 1500);
+        }
       };
       
       const handlePlaying = () => {
         console.log('Video playing');
         hasStartedPlaying = true;
         clearPlaybackTimeout();
+        // Clear any pending buffering timer and hide spinner immediately
+        if (bufferingTimerRef.current) {
+          clearTimeout(bufferingTimerRef.current);
+          bufferingTimerRef.current = null;
+        }
         setVideoLoading(false);
       };
       
       const handleStalled = () => {
         console.warn('Video stalled');
-        setVideoLoading(true);
+        if (!bufferingTimerRef.current) {
+          bufferingTimerRef.current = setTimeout(() => {
+            setVideoLoading(true);
+          }, 1500);
+        }
       };
       
       const handleSuspend = () => {

@@ -103,14 +103,11 @@ if (typeof window !== 'undefined') {
               newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed') {
                   if (navigator.serviceWorker.controller) {
-                    // There's a new service worker available
-                    console.log('🔄 New service worker installed - activating...');
+                    // New service worker available - activate it silently
+                    // Do NOT reload: let the user finish watching; update takes effect on next navigation
+                    console.log('🔄 New service worker ready - will activate on next page load');
                     newWorker.postMessage({ type: 'SKIP_WAITING' });
-                    // Reload after a short delay
-                    setTimeout(() => {
-                      localStorage.setItem('tv_app_version', APP_VERSION);
-                      window.location.reload();
-                    }, 1000);
+                    localStorage.setItem('tv_app_version', APP_VERSION);
                   } else {
                     // First time installation
                     console.log('✅ Service worker installed for first time');
@@ -120,12 +117,12 @@ if (typeof window !== 'undefined') {
             }
           });
           
-          // Also listen for controller change (service worker activated)
+          // Service worker controller changed - do NOT reload automatically
+          // Reloading mid-playback disrupts the user experience
           navigator.serviceWorker.addEventListener('controllerchange', () => {
-            console.log('🔄 Service worker controller changed - reloading...');
-            clearInterval(updateInterval); // Clean up interval
+            console.log('🔄 Service worker controller changed - update applied silently');
+            clearInterval(updateInterval);
             localStorage.setItem('tv_app_version', APP_VERSION);
-            window.location.reload();
           });
           
           // Store registration globally for manual refresh

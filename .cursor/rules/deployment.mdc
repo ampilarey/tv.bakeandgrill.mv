@@ -1,0 +1,37 @@
+---
+description: cPanel deployment workflow for tv.bakeandgrill.mv
+alwaysApply: true
+---
+
+# Deployment — tv.bakeandgrill.mv
+
+After every `git push`, always provide the cPanel pull & deploy instructions:
+
+## After Every Push
+
+1. **If frontend files changed** (`client/src/**`), build first locally:
+```bash
+cd /Users/vigani/Website/tv/client && npm run build
+cd .. && git add client/dist/ && git commit -m "build: rebuild frontend dist" && git push origin main
+```
+
+2. **Pull on cPanel server:**
+```bash
+cd ~/tv.bakeandgrill.mv
+GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main
+```
+
+3. **Restart:** cPanel → Setup Node.js App → RESTART
+
+4. **Verify:**
+```bash
+curl https://tv.bakeandgrill.mv/api/health
+```
+
+## Key Info
+- **Server path:** `~/tv.bakeandgrill.mv`
+- **SSH key:** `~/.ssh/id_ed25519`
+- **GitHub repo:** `git@github.com:ampilarey/tv.bakeandgrill.mv.git`
+- **Node app root:** `tv.bakeandgrill.mv/server`
+- **Startup file:** `server.js`
+- **Always build `client/dist` locally** — server has memory limits
