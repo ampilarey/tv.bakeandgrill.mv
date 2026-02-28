@@ -18,10 +18,15 @@ import Footer from '../../components/Footer';
 export default function DisplayManagement() {
   const [displays, setDisplays] = useState([]);
   const [playlists, setPlaylists] = useState([]);
+  const [mediaPlaylists, setMediaPlaylists] = useState([]);
+  const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showControlModal, setShowControlModal] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({});
   const [createdDisplay, setCreatedDisplay] = useState(null);
   const [selectedDisplay, setSelectedDisplay] = useState(null);
   const [channels, setChannels] = useState([]);
@@ -160,6 +165,80 @@ export default function DisplayManagement() {
       setPlaylists(response.data.playlists || []);
     } catch (error) {
       console.error('Error fetching playlists:', error);
+    }
+  };
+
+  const fetchMediaPlaylists = async () => {
+    try { const r = await api.get('/media-playlists'); setMediaPlaylists(r.data.playlists || []); } catch { /* ignore */ }
+  };
+
+  const fetchZones = async () => {
+    try { const r = await api.get('/zones'); setZones(r.data.zones || []); } catch { /* ignore */ }
+  };
+
+  const openSettings = (display) => {
+    setSelectedDisplay(display);
+    setSettingsForm({
+      name:                display.name          || '',
+      location:            display.location       || '',
+      display_type:        display.display_type   || 'stream',
+      playlist_id:         display.playlist_id    || '',
+      media_playlist_id:   display.media_playlist_id || '',
+      overlay_mode:        display.overlay_mode   || 'none',
+      overlay_safe_area:   display.overlay_safe_area || 'standard',
+      zone_id:             display.zone_id        || '',
+      is_outdoor:          !!display.is_outdoor,
+      mute_audio:          !!display.mute_audio,
+      show_brand_overlay:  display.show_brand_overlay !== false && display.show_brand_overlay !== 0,
+      show_clock_overlay:  !!display.show_clock_overlay,
+      day_playlist_id:     display.day_playlist_id  || '',
+      night_playlist_id:   display.night_playlist_id || '',
+      day_start_time:      display.day_start_time   || '07:00',
+      night_start_time:    display.night_start_time || '18:00',
+    });
+    fetchMediaPlaylists();
+    fetchZones();
+    setShowSettingsModal(true);
+  };
+
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const body = {
+        name:              settingsForm.name,
+        location:          settingsForm.location,
+        display_type:      settingsForm.display_type,
+        playlist_id:       settingsForm.playlist_id       || null,
+        media_playlist_id: settingsForm.media_playlist_id || null,
+        overlay_mode:      settingsForm.overlay_mode,
+        overlay_safe_area: settingsForm.overlay_safe_area,
+        zone_id:           settingsForm.zone_id           || null,
+        is_outdoor:        settingsForm.is_outdoor        ? 1 : 0,
+        mute_audio:        settingsForm.mute_audio        ? 1 : 0,
+        show_brand_overlay: settingsForm.show_brand_overlay ? 1 : 0,
+        show_clock_overlay: settingsForm.show_clock_overlay ? 1 : 0,
+        day_playlist_id:   settingsForm.day_playlist_id   || null,
+        night_playlist_id: settingsForm.night_playlist_id || null,
+        day_start_time:    settingsForm.day_start_time    || null,
+        night_start_time:  settingsForm.night_start_time  || null,
+      };
+      await api.put(`/displays/${selectedDisplay.id}`, body);
+      setShowSettingsModal(false);
+      fetchDisplays();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Save failed');
+    }
+    setSavingSettings(false);
+  };
+
+  const enablePairing = async (displayId) => {
+    try {
+      await api.post(`/displays/${displayId}/enable-pairing`);
+      setError('✅ Pairing window enabled for 10 minutes');
+      setTimeout(() => setError(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to enable pairing');
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -627,9 +706,14 @@ export default function DisplayManagement() {
                     ) : (
                       <p className="text-xs text-tv-textMuted">Never connected</p>
                     )}
-                    {display.current_channel_id && (
-                      <p className="text-sm text-tv-textMuted mt-1">Now: {display.current_channel_id}</p>
-                    )}
+                    {display.now_playing || display.current_channel_id ? (
+                      <p className="text-xs text-tv-textMuted mt-1 truncate">▶ {display.now_playing || display.current_channel_id}</p>
+                    ) : null}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {display.display_type === 'media' && <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">Media</span>}
+                      {display.overlay_mode && display.overlay_mode !== 'none' && <span className="text-xs bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded">{display.overlay_mode}</span>}
+                      {display.is_outdoor ? <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">🌤 Outdoor</span> : null}
+                    </div>
                   </div>
                 </div>
 
@@ -668,6 +752,26 @@ export default function DisplayManagement() {
                     View Display URL
                   </button>
                   
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openSettings(display)}
+                    className="w-full"
+                  >
+                    ⚙️ Display Settings
+                  </Button>
+
+                  {display.is_outdoor ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => enablePairing(display.id)}
+                      className="w-full"
+                    >
+                      📡 Enable Pairing (10 min)
+                    </Button>
+                  ) : null}
+
                   <Button 
                     variant="danger" 
                     size="sm" 
@@ -1186,6 +1290,141 @@ export default function DisplayManagement() {
         message={confirmModal.message}
         variant={confirmModal.variant}
       />
+
+      {/* ── Display Settings Modal ─────────────────────────────── */}
+      <Modal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        title={`Settings — ${selectedDisplay?.name}`}
+        size="lg"
+      >
+        <div className="space-y-5 max-h-[75vh] overflow-y-auto pr-1">
+
+          {/* Basic */}
+          <section>
+            <h4 className="text-xs font-semibold text-tv-textMuted uppercase tracking-wider mb-3">Basic</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Display Name" value={settingsForm.name || ''} onChange={e => setSettingsForm(f => ({...f, name: e.target.value}))} />
+              <Input label="Location" value={settingsForm.location || ''} onChange={e => setSettingsForm(f => ({...f, location: e.target.value}))} />
+            </div>
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-tv-textMuted mb-1">Zone</label>
+              <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.zone_id || ''} onChange={e => setSettingsForm(f => ({...f, zone_id: e.target.value}))}>
+                <option value="">No zone</option>
+                {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+              </select>
+            </div>
+          </section>
+
+          {/* Playback */}
+          <section>
+            <h4 className="text-xs font-semibold text-tv-textMuted uppercase tracking-wider mb-3">Playback</h4>
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-tv-textMuted mb-1">Display Type</label>
+              <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.display_type || 'stream'} onChange={e => setSettingsForm(f => ({...f, display_type: e.target.value}))}>
+                <option value="stream">Stream (IPTV / HLS channels)</option>
+                <option value="media">Media (photo/video slideshow)</option>
+              </select>
+            </div>
+            {settingsForm.display_type === 'stream' ? (
+              <div>
+                <label className="block text-xs font-medium text-tv-textMuted mb-1">M3U Playlist</label>
+                <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.playlist_id || ''} onChange={e => setSettingsForm(f => ({...f, playlist_id: e.target.value}))}>
+                  <option value="">None</option>
+                  {playlists.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-medium text-tv-textMuted mb-1">Media Playlist (slideshow)</label>
+                <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.media_playlist_id || ''} onChange={e => setSettingsForm(f => ({...f, media_playlist_id: e.target.value}))}>
+                  <option value="">None — will show idle screen</option>
+                  {mediaPlaylists.map(p => <option key={p.id} value={p.id}>{p.name} ({p.item_count || 0} items)</option>)}
+                </select>
+                {mediaPlaylists.length === 0 && <p className="text-xs text-tv-textMuted mt-1">No media playlists yet. Create one in Admin → Media Playlists.</p>}
+              </div>
+            )}
+          </section>
+
+          {/* Smart Overlay */}
+          <section>
+            <h4 className="text-xs font-semibold text-tv-textMuted uppercase tracking-wider mb-3">Smart Overlay</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-tv-textMuted mb-1">Overlay Mode</label>
+                <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.overlay_mode || 'none'} onChange={e => setSettingsForm(f => ({...f, overlay_mode: e.target.value}))}>
+                  <option value="none">None (off)</option>
+                  <option value="bottom_bar">Bottom Bar (ticker)</option>
+                  <option value="bottom_bar_popup">Bottom Bar + Popup Card</option>
+                  <option value="split_right">Split Right Panel (75/25)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-tv-textMuted mb-1">Safe Area</label>
+                <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.overlay_safe_area || 'standard'} onChange={e => setSettingsForm(f => ({...f, overlay_safe_area: e.target.value}))}>
+                  <option value="standard">Standard</option>
+                  <option value="sports">Sports (avoids score corners)</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          {/* Display Options */}
+          <section>
+            <h4 className="text-xs font-semibold text-tv-textMuted uppercase tracking-wider mb-3">Display Options</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ['show_brand_overlay', '🏷 Brand watermark'],
+                ['show_clock_overlay', '🕐 Clock overlay'],
+                ['mute_audio',         '🔇 Mute audio'],
+                ['is_outdoor',         '🌤 Outdoor display'],
+              ].map(([key, label]) => (
+                <label key={key} className="flex items-center gap-2 cursor-pointer bg-tv-bgSoft rounded-lg px-3 py-2 border border-tv-borderSubtle hover:border-tv-accent/40 transition-colors">
+                  <input type="checkbox" className="w-4 h-4 accent-tv-accent" checked={!!settingsForm[key]} onChange={e => setSettingsForm(f => ({...f, [key]: e.target.checked}))} />
+                  <span className="text-tv-text text-sm">{label}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          {/* Outdoor day/night — shown only when is_outdoor */}
+          {settingsForm.is_outdoor && (
+            <section>
+              <h4 className="text-xs font-semibold text-tv-textMuted uppercase tracking-wider mb-3">Outdoor Day / Night</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-tv-textMuted mb-1">Day Playlist</label>
+                  <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.day_playlist_id || ''} onChange={e => setSettingsForm(f => ({...f, day_playlist_id: e.target.value}))}>
+                    <option value="">None</option>
+                    {mediaPlaylists.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-tv-textMuted mb-1">Night Playlist</label>
+                  <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.night_playlist_id || ''} onChange={e => setSettingsForm(f => ({...f, night_playlist_id: e.target.value}))}>
+                    <option value="">None</option>
+                    {mediaPlaylists.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-tv-textMuted mb-1">Day starts at</label>
+                  <input type="time" className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.day_start_time || '07:00'} onChange={e => setSettingsForm(f => ({...f, day_start_time: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-tv-textMuted mb-1">Night starts at</label>
+                  <input type="time" className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.night_start_time || '18:00'} onChange={e => setSettingsForm(f => ({...f, night_start_time: e.target.value}))} />
+                </div>
+              </div>
+              <p className="text-xs text-tv-textMuted mt-2">Pairing is disabled by default for outdoor displays. Use "Enable Pairing" on the display card when needed.</p>
+            </section>
+          )}
+
+          <div className="flex gap-3 justify-end pt-2 border-t border-tv-borderSubtle">
+            <Button variant="ghost" onClick={() => setShowSettingsModal(false)}>Cancel</Button>
+            <Button onClick={saveSettings} disabled={savingSettings}>{savingSettings ? <Spinner size="sm" /> : 'Save Settings'}</Button>
+          </div>
+        </div>
+      </Modal>
 
       <Footer />
     </div>

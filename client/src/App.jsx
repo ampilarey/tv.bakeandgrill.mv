@@ -26,6 +26,8 @@ import ZoneManagement from './pages/admin/ZoneManagement';
 import MediaLibrary from './pages/admin/MediaLibrary';
 import MediaPlaylistManagement from './pages/admin/MediaPlaylistManagement';
 import OverlayManagement from './pages/admin/OverlayManagement';
+import MonitoringDashboard from './pages/admin/MonitoringDashboard';
+import ContentSchedules from './pages/admin/ContentSchedules';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -285,6 +287,22 @@ function AppRouter() {
           element={
             <AdminRoute>
               <OverlayManagement />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/monitoring"
+          element={
+            <AdminRoute>
+              <MonitoringDashboard />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/content-schedules"
+          element={
+            <AdminRoute>
+              <ContentSchedules />
             </AdminRoute>
           }
         />
