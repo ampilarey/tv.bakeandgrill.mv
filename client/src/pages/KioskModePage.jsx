@@ -89,7 +89,8 @@ export default function KioskModePage() {
   const retryTimerRef       = useRef(null);
   const retryCountdownRef   = useRef(null);
   const startTimeRef        = useRef(Date.now());
-  const normalPlaylistRef   = useRef(null); // for reverting after override
+  const normalPlaylistRef   = useRef(null);
+  const rebootTimerRef      = useRef(null);
 
   // ── Kiosk lockdown ──────────────────────────────────────────────────────
 
@@ -207,12 +208,24 @@ export default function KioskModePage() {
       setDisplay(d);
       setChannels(ch || []);
       normalPlaylistRef.current = ch || [];
-      // Auto-mute if display setting requires it
       if (d?.muteAudio) setIsMuted(true);
       if (ch && ch.length && d?.displayType !== 'media') setCurrentChannel(ch[0]);
       saveToCache(d, ch || []);
       setShowFallback(false);
       clearInterval(retryCountdownRef.current);
+
+      // ── Auto-reboot scheduling ──────────────────────────────────────
+      if (d?.autoRebootTime) {
+        clearInterval(rebootTimerRef.current);
+        rebootTimerRef.current = setInterval(() => {
+          const now = new Date();
+          const [hh, mm] = d.autoRebootTime.split(':').map(Number);
+          if (now.getHours() === hh && now.getMinutes() === mm) {
+            console.log('[Kiosk] Auto-reboot triggered at', d.autoRebootTime);
+            window.location.reload();
+          }
+        }, 60_000); // check every minute
+      }
     } catch {
       const fromCache = loadFromCache();
       if (!fromCache) scheduleRetry('Could not connect — check network');
@@ -600,6 +613,28 @@ export default function KioskModePage() {
           <p className="text-white/70 text-xs">{display.name}</p>
         </div>
       )}
+
+      {/* ── WiFi QR overlay ────────────────────────────────────────────── */}
+      {display?.showWifiQr && display?.wifiSsid && !showStartOverlay && (() => {
+        const ssid = display.wifiSsid;
+        const pass = display.wifiPassword || '';
+        const sec  = display.wifiSecurity || 'WPA';
+        const wifiString = `WIFI:T:${sec};S:${ssid};P:${pass};;`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(wifiString)}&bgcolor=000000&color=ffffff&margin=4`;
+        const pos = display.wifiQrPosition || 'bottom-right';
+        const posClass = pos === 'bottom-left' ? 'bottom-6 left-6'
+          : pos === 'top-right' ? 'top-6 right-6'
+          : pos === 'top-left'  ? 'top-6 left-6'
+          : 'bottom-6 right-6';
+        return (
+          <div className={`absolute ${posClass} pointer-events-none z-20`} style={{ zIndex: 1000 }}>
+            <div className="bg-black/80 backdrop-blur-sm rounded-xl p-2 border border-white/10 flex flex-col items-center gap-1">
+              <img src={qrUrl} alt="WiFi QR" width={80} height={80} className="rounded" />
+              <p className="text-white text-xs font-medium text-center leading-tight">📶 {ssid}</p>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

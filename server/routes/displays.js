@@ -122,6 +122,12 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
       showBrandOverlay:  display.show_brand_overlay !== 0,
       overlayMode:       display.overlay_mode       || 'none',
       overlaySafeArea:   display.overlay_safe_area  || 'standard',
+      showWifiQr:        display.show_wifi_qr === 1,
+      wifiSsid:          display.wifi_ssid          || null,
+      wifiPassword:      display.wifi_password      || null,
+      wifiSecurity:      display.wifi_security      || 'WPA',
+      wifiQrPosition:    display.wifi_qr_position   || 'bottom-right',
+      autoRebootTime:    display.auto_reboot_time   || null,
     },
     playlist,
     channels
@@ -399,6 +405,14 @@ router.put('/:id', asyncHandler(async (req, res) => {
   if (show_brand_overlay !== undefined) { updates.push('show_brand_overlay = ?'); params.push(show_brand_overlay ? 1 : 0); }
   if (req.body.overlay_mode      !== undefined) { updates.push('overlay_mode = ?');      params.push(req.body.overlay_mode); }
   if (req.body.overlay_safe_area !== undefined) { updates.push('overlay_safe_area = ?'); params.push(req.body.overlay_safe_area); }
+  // WiFi QR
+  if (req.body.show_wifi_qr     !== undefined) { updates.push('show_wifi_qr = ?');     params.push(req.body.show_wifi_qr ? 1 : 0); }
+  if (req.body.wifi_ssid        !== undefined) { updates.push('wifi_ssid = ?');        params.push(req.body.wifi_ssid || null); }
+  if (req.body.wifi_password    !== undefined) { updates.push('wifi_password = ?');    params.push(req.body.wifi_password || null); }
+  if (req.body.wifi_security    !== undefined) { updates.push('wifi_security = ?');    params.push(req.body.wifi_security || 'WPA'); }
+  if (req.body.wifi_qr_position !== undefined) { updates.push('wifi_qr_position = ?'); params.push(req.body.wifi_qr_position || 'bottom-right'); }
+  // Auto-reboot
+  if (req.body.auto_reboot_time !== undefined) { updates.push('auto_reboot_time = ?'); params.push(req.body.auto_reboot_time || null); }
   if (is_active !== undefined) {
     updates.push('is_active = ?');
     params.push(is_active ? 1 : 0);

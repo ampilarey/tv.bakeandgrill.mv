@@ -206,6 +206,12 @@ export default function DisplayManagement() {
       night_playlist_id:   display.night_playlist_id || '',
       day_start_time:      display.day_start_time   || '07:00',
       night_start_time:    display.night_start_time || '18:00',
+      show_wifi_qr:        !!display.show_wifi_qr,
+      wifi_ssid:           display.wifi_ssid        || '',
+      wifi_password:       display.wifi_password    || '',
+      wifi_security:       display.wifi_security    || 'WPA',
+      wifi_qr_position:    display.wifi_qr_position || 'bottom-right',
+      auto_reboot_time:    display.auto_reboot_time || '',
     });
     fetchMediaPlaylists();
     fetchZones();
@@ -232,6 +238,12 @@ export default function DisplayManagement() {
         night_playlist_id: settingsForm.night_playlist_id || null,
         day_start_time:    settingsForm.day_start_time    || null,
         night_start_time:  settingsForm.night_start_time  || null,
+        show_wifi_qr:      settingsForm.show_wifi_qr      ? 1 : 0,
+        wifi_ssid:         settingsForm.wifi_ssid         || null,
+        wifi_password:     settingsForm.wifi_password     || null,
+        wifi_security:     settingsForm.wifi_security     || 'WPA',
+        wifi_qr_position:  settingsForm.wifi_qr_position  || 'bottom-right',
+        auto_reboot_time:  settingsForm.auto_reboot_time  || null,
       };
       await api.put(`/displays/${selectedDisplay.id}`, body);
       setShowSettingsModal(false);
@@ -1555,6 +1567,56 @@ export default function DisplayManagement() {
               <p className="text-xs text-tv-textMuted mt-2">Pairing is disabled by default for outdoor displays. Use "Enable Pairing" on the display card when needed.</p>
             </section>
           )}
+
+          {/* WiFi QR */}
+          <section>
+            <h4 className="text-xs font-semibold text-tv-textMuted uppercase tracking-wider mb-3">WiFi QR Code</h4>
+            <label className="flex items-center gap-2 cursor-pointer mb-3 bg-tv-bgSoft rounded-lg px-3 py-2 border border-tv-borderSubtle">
+              <input type="checkbox" className="w-4 h-4 accent-tv-accent" checked={!!settingsForm.show_wifi_qr} onChange={e => setSettingsForm(f => ({...f, show_wifi_qr: e.target.checked}))} />
+              <span className="text-tv-text text-sm">Show WiFi QR on this display</span>
+            </label>
+            {settingsForm.show_wifi_qr && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-tv-textMuted mb-1">WiFi Network (SSID)</label>
+                    <input type="text" className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" placeholder="BakeGrill_Guest" value={settingsForm.wifi_ssid || ''} onChange={e => setSettingsForm(f => ({...f, wifi_ssid: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-tv-textMuted mb-1">Password</label>
+                    <input type="text" className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" placeholder="password123" value={settingsForm.wifi_password || ''} onChange={e => setSettingsForm(f => ({...f, wifi_password: e.target.value}))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-tv-textMuted mb-1">Security</label>
+                    <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.wifi_security || 'WPA'} onChange={e => setSettingsForm(f => ({...f, wifi_security: e.target.value}))}>
+                      <option value="WPA">WPA/WPA2</option>
+                      <option value="WEP">WEP</option>
+                      <option value="nopass">Open (no password)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-tv-textMuted mb-1">Position</label>
+                    <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.wifi_qr_position || 'bottom-right'} onChange={e => setSettingsForm(f => ({...f, wifi_qr_position: e.target.value}))}>
+                      <option value="bottom-right">Bottom Right</option>
+                      <option value="bottom-left">Bottom Left</option>
+                      <option value="top-right">Top Right</option>
+                      <option value="top-left">Top Left</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Auto-reboot */}
+          <section>
+            <h4 className="text-xs font-semibold text-tv-textMuted uppercase tracking-wider mb-2">Auto-Reboot</h4>
+            <p className="text-xs text-tv-textMuted mb-2">Display silently reloads at this time daily (clears memory leaks). Leave empty to disable.</p>
+            <input type="time" className="rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={settingsForm.auto_reboot_time || ''} onChange={e => setSettingsForm(f => ({...f, auto_reboot_time: e.target.value || null}))} />
+            {settingsForm.auto_reboot_time && <p className="text-xs text-yellow-400 mt-1">⚠ Display will briefly go dark at {settingsForm.auto_reboot_time} daily</p>}
+          </section>
 
           <div className="flex gap-3 justify-end pt-2 border-t border-tv-borderSubtle">
             <Button variant="ghost" onClick={() => setShowSettingsModal(false)}>Cancel</Button>

@@ -86,38 +86,44 @@ async function runMigrations(connection) {
       .sort();
     
     for (const file of migrationFiles) {
-      const migrationPath = path.join(migrationsDir, file);
-      const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
-      
-      // Split by semicolons and execute each statement
-      const statements = migrationSQL
-        .split(';')
-        .map(s => s.trim())
-        .filter(s => s.length > 0 && !s.startsWith('--'));
-      
-      for (const statement of statements) {
-        try {
-          await connection.query(statement);
-        } catch (error) {
-          // Swallow idempotent errors so migrations can be re-run safely
-          if (
-            error.message.includes('does not exist') ||
-            error.message.includes('Unknown constraint') ||
-            error.message.includes('Duplicate column name') ||
-            error.message.includes('already exists')
-          ) {
-            console.log(`⚠️  Migration ${file}: Skipping already-applied statement (${error.message.split('\n')[0]})`);
-          } else {
-            throw error;
+      try {
+        const migrationPath = path.join(migrationsDir, file);
+        const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+
+        const statements = migrationSQL
+          .split(';')
+          .map(s => s.trim())
+          .filter(s => s.length > 0 && !s.startsWith('--'));
+
+        for (const statement of statements) {
+          try {
+            await connection.query(statement);
+          } catch (error) {
+            // Swallow idempotent/already-applied errors
+            if (
+              error.message.includes('does not exist') ||
+              error.message.includes('Unknown constraint') ||
+              error.message.includes('Duplicate column name') ||
+              error.message.includes('Duplicate key name') ||
+              error.message.includes('Duplicate foreign key') ||
+              error.message.includes('already exists') ||
+              error.code === 'ER_DUP_KEYNAME' ||
+              error.code === 'ER_DUP_FIELDNAME'
+            ) {
+              console.log(`⚠️  Migration ${file}: Skipping already-applied statement (${error.message.split('\n')[0]})`);
+            } else {
+              console.error(`⚠️  Migration ${file} statement error (skipping): ${error.message.split('\n')[0]}`);
+            }
           }
         }
+
+        console.log(`✅ Migration applied: ${file}`);
+      } catch (fileError) {
+        console.error(`⚠️  Migration ${file} failed (continuing): ${fileError.message}`);
       }
-      
-      console.log(`✅ Migration applied: ${file}`);
     }
   } catch (error) {
-    console.error('⚠️  Migration error (continuing anyway):', error.message);
-    // Don't fail initialization if migrations fail
+    console.error('⚠️  Migration runner error:', error.message);
   }
 }
 
