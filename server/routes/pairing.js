@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const { getDatabase } = require('../database/init');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
@@ -7,6 +8,15 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 
 const router = express.Router();
+
+// 5 PIN requests per IP per minute — prevents brute-force pairing requests
+const pinRequestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: 'Too many pairing requests from this IP, please wait a minute',
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,7 +57,7 @@ async function purgeExpired(db) {
  * POST /api/pairing/request-pin
  * Display requests to generate a PIN for pairing
  */
-router.post('/request-pin', asyncHandler(async (req, res) => {
+router.post('/request-pin', pinRequestLimiter, asyncHandler(async (req, res) => {
   logger.debug('🔢 PIN request received');
 
   const db = getDatabase();
@@ -250,8 +260,9 @@ router.get('/locations', asyncHandler(async (req, res) => {
 /**
  * POST /api/pairing/pair-with-location
  * Display pairs using location ID and PIN
+ * Requires admin to have opened a pairing window via POST /api/displays/:id/enable-pairing
  */
-router.post('/pair-with-location', asyncHandler(async (req, res) => {
+router.post('/pair-with-location', pinRequestLimiter, asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { location_id, pin } = req.body;
 
@@ -261,16 +272,23 @@ router.post('/pair-with-location', asyncHandler(async (req, res) => {
   );
 
   if (displays.length === 0) {
-    return res.status(401).json({
+    return res.status(401).json({ success: false, error: 'Invalid location or PIN' });
+  }
+
+  const display = displays[0];
+
+  // Check pairing window — must be enabled by admin within last 10 min
+  if (!display.pairing_enabled_until || new Date(display.pairing_enabled_until) < new Date()) {
+    return res.status(403).json({
       success: false,
-      error: 'Invalid location or PIN'
+      error: 'Pairing is not currently enabled for this display. Ask an admin to enable the pairing window.'
     });
   }
 
-  res.json({
-    success: true,
-    display: displays[0]
-  });
+  // Consume the window immediately (one-shot)
+  await db.query('UPDATE displays SET pairing_enabled_until = NULL WHERE id = ?', [display.id]);
+
+  res.json({ success: true, display });
 }));
 
 /**

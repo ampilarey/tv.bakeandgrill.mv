@@ -99,9 +99,14 @@ async function runMigrations(connection) {
         try {
           await connection.query(statement);
         } catch (error) {
-          // Ignore errors for DROP CHECK IF EXISTS (constraint might not exist)
-          if (error.message.includes('does not exist') || error.message.includes('Unknown constraint')) {
-            console.log(`⚠️  Migration ${file}: Constraint already dropped or doesn't exist, continuing...`);
+          // Swallow idempotent errors so migrations can be re-run safely
+          if (
+            error.message.includes('does not exist') ||
+            error.message.includes('Unknown constraint') ||
+            error.message.includes('Duplicate column name') ||
+            error.message.includes('already exists')
+          ) {
+            console.log(`⚠️  Migration ${file}: Skipping already-applied statement (${error.message.split('\n')[0]})`);
           } else {
             throw error;
           }

@@ -1,927 +1,524 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import Hls from 'hls.js';
-import Spinner from '../components/common/Spinner';
-// Temporarily disabled to prevent crashes
-// import TickerBar from '../components/TickerBar';
-// import AnnouncementOverlay from '../components/AnnouncementOverlay';
 
-// Detect if we're on mobile/network access and need to use IP address
-const getDisplayApiBaseURL = () => {
-  // In development, check if we're accessing via IP (not localhost)
+const APP_VERSION = '1.1.0';
+const HEARTBEAT_INTERVAL_MS   = 25_000; // every 25 s
+const COMMAND_POLL_INTERVAL_MS = 2_000; // every 2 s
+const CURSOR_HIDE_DELAY_MS     = 3_000; // hide cursor after 3 s idle
+const RETRY_INTERVAL_MS        = 10_000;
+const CACHE_KEY                = 'kiosk_cache_v1';
+const CACHE_MAX_AGE_MS         = 24 * 60 * 60 * 1000; // 24 h
+
+// Use same-origin relative path in prod; direct IP in dev via IP access
+const getBase = () => {
   if (import.meta.env.DEV) {
-    const hostname = window.location.hostname;
-    // If accessing via IP address (not localhost/127.0.0.1), use direct API URL
-    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      // Use the same hostname but port 4000 for API
-      return `http://${hostname}:4000/api`;
-    }
+    const h = window.location.hostname;
+    if (h && h !== 'localhost' && h !== '127.0.0.1') return `http://${h}:4000/api`;
   }
-  // Default: use relative path (works with Vite proxy or same origin)
   return '/api';
 };
 
-// Create a separate API client without auth headers for display mode
-const displayApi = axios.create({
-  baseURL: getDisplayApiBaseURL(),
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
+const displayApi = axios.create({ baseURL: getBase(), headers: { 'Content-Type': 'application/json' } });
 
+// ---------------------------------------------------------------------------
+// Branded fallback screen
+// ---------------------------------------------------------------------------
+function FallbackScreen({ retryIn, message }) {
+  return (
+    <div className="h-screen w-screen bg-black flex flex-col items-center justify-center select-none">
+      <div className="text-center px-8">
+        {/* Logo / brand mark */}
+        <div className="w-24 h-24 mx-auto mb-6 rounded-2xl bg-[#B03A48] flex items-center justify-center shadow-2xl">
+          <svg viewBox="0 0 48 48" className="w-14 h-14" fill="none">
+            <rect x="6" y="28" width="36" height="6" rx="3" fill="white" opacity=".9"/>
+            <rect x="6" y="20" width="36" height="6" rx="3" fill="white" opacity=".7"/>
+            <rect x="6" y="12" width="36" height="6" rx="3" fill="white" opacity=".5"/>
+          </svg>
+        </div>
+        <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">Bake &amp; Grill TV</h1>
+        <p className="text-xl text-white/60 mb-8">{message || 'Back soon'}</p>
+        {retryIn > 0 && (
+          <div className="inline-flex items-center gap-2 bg-white/10 px-5 py-2 rounded-full">
+            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+            <span className="text-white/70 text-sm">Retrying in {retryIn}s</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 export default function KioskModePage() {
-  // Debug logging helper (dev-only)
-  const isDev = import.meta.env.MODE !== 'production';
-  const debugLog = (...args) => {
-    if (isDev) console.log(...args);
-  };
-  
   const [searchParams] = useSearchParams();
   const displayToken = searchParams.get('token');
-  
-  const [display, setDisplay] = useState(null);
-  const [channels, setChannels] = useState([]);
+
+  const [display, setDisplay]           = useState(null);
+  const [channels, setChannels]         = useState([]);
   const [currentChannel, setCurrentChannel] = useState(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
-  const [lastCommand, setLastCommand] = useState(null);
+  const [error, setError]               = useState('');
+  const [loading, setLoading]           = useState(true);
+  const [isMuted, setIsMuted]           = useState(false);
+  const [lastCommand, setLastCommand]   = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  const videoRef = useRef(null);
-  const hlsRef = useRef(null);
-  const heartbeatIntervalRef = useRef(null);
-  const commandPollingIntervalRef = useRef(null);
-  const commandTimeoutRef = useRef(null);
-  const containerRef = useRef(null);
+  const [showStartOverlay, setShowStartOverlay] = useState(true);
+  const [cursorVisible, setCursorVisible] = useState(true);
+  const [showFallback, setShowFallback]  = useState(false);
+  const [fallbackMsg, setFallbackMsg]    = useState('Back soon');
+  const [retryIn, setRetryIn]           = useState(0);
+  const [activeOverride, setActiveOverride] = useState(null);
 
-  // Listen for fullscreen changes and handle overlay positioning
+  const videoRef            = useRef(null);
+  const hlsRef              = useRef(null);
+  const containerRef        = useRef(null);
+  const heartbeatRef        = useRef(null);
+  const commandPollRef      = useRef(null);
+  const commandTimeoutRef   = useRef(null);
+  const cursorTimerRef      = useRef(null);
+  const retryTimerRef       = useRef(null);
+  const retryCountdownRef   = useRef(null);
+  const startTimeRef        = useRef(Date.now());
+  const normalPlaylistRef   = useRef(null); // for reverting after override
+
+  // ── Kiosk lockdown ──────────────────────────────────────────────────────
+
+  // Block context menu
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      const inFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-      setIsFullscreen(inFullscreen);
-    };
+    const block = (e) => e.preventDefault();
+    document.addEventListener('contextmenu', block);
+    return () => document.removeEventListener('contextmenu', block);
+  }, []);
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    
-    // Also listen for video element's fullscreen (for Safari)
-    if (videoRef.current) {
-      videoRef.current.addEventListener('webkitbeginfullscreen', () => setIsFullscreen(true));
-      videoRef.current.addEventListener('webkitendfullscreen', () => setIsFullscreen(false));
-    }
-    
+  // Block keyboard shortcuts that could exit kiosk
+  useEffect(() => {
+    const block = (e) => {
+      const blocked = ['F5', 'F11', 'F12'];
+      if (blocked.includes(e.key)) { e.preventDefault(); return; }
+      if ((e.ctrlKey || e.metaKey) && ['r', 'R', 'w', 'W', 'n', 'N', 'q', 'Q', 't', 'T'].includes(e.key)) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', block);
+    return () => window.removeEventListener('keydown', block);
+  }, []);
+
+  // Cursor auto-hide
+  useEffect(() => {
+    const resetTimer = () => {
+      setCursorVisible(true);
+      clearTimeout(cursorTimerRef.current);
+      cursorTimerRef.current = setTimeout(() => setCursorVisible(false), CURSOR_HIDE_DELAY_MS);
+    };
+    resetTimer();
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('touchstart', resetTimer);
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('touchstart', resetTimer);
+      clearTimeout(cursorTimerRef.current);
     };
   }, []);
 
-  // Verify display token and get configuration
+  // Fullscreen change listener
   useEffect(() => {
+    const onChange = () => {
+      setIsFullscreen(!!(document.fullscreenElement || document.webkitFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
+  }, []);
+
+  // ── Fullscreen helper ────────────────────────────────────────────────────
+
+  const enterFullscreen = useCallback(async () => {
+    try {
+      const el = containerRef.current || document.documentElement;
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+      setIsFullscreen(true);
+    } catch { /* user denied — ok */ }
+  }, []);
+
+  // ── Initial verify ───────────────────────────────────────────────────────
+
+  const loadFromCache = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return false;
+      const { data, cachedAt } = JSON.parse(raw);
+      if (Date.now() - cachedAt > CACHE_MAX_AGE_MS) return false;
+      setDisplay(data.display);
+      setChannels(data.channels);
+      normalPlaylistRef.current = data.channels;
+      if (data.channels.length) setCurrentChannel(data.channels[0]);
+      return true;
+    } catch { return false; }
+  }, []);
+
+  const saveToCache = useCallback((displayData, channelList) => {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        data: { display: displayData, channels: channelList },
+        cachedAt: Date.now()
+      }));
+    } catch { /* storage full — ignore */ }
+  }, []);
+
+  const scheduleRetry = useCallback((msg) => {
+    setFallbackMsg(msg);
+    setShowFallback(true);
+    let countdown = Math.round(RETRY_INTERVAL_MS / 1000);
+    setRetryIn(countdown);
+    clearInterval(retryCountdownRef.current);
+    retryCountdownRef.current = setInterval(() => {
+      countdown -= 1;
+      setRetryIn(countdown);
+      if (countdown <= 0) {
+        clearInterval(retryCountdownRef.current);
+        verifyDisplay(); // eslint-disable-line no-use-before-define
+      }
+    }, 1000);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const verifyDisplay = useCallback(async () => {
     if (!displayToken) {
       setError('No display token provided');
       setLoading(false);
       return;
     }
+    try {
+      const { data } = await displayApi.post('/displays/verify', { token: displayToken });
+      const { display: d, channels: ch } = data;
+      setDisplay(d);
+      setChannels(ch || []);
+      normalPlaylistRef.current = ch || [];
+      if (ch && ch.length) setCurrentChannel(ch[0]);
+      saveToCache(d, ch || []);
+      setShowFallback(false);
+      clearInterval(retryCountdownRef.current);
+    } catch {
+      const fromCache = loadFromCache();
+      if (!fromCache) scheduleRetry('Could not connect — check network');
+    } finally {
+      setLoading(false);
+    }
+  }, [displayToken, loadFromCache, saveToCache, scheduleRetry]);
 
-    const verifyDisplay = async () => {
-      try {
-        debugLog('🖥️ Verifying display with token:', displayToken);
-        const response = await displayApi.post('/displays/verify', { token: displayToken });
-        debugLog('✅ Display verification successful:', response.data);
-        
-        const { display: displayData, playlist, channels: channelsList } = response.data;
-        
-        setDisplay(displayData);
-        
-        // Channels are now included in the verify response
-        if (channelsList && channelsList.length > 0) {
-          debugLog('📺 Channels loaded:', channelsList.length);
-          setChannels(channelsList);
-          
-          // Auto-play first channel
-          const firstChannel = channelsList[0];
-          debugLog('▶️ Auto-playing:', firstChannel.name);
-          setCurrentChannel(firstChannel);
-        } else {
-          console.warn('⚠️ No channels found for this display');
-        }
-      } catch (err) {
-        console.error('❌ Display verification error:', err);
-        console.error('Error details:', err.response?.data);
-        setError(err.response?.data?.error || 'Invalid display token or display not found');
-      } finally {
-        setLoading(false);
-      }
-    };
+  useEffect(() => { verifyDisplay(); }, [verifyDisplay]);
 
-    verifyDisplay();
-  }, [displayToken]);
+  // ── Heartbeat ────────────────────────────────────────────────────────────
 
-  // Send heartbeat every 30 seconds
   useEffect(() => {
     if (!displayToken || !display) return;
 
-    const sendHeartbeat = async () => {
-      try {
-        debugLog('💓 Sending heartbeat...');
-        await displayApi.post('/displays/heartbeat', {
-          token: displayToken,
-          current_channel_id: currentChannel?.id || null
-        });
-        debugLog('✅ Heartbeat sent successfully');
-      } catch (error) {
-        console.error('❌ Heartbeat error:', error);
-      }
+    const send = () => {
+      displayApi.post('/displays/heartbeat', {
+        token: displayToken,
+        current_channel_id: currentChannel?.id || null,
+        status: showFallback ? 'fallback' : 'playing',
+        nowPlaying: currentChannel?.name || null,
+        uptime: Math.round((Date.now() - startTimeRef.current) / 1000),
+        appVersion: APP_VERSION
+      }).catch(() => {});
     };
 
-    // Initial heartbeat (immediate)
-    debugLog('🎬 Starting heartbeat system...');
-    sendHeartbeat();
+    send();
+    heartbeatRef.current = setInterval(send, HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(heartbeatRef.current);
+  }, [displayToken, display, currentChannel, showFallback]);
 
-    // Set up interval
-    heartbeatIntervalRef.current = setInterval(sendHeartbeat, 30000); // 30 seconds
+  // ── Command + override polling ───────────────────────────────────────────
 
-    return () => {
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-      }
-    };
-  }, [displayToken, display, currentChannel]);
-
-  // Poll for remote control commands every 2 seconds for fast response
   useEffect(() => {
     if (!displayToken || !display) return;
 
-    const pollCommands = async () => {
+    const poll = async () => {
       try {
-        const response = await displayApi.get(`/displays/commands/${displayToken}`);
-        const commands = response.data.commands || [];
-        
-        // Process commands
-        for (const command of commands) {
-          const commandData = command.command_data ? JSON.parse(command.command_data) : {};
-          
-          // Show visual feedback (will auto-hide after 3 seconds)
-          const commandInfo = {
-            type: command.command_type,
-            data: commandData,
-            time: new Date().toLocaleTimeString()
-          };
-          setLastCommand(commandInfo);
-          
-          // Also show notification in video (works in fullscreen)
-          showVideoNotification(commandInfo);
-          
-          // Clear any existing timeout
-          if (commandTimeoutRef.current) {
-            clearTimeout(commandTimeoutRef.current);
-          }
-          
-          // Auto-hide command indicator after 3 seconds
-          commandTimeoutRef.current = setTimeout(() => {
-            setLastCommand(null);
-          }, 3000);
-          
-          // Handle different command types
-          switch (command.command_type) {
-            case 'change_channel':
-              const targetChannel = channels.find(ch => ch.id === commandData.channel_id);
-              if (targetChannel) {
-                setCurrentChannel(targetChannel);
-              }
-              break;
-              
-            case 'set_volume':
-              if (videoRef.current && commandData.volume !== undefined) {
-                try {
-                  const volumeDecimal = parseInt(commandData.volume) / 100;
-                  videoRef.current.volume = volumeDecimal;
-                  videoRef.current.muted = false;
-                  setIsMuted(false);
-                  
-                  // Ensure video continues playing after volume change
-                  if (videoRef.current.paused) {
-                    videoRef.current.play().catch(err => {
-                      console.error('Error resuming playback after volume change:', err);
-                    });
-                  }
-                  
-                  debugLog(`🔊 Volume set to ${commandData.volume}%`);
-                } catch (err) {
-                  console.error('Error setting volume:', err);
-                }
-              }
-              break;
-              
-            case 'mute':
-              if (videoRef.current) {
-                videoRef.current.muted = true;
-                setIsMuted(true);
-              }
-              break;
-              
-            case 'unmute':
-              if (videoRef.current) {
-                debugLog('🔊 Unmute command received');
-                const video = videoRef.current;
-                const wasPaused = video.paused;
-                
-                debugLog('Video state before unmute:', {
-                  paused: video.paused,
-                  muted: video.muted,
-                  currentTime: video.currentTime,
-                  readyState: video.readyState
-                });
-                
-                // Unmute first
-                video.muted = false;
-                setIsMuted(false);
-                
-                // Always try to play (resume if paused, continue if playing)
-                video.play().then(() => {
-                  debugLog('✅ Video playing with sound');
-                }).catch(err => {
-                  console.error('❌ Error playing after unmute:', err);
-                  // If play fails, try muting again and playing
-                  video.muted = true;
-                  video.play().then(() => {
-                    debugLog('⚠️ Playing muted (browser blocked unmuted autoplay)');
-                  });
-                });
-                
-                debugLog('Unmute completed, video was paused:', wasPaused);
-              }
-              break;
-              
-            case 'toggle_fullscreen':
-              console.log('🖥️ Fullscreen command received');
-              console.log('Current fullscreen state:', {
-                fullscreenElement: document.fullscreenElement,
-                webkitFullscreenElement: document.webkitFullscreenElement,
-                isFullscreen: !!(document.fullscreenElement || document.webkitFullscreenElement)
-              });
-              
+        const { data } = await displayApi.get(`/displays/commands/${displayToken}`);
+        const commands = data.commands || [];
+        const override = data.override || null;
+
+        // Handle emergency override
+        if (override && new Date(override.expires_at) > new Date()) {
+          if (!activeOverride || activeOverride.id !== override.id) {
+            setActiveOverride(override);
+            // Fetch override playlist channels if different from current
+            if (override.m3u_url) {
               try {
-                const isCurrentlyFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                
-                if (!isCurrentlyFullscreen) {
-                  // Enter fullscreen
-                  console.log('Attempting to enter fullscreen...');
-                  const container = containerRef.current || document.documentElement;
-                  
-                  let fullscreenPromise;
-                  if (container.requestFullscreen) {
-                    fullscreenPromise = container.requestFullscreen();
-                  } else if (container.webkitRequestFullscreen) {
-                    fullscreenPromise = container.webkitRequestFullscreen();
-                  } else if (container.mozRequestFullScreen) {
-                    fullscreenPromise = container.mozRequestFullScreen();
-                  } else if (container.msRequestFullscreen) {
-                    fullscreenPromise = container.msRequestFullscreen();
-                  }
-                  
-                  if (fullscreenPromise) {
-                    await fullscreenPromise;
-                    console.log('✅ Entered fullscreen successfully');
-                    setIsFullscreen(true);
-                  } else {
-                    console.error('❌ Fullscreen API not supported');
-                  }
-                } else {
-                  // Exit fullscreen
-                  console.log('Attempting to exit fullscreen...');
-                  
-                  let exitPromise;
-                  if (document.exitFullscreen) {
-                    exitPromise = document.exitFullscreen();
-                  } else if (document.webkitExitFullscreen) {
-                    exitPromise = document.webkitExitFullscreen();
-                  } else if (document.mozCancelFullScreen) {
-                    exitPromise = document.mozCancelFullScreen();
-                  } else if (document.msExitFullscreen) {
-                    exitPromise = document.msExitFullscreen();
-                  }
-                  
-                  if (exitPromise) {
-                    await exitPromise;
-                    console.log('✅ Exited fullscreen successfully');
-                    setIsFullscreen(false);
-                  }
-                }
-              } catch (err) {
-                console.error('❌ Fullscreen error:', err);
-                console.error('Error details:', {
-                  message: err.message,
-                  name: err.name,
-                  code: err.code
-                });
-              }
-              break;
-              
-            default:
-              console.warn('Unknown command type:', command.command_type);
+                const { data: vData } = await displayApi.post('/displays/verify', { token: displayToken });
+                // override playlist channels aren't fetched here — handled by change_channel command or refresh
+              } catch { /* ignore */ }
+            }
           }
-          
-          // Mark command as executed
-          await displayApi.patch(`/displays/commands/${command.id}/execute`);
+        } else if (activeOverride) {
+          // Override expired — revert
+          setActiveOverride(null);
+          if (normalPlaylistRef.current?.length) {
+            setChannels(normalPlaylistRef.current);
+            setCurrentChannel(normalPlaylistRef.current[0]);
+          }
         }
-      } catch (error) {
-        console.error('Command polling error:', error);
-      }
+
+        for (const cmd of commands) {
+          const d = cmd.command_data ? JSON.parse(cmd.command_data) : {};
+          setLastCommand({ type: cmd.command_type, data: d, time: new Date().toLocaleTimeString() });
+          clearTimeout(commandTimeoutRef.current);
+          commandTimeoutRef.current = setTimeout(() => setLastCommand(null), 3000);
+
+          if (cmd.command_type === 'change_channel') {
+            const ch = channels.find(c => c.id === d.channel_id);
+            if (ch) setCurrentChannel(ch);
+          } else if (cmd.command_type === 'set_volume' && videoRef.current) {
+            videoRef.current.volume = (parseInt(d.volume) || 50) / 100;
+            videoRef.current.muted = false;
+            setIsMuted(false);
+            if (videoRef.current.paused) videoRef.current.play().catch(() => {});
+          } else if (cmd.command_type === 'mute' && videoRef.current) {
+            videoRef.current.muted = true; setIsMuted(true);
+          } else if (cmd.command_type === 'unmute' && videoRef.current) {
+            videoRef.current.muted = false; setIsMuted(false);
+            videoRef.current.play().catch(() => { videoRef.current.muted = true; videoRef.current.play().catch(() => {}); });
+          } else if (cmd.command_type === 'toggle_fullscreen') {
+            const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (!inFS) await enterFullscreen().catch(() => {});
+            else { if (document.exitFullscreen) document.exitFullscreen(); }
+          } else if (cmd.command_type === 'check_override' || cmd.command_type === 'revert_override') {
+            // Already handled above via override field
+          } else if (cmd.command_type === 'refresh_playlist') {
+            verifyDisplay();
+          }
+
+          await displayApi.patch(`/displays/commands/${cmd.id}/execute`).catch(() => {});
+        }
+      } catch { /* network down — silent */ }
     };
 
-    // Initial poll
-    pollCommands();
+    poll();
+    commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
+    return () => clearInterval(commandPollRef.current);
+  }, [displayToken, display, channels, activeOverride, enterFullscreen, verifyDisplay]);
 
-    // Set up interval - Poll every 2 seconds for fast command response (mute/unmute/channel change)
-    commandPollingIntervalRef.current = setInterval(pollCommands, 2000); // 2 seconds
+  // ── Video player ─────────────────────────────────────────────────────────
 
-    return () => {
-      if (commandPollingIntervalRef.current) {
-        clearInterval(commandPollingIntervalRef.current);
-      }
-    };
-  }, [displayToken, display, channels]);
-
-  // Video player setup with auto-retry
   useEffect(() => {
-    if (!currentChannel || !videoRef.current) return;
+    if (!currentChannel?.url || !videoRef.current) return;
 
     const video = videoRef.current;
-    const isHLS = currentChannel.url.endsWith('.m3u8');
-    
-    // Detect iOS - MORE ROBUST DETECTION
-    const userAgent = navigator.userAgent || '';
-    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream ||
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad on iOS 13+
-    const hasNativeHLS = video.canPlayType('application/vnd.apple.mpegurl') !== '' ||
-                         video.canPlayType('application/x-mpegURL') !== '';
-    
-    // Log detection for debugging
-    console.log('🔍 Kiosk Device Detection:', {
-      userAgent: userAgent,
-      isIOS: isIOS,
-      isHLS: isHLS,
-      hasNativeHLS: hasNativeHLS,
-      HlsSupported: Hls.isSupported(),
-      url: currentChannel.url
-    });
-    
+    const ua = navigator.userAgent || '';
+    const isIOS = (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isHLS = (() => {
+      try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); }
+      catch { return currentChannel.url?.toLowerCase().includes('.m3u8') ?? false; }
+    })();
+
     let retryCount = 0;
-    const maxRetries = 3;
-    let errorHandler = null;
-    
-    // 🚨 CRITICAL: Timeout guard to prevent infinite loading in kiosk mode
-    let playbackStartTimeout = null;
-    let hasStartedPlaying = false;
-    let timeoutCleared = false;
-    
-    const clearPlaybackTimeout = () => {
-      if (playbackStartTimeout && !timeoutCleared) {
-        clearTimeout(playbackStartTimeout);
-        timeoutCleared = true;
-      }
-    };
-    
-    const startPlaybackTimeout = () => {
-      clearPlaybackTimeout();
-      playbackStartTimeout = setTimeout(() => {
-        if (!hasStartedPlaying && video.readyState < 3) {
-          console.error('⏱️ KIOSK TIMEOUT: Video did not start playing within 15 seconds');
-          console.error('Video state:', {
-            readyState: video.readyState,
-            networkState: video.networkState,
-            paused: video.paused,
-            currentTime: video.currentTime
-          });
-          // In kiosk mode, we should retry automatically
-          if (retryCount < maxRetries) {
-            console.log('🔄 Kiosk: Retrying due to timeout...');
-            retryCount++;
-            setTimeout(() => {
-              video.src = '';
-              video.load();
-              video.src = currentChannel.url;
-              video.play().catch(() => {
-                video.muted = true;
-                video.play();
-              });
-            }, 2000);
-          }
+    const maxRetries = 5;
+    let hasStarted = false;
+    let playTimeout = null;
+
+    const clearPT = () => { if (playTimeout) { clearTimeout(playTimeout); playTimeout = null; } };
+
+    const startPT = () => {
+      clearPT();
+      playTimeout = setTimeout(() => {
+        if (!hasStarted && retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(() => setupPlayer(), 2000);
         }
-      }, 15000); // 15 second timeout for kiosk mode (longer since it's unattended)
+      }, 15_000);
     };
 
     const setupPlayer = () => {
-      // CRITICAL: On iOS - ALWAYS use native HLS (NEVER HLS.js - avoids CORS issues)
-      // On other platforms: Use HLS.js if supported, otherwise native
-      if (isHLS && isIOS) {
-        // iOS: FORCE native HLS - this is the ONLY path for iOS
-        console.log('✅ Kiosk iOS DETECTED - FORCING native HLS playback (no HLS.js)');
-        video.src = '';
-        video.load();
-        
-        // CRITICAL: Set iOS-specific attributes BEFORE setting source
-        video.controls = true;
+      clearPT();
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+
+      if (isHLS && (isIOS || (!Hls.isSupported() && video.canPlayType('application/vnd.apple.mpegurl') !== ''))) {
+        // Native HLS (iOS / Safari)
+        video.src = ''; video.load();
         video.playsInline = true;
         video.setAttribute('playsinline', 'true');
         video.setAttribute('webkit-playsinline', 'true');
-        video.setAttribute('x-webkit-airplay', 'allow');
-        video.preload = 'auto';
         video.muted = false;
-        
-        // Set new source
         video.src = currentChannel.url;
-        
-        console.log('📱 Kiosk iOS Native HLS Setup:', {
-          src: video.src,
-          currentSrc: video.currentSrc,
-          controls: video.controls,
-          playsInline: video.playsInline,
-          readyState: video.readyState
-        });
-        
-        // Start timeout guard
-        startPlaybackTimeout();
-        
-        // Track playing event
-        const handlePlaying = () => {
-          hasStartedPlaying = true;
-          clearPlaybackTimeout();
-        };
-        video.addEventListener('playing', handlePlaying);
-        
-        video.play().then(() => {
-          hasStartedPlaying = true;
-          clearPlaybackTimeout();
-        }).catch(err => {
-          console.log('Auto-play with sound blocked, trying muted...');
-          video.muted = true;
-          setIsMuted(true);
-          video.play().then(() => {
-            hasStartedPlaying = true;
-            clearPlaybackTimeout();
-          }).catch(e => console.error('Muted play error:', e));
-        });
-
-        // Auto-retry on error
-        errorHandler = () => {
-          clearPlaybackTimeout(); // Clear timeout on error
-          if (retryCount < maxRetries) {
-            console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
-            retryCount++;
-            setTimeout(() => {
-              video.load();
-              video.play().then(() => {
-                hasStartedPlaying = true;
-              }).catch(() => {
-                video.muted = true;
-                video.play().then(() => {
-                  hasStartedPlaying = true;
-                });
-              });
-              // Restart timeout after retry
-              startPlaybackTimeout();
-            }, 5000);
-          }
-        };
-        video.addEventListener('error', errorHandler);
-        
-      } else if (isHLS && !isIOS && Hls.isSupported()) {
-        // HLS.js playback (Android, Chrome, Firefox, etc.) - NOT iOS
-        // DOUBLE CHECK: If somehow iOS reaches here, abort and use native
-        if (isIOS) {
-          console.error('❌ ERROR: iOS detected in Kiosk HLS.js path - ABORTING');
-          video.src = '';
-          video.load();
-          video.controls = true;
-          video.src = currentChannel.url;
-          video.play().catch(err => console.error('Play error:', err));
-          return;
-        }
-        
-        console.log('⚠️ Kiosk Using HLS.js playback (NOT iOS)');
-        // Clean up existing instance
-        if (hlsRef.current) {
-          hlsRef.current.destroy();
-        }
-
-        const hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 60
-        });
-
+        startPT();
+        video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
+      } else if (isHLS && Hls.isSupported()) {
+        // HLS.js
+        const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
         hlsRef.current = hls;
         hls.loadSource(currentChannel.url);
         hls.attachMedia(video);
-
-        // Start timeout guard for HLS.js path
-        startPlaybackTimeout();
-        
+        startPT();
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          // Try playing with sound first
           video.muted = false;
-          video.play().then(() => {
-            hasStartedPlaying = true;
-            clearPlaybackTimeout();
-          }).catch(err => {
-            console.log('Auto-play with sound blocked, trying muted...');
-            // If blocked, play muted (browsers require muted for auto-play)
-            video.muted = true;
-            setIsMuted(true);
-            video.play().then(() => {
-              hasStartedPlaying = true;
-              clearPlaybackTimeout();
-            }).catch(e => console.error('Muted play error:', e));
-          });
+          video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
         });
-        
-        // Track playing event
-        video.addEventListener('playing', () => {
-          hasStartedPlaying = true;
-          clearPlaybackTimeout();
+        hls.on(Hls.Events.ERROR, (_, d) => {
+          if (d.fatal && retryCount < maxRetries) { retryCount++; setTimeout(() => setupPlayer(), 5_000); }
         });
-
-        hls.on(Hls.Events.ERROR, (event, data) => {
-          console.error('HLS Error:', data);
-          
-          if (data.fatal) {
-            clearPlaybackTimeout(); // Clear timeout on fatal error
-            if (retryCount < maxRetries) {
-              console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
-              retryCount++;
-              setTimeout(() => {
-                hls.destroy();
-                setupPlayer(); // This will restart the timeout
-              }, 5000);
-            } else {
-              console.error('Max retries reached');
-            }
-          }
-        });
-
-      } else if (isHLS && !isIOS && !Hls.isSupported() && hasNativeHLS) {
-        // HLS stream on non-iOS device without HLS.js support but with native HLS
-        console.log('📺 Kiosk Using native HLS playback (non-iOS, no HLS.js support)');
-        
-        // Start timeout guard
-        startPlaybackTimeout();
-        
-        video.src = '';
-        video.load();
-        video.controls = true;
-        video.playsInline = true;
-        video.muted = false;
-        video.src = currentChannel.url;
-        
-        const handleNativePlaying = () => {
-          hasStartedPlaying = true;
-          clearPlaybackTimeout();
-        };
-        video.addEventListener('playing', handleNativePlaying);
-        
-        video.play().then(() => {
-          hasStartedPlaying = true;
-          clearPlaybackTimeout();
-        }).catch(err => {
-          console.log('Auto-play with sound blocked, trying muted...');
-          video.muted = true;
-          setIsMuted(true);
-          video.play().then(() => {
-            hasStartedPlaying = true;
-            clearPlaybackTimeout();
-          }).catch(e => console.error('Muted play error:', e));
-        });
-
-        // Auto-retry on error
-        errorHandler = () => {
-          clearPlaybackTimeout(); // Clear timeout on error
-          if (retryCount < maxRetries) {
-            console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
-            retryCount++;
-            setTimeout(() => {
-              video.load();
-              video.play().then(() => {
-                hasStartedPlaying = true;
-              }).catch(() => {
-                video.muted = true;
-                video.play().then(() => {
-                  hasStartedPlaying = true;
-                });
-              });
-              // Restart timeout after retry
-              startPlaybackTimeout();
-            }, 5000);
-          }
-        };
-        video.addEventListener('error', errorHandler);
-        
       } else {
-        // Native playback (non-HLS streams)
-        console.log('🎬 Kiosk Using native video playback (non-HLS)');
-        
-        // Start timeout guard
-        startPlaybackTimeout();
-        
+        // Native MP4 / RTSP fallback
         video.src = currentChannel.url;
         video.playsInline = true;
-        video.muted = false;
-        
-        const handleNativePlaying = () => {
-          hasStartedPlaying = true;
-          clearPlaybackTimeout();
-        };
-        video.addEventListener('playing', handleNativePlaying);
-        
-        video.play().then(() => {
-          hasStartedPlaying = true;
-          clearPlaybackTimeout();
-        }).catch(err => {
-          console.log('Auto-play with sound blocked, trying muted...');
-          video.muted = true;
-          setIsMuted(true);
-          video.play().then(() => {
-            hasStartedPlaying = true;
-            clearPlaybackTimeout();
-          }).catch(e => console.error('Muted play error:', e));
-        });
-
-        // Auto-retry on error
-        errorHandler = () => {
-          clearPlaybackTimeout(); // Clear timeout on error
-          if (retryCount < maxRetries) {
-            console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
-            retryCount++;
-            setTimeout(() => {
-              video.load();
-              video.play().then(() => {
-                hasStartedPlaying = true;
-              }).catch(() => {
-                video.muted = true;
-                video.play().then(() => {
-                  hasStartedPlaying = true;
-                });
-              });
-              // Restart timeout after retry
-              startPlaybackTimeout();
-            }, 5000);
-          }
-        };
-        video.addEventListener('error', errorHandler);
+        startPT();
+        video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
       }
     };
+
+    const onPlaying = () => { hasStarted = true; clearPT(); };
+    video.addEventListener('playing', onPlaying);
 
     setupPlayer();
 
-    // Store playing handler for cleanup
-    let playingHandler = null;
-    
-    // Set up playing handler reference (if not already set)
-    if (!playingHandler) {
-      playingHandler = () => {
-        hasStartedPlaying = true;
-        clearPlaybackTimeout();
-      };
-    }
-
     return () => {
-      clearPlaybackTimeout(); // Clear timeout on cleanup
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-      if (errorHandler && video) {
-        video.removeEventListener('error', errorHandler);
-      }
-      // Remove playing event listener with the actual handler
-      if (playingHandler && video) {
-        video.removeEventListener('playing', playingHandler);
-      }
+      clearPT();
+      video.removeEventListener('playing', onPlaying);
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     };
   }, [currentChannel]);
+
+  // ── Start overlay (tap to enter fullscreen) ──────────────────────────────
+
+  const handleStart = async () => {
+    setShowStartOverlay(false);
+    await enterFullscreen();
+  };
+
+  // ── Renders ──────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-black">
         <div className="text-center">
-          <Spinner size="xl" className="mb-4" />
-          <p className="text-white text-lg">Initializing Display...</p>
+          <div className="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white text-lg">Initializing Display…</p>
         </div>
       </div>
     );
   }
 
   if (error) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-black">
-        <div className="text-center p-8 bg-tv-error/20 rounded-lg border border-tv-error/30 max-w-md">
-          <svg className="w-16 h-16 mx-auto text-red-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h2 className="text-2xl font-bold text-white mb-2">Display Error</h2>
-          <p className="text-red-400">{error}</p>
-        </div>
-      </div>
-    );
+    return <FallbackScreen retryIn={0} message={error} />;
   }
 
-  if (!currentChannel) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-black">
-        <div className="text-center">
-          <svg className="w-24 h-24 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-          <p className="text-gray-500 text-lg">No channel assigned</p>
-        </div>
-      </div>
-    );
+  if (showFallback && !display) {
+    return <FallbackScreen retryIn={retryIn} message={fallbackMsg} />;
   }
-
-  const handleUnmute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = false;
-      setIsMuted(false);
-    }
-  };
-
-  // Show notification overlay on video (works even in fullscreen)
-  const showVideoNotification = (commandInfo) => {
-    if (!videoRef.current) return;
-
-    // Create a text track for displaying notifications (works in fullscreen!)
-    let track = Array.from(videoRef.current.textTracks).find(t => t.label === 'notifications');
-    
-    if (!track) {
-      const trackElement = document.createElement('track');
-      trackElement.kind = 'metadata';
-      trackElement.label = 'notifications';
-      trackElement.srclang = 'en';
-      videoRef.current.appendChild(trackElement);
-      track = videoRef.current.textTracks[videoRef.current.textTracks.length - 1];
-      track.mode = 'hidden'; // We'll use custom rendering
-    }
-
-    // Create a temporary cue/notification overlay
-    // Since iOS doesn't allow DOM overlays in fullscreen, we'll use a different approach:
-    // Create a floating div that mimics Picture-in-Picture style notification
-    
-    const notification = document.createElement('div');
-    notification.className = 'video-notification';
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      background: rgba(255, 193, 7, 0.95);
-      color: black;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 14px;
-      font-weight: bold;
-      z-index: 2147483647;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      pointer-events: none;
-      animation: slideIn 0.3s ease-out;
-    `;
-    
-    let text = `🎮 ${commandInfo.type}`;
-    if (commandInfo.data.volume) text += ` ${commandInfo.data.volume}%`;
-    
-    notification.textContent = text;
-    document.body.appendChild(notification);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-      notification.style.opacity = '0';
-      notification.style.transition = 'opacity 0.5s';
-      setTimeout(() => notification.remove(), 500);
-    }, 3000);
-  };
-
-  const handleFullscreenToggle = async () => {
-    try {
-      const isCurrentlyFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-      
-      if (!isCurrentlyFullscreen) {
-        const container = containerRef.current || document.documentElement;
-        if (container.requestFullscreen) {
-          await container.requestFullscreen();
-        } else if (container.webkitRequestFullscreen) {
-          await container.webkitRequestFullscreen();
-        }
-        console.log('✅ Entered fullscreen');
-      } else {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          await document.webkitExitFullscreen();
-        }
-        console.log('✅ Exited fullscreen');
-      }
-    } catch (err) {
-      console.error('Fullscreen error:', err);
-    }
-  };
 
   return (
-    <div ref={containerRef} className="h-screen w-screen bg-black overflow-hidden relative">
-      {/* Full Screen Video Player */}
-      <video
-        ref={videoRef}
-        className="w-full h-full object-contain"
-        autoPlay
-        controls
-        playsInline
-      />
-      
-      {/* Command Indicator - Positioned over video (with high z-index for fullscreen) */}
+    <div
+      ref={containerRef}
+      className="h-screen w-screen bg-black overflow-hidden relative"
+      style={{ cursor: cursorVisible ? 'default' : 'none' }}
+    >
+      {/* ── Tap-to-start overlay (first load) ──────────────────── */}
+      {showStartOverlay && (
+        <div
+          className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm"
+          onClick={handleStart}
+        >
+          <div className="w-20 h-20 rounded-2xl bg-[#B03A48] flex items-center justify-center mb-6 shadow-2xl">
+            <svg viewBox="0 0 48 48" className="w-12 h-12" fill="none">
+              <rect x="6" y="28" width="36" height="6" rx="3" fill="white" opacity=".9"/>
+              <rect x="6" y="20" width="36" height="6" rx="3" fill="white" opacity=".7"/>
+              <rect x="6" y="12" width="36" height="6" rx="3" fill="white" opacity=".5"/>
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">Bake &amp; Grill TV</h1>
+          <p className="text-white/50 mb-10 text-sm">{display?.name || 'Display'}</p>
+          <div className="bg-white/10 border border-white/20 px-8 py-3 rounded-full text-white font-semibold text-lg animate-pulse">
+            Tap to Start
+          </div>
+        </div>
+      )}
+
+      {/* ── Emergency override banner ───────────────────────────── */}
+      {activeOverride && (
+        <div
+          className="fixed top-0 left-0 right-0 z-40 bg-red-600 text-white text-center py-2 text-sm font-bold tracking-wide"
+          style={{ zIndex: 2147483646 }}
+        >
+          🚨 {activeOverride.override_message} — ends {new Date(activeOverride.expires_at).toLocaleTimeString()}
+        </div>
+      )}
+
+      {/* ── Video ────────────────────────────────────────────────── */}
+      {currentChannel ? (
+        <video
+          ref={videoRef}
+          className="w-full h-full object-contain"
+          autoPlay
+          playsInline
+          controls={false}
+        />
+      ) : (
+        <FallbackScreen retryIn={retryIn} message={fallbackMsg || 'No channel assigned'} />
+      )}
+
+      {/* ── Command toast ─────────────────────────────────────────── */}
       {lastCommand && (
-        <div 
-          className="fixed top-4 left-4 bg-yellow-500/95 backdrop-blur-sm px-4 py-2 rounded-lg shadow-2xl transition-opacity duration-500 pointer-events-none"
+        <div
+          className="fixed top-4 left-4 bg-yellow-500/95 backdrop-blur-sm px-4 py-2 rounded-lg shadow-2xl pointer-events-none"
           style={{ zIndex: 2147483647 }}
         >
           <p className="text-black text-sm font-bold">
-            🎮 {lastCommand.type}
-            {lastCommand.data.volume && ` (${lastCommand.data.volume}%)`}
+            🎮 {lastCommand.type}{lastCommand.data?.volume ? ` ${lastCommand.data.volume}%` : ''}
           </p>
           <p className="text-black/70 text-xs">{lastCommand.time}</p>
         </div>
       )}
 
-      {/* Unmute Button (if muted) */}
-      {isMuted && (
+      {/* ── Unmute prompt ─────────────────────────────────────────── */}
+      {isMuted && !showStartOverlay && (
         <button
-          onClick={handleUnmute}
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-primary hover:bg-primary-dark text-white px-8 py-4 rounded-full shadow-2xl transition-all z-10"
+          onClick={() => {
+            if (videoRef.current) { videoRef.current.muted = false; setIsMuted(false); }
+          }}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#B03A48] hover:bg-[#8f2d3a] text-white px-8 py-4 rounded-full shadow-2xl transition-all z-30"
         >
           <svg className="w-8 h-8 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
           </svg>
-          Click to Unmute
+          Tap to Unmute
         </button>
       )}
 
-      {/* Channel Info Overlay (small, bottom-right) */}
-      <div className="absolute bottom-20 right-4 bg-black/70 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/10">
-        <p className="text-white text-sm font-medium">{currentChannel.name}</p>
-        {currentChannel.group && (
-          <p className="text-gray-400 text-xs">{currentChannel.group}</p>
-        )}
-      </div>
+      {/* ── Channel info chip (bottom-right) ──────────────────────── */}
+      {currentChannel && !showStartOverlay && (
+        <div className="absolute bottom-8 right-4 bg-black/70 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/10 pointer-events-none">
+          <p className="text-white text-sm font-medium">{currentChannel.name}</p>
+          {currentChannel.group && <p className="text-gray-400 text-xs">{currentChannel.group}</p>}
+        </div>
+      )}
 
-      {/* Fullscreen Toggle Button (top-left) - hidden in fullscreen */}
-      {!isFullscreen && (
+      {/* ── Fullscreen button (only when not in fullscreen & overlay gone) ── */}
+      {!isFullscreen && !showStartOverlay && (
         <button
-          onClick={handleFullscreenToggle}
-          className="absolute top-4 left-4 bg-tv-goldDark/90 hover:bg-tv-gold text-white p-3 rounded-lg shadow-lg transition-all z-20 backdrop-blur-sm"
+          onClick={enterFullscreen}
+          className="absolute top-4 left-4 bg-black/60 hover:bg-black/80 text-white p-3 rounded-lg shadow-lg transition-all z-20 backdrop-blur-sm"
           title="Enter Fullscreen"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-          </svg>
-        </button>
-      )}
-      
-      {/* Exit Fullscreen Button - shown IN fullscreen */}
-      {isFullscreen && (
-        <button
-          onClick={handleFullscreenToggle}
-          className="absolute top-4 right-4 bg-tv-accent/90 hover:bg-tv-accentHover text-white px-4 py-2 rounded-lg shadow-lg transition-all z-20 backdrop-blur-sm flex items-center gap-2"
-          style={{ zIndex: 2147483647 }}
-          title="Exit Fullscreen"
-        >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
           </svg>
-          <span className="text-sm font-bold">Exit Fullscreen</span>
         </button>
       )}
-      
-      {/* Display Name (small, top-right) - hidden in fullscreen */}
-      {display?.name && !isFullscreen && (
-        <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full">
+
+      {/* ── Display name chip (top-right, not in fullscreen) ─────────── */}
+      {display?.name && !isFullscreen && !showStartOverlay && (
+        <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full pointer-events-none">
           <p className="text-white/70 text-xs">{display.name}</p>
         </div>
       )}
-
-      {/* Info Ticker - Phase 3 - TEMPORARILY DISABLED */}
-      {/* {display?.id && (
-        <div className="absolute bottom-0 left-0 right-0 z-30">
-          <TickerBar displayId={display.id} />
-        </div>
-      )} */}
-
-      {/* Announcements Overlay - Phase 3 - TEMPORARILY DISABLED */}
-      {/* {display?.id && (
-        <AnnouncementOverlay displayId={display.id} />
-      )} */}
     </div>
   );
 }
-

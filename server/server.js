@@ -26,6 +26,7 @@ const permissionsRoutes = require('./routes/permissions');
 const notificationsRoutes = require('./routes/notifications');
 const pairingRoutes = require('./routes/pairing');
 const reconnectRoutes = require('./routes/reconnect');
+const zonesRoutes = require('./routes/zones');
 
 // Phase 1: New content routes (featuresRoutes already declared above)
 const playlistItemsRoutes = require('./routes/playlistItems');
@@ -198,8 +199,9 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/permissions', permissionsRoutes);
 app.use('/api/notifications', notificationsRoutes);
-app.use('/api/pairing', pairingRoutes); // Must be before catch-all schedules route
+app.use('/api/pairing', pairingRoutes);
 app.use('/api/reconnect', reconnectRoutes);
+app.use('/api/zones', zonesRoutes);
 
 // Phase 1: Content routes (features already mounted above as public route)
 app.use('/api/playlist-items', playlistItemsRoutes);

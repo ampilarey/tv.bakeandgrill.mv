@@ -22,6 +22,7 @@ import Settings from './pages/admin/Settings';
 import TickerManagement from './pages/admin/TickerManagement';
 import ScheduleManagement from './pages/admin/ScheduleManagement';
 import SceneManagement from './pages/admin/SceneManagement';
+import ZoneManagement from './pages/admin/ZoneManagement';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -249,6 +250,14 @@ function AppRouter() {
           element={
             <AdminRoute>
               <SceneManagement />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/zones"
+          element={
+            <AdminRoute>
+              <ZoneManagement />
             </AdminRoute>
           }
         />

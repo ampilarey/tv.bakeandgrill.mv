@@ -81,13 +81,14 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
 /**
  * POST /api/displays/heartbeat
  * Update display heartbeat (public endpoint for displays)
+ * Body: { token, current_channel_id?, status?, nowPlaying?, uptime?, appVersion? }
  */
 router.post('/heartbeat', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
-  const { token, current_channel_id } = req.body;
+  const { token, current_channel_id, status, nowPlaying, uptime, appVersion } = req.body;
   const db = getDatabase();
-  
+
   const [displays] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);
-  
+
   if (displays.length === 0) {
     return res.status(404).json({
       success: false,
@@ -95,35 +96,44 @@ router.post('/heartbeat', displayLimiter, verifyDisplayToken, asyncHandler(async
       code: 'DISPLAY_NOT_FOUND'
     });
   }
-  
+
   const display = displays[0];
-  
-  // Update heartbeat and optional current channel
-  if (current_channel_id) {
-    await db.query(
-      'UPDATE displays SET last_heartbeat = CURRENT_TIMESTAMP, current_channel_id = ? WHERE id = ?',
-      [current_channel_id, display.id]
-    );
-  } else {
-    await db.query('UPDATE displays SET last_heartbeat = CURRENT_TIMESTAMP WHERE id = ?', [display.id]);
-  }
-  
-  res.json({
-    success: true,
-    message: 'Heartbeat updated'
-  });
+
+  await db.query(
+    `UPDATE displays
+     SET last_heartbeat   = CURRENT_TIMESTAMP,
+         current_channel_id = COALESCE(?, current_channel_id),
+         last_status        = COALESCE(?, last_status),
+         now_playing        = COALESCE(?, now_playing),
+         uptime_seconds     = COALESCE(?, uptime_seconds),
+         app_version        = COALESCE(?, app_version)
+     WHERE id = ?`,
+    [
+      current_channel_id || null,
+      status     || null,
+      nowPlaying || null,
+      uptime     || null,
+      appVersion || null,
+      display.id
+    ]
+  );
+
+  res.json({ success: true, message: 'Heartbeat updated' });
 }));
 
 /**
  * GET /api/displays/commands/:token
- * Poll for pending commands (public endpoint for displays)
+ * Poll for pending commands + active override (public endpoint for displays)
  */
 router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => {
   const { token } = req.params;
   const db = getDatabase();
-  
-  const [displays] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);
-  
+
+  const [displays] = await db.query(
+    'SELECT id, zone_id FROM displays WHERE token = ?',
+    [token]
+  );
+
   if (displays.length === 0) {
     return res.status(404).json({
       success: false,
@@ -131,19 +141,35 @@ router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => 
       code: 'DISPLAY_NOT_FOUND'
     });
   }
-  
+
   const display = displays[0];
-  
-  // Get unexecuted commands
+
+  // Pending commands
   const [commands] = await db.query(
     'SELECT * FROM display_commands WHERE display_id = ? AND is_executed = FALSE ORDER BY created_at ASC',
     [display.id]
   );
-  
-  res.json({
-    success: true,
-    commands
-  });
+
+  // Active emergency override for this display or its zone
+  let override = null;
+  try {
+    const [overrides] = await db.query(
+      `SELECT eo.*, p.m3u_url, p.name AS playlist_name
+       FROM emergency_overrides eo
+       LEFT JOIN playlists p ON p.id = eo.playlist_id
+       WHERE eo.is_active = 1
+         AND eo.expires_at > NOW()
+         AND (eo.display_id = ? OR eo.zone_id = ?)
+       ORDER BY eo.started_at DESC
+       LIMIT 1`,
+      [display.id, display.zone_id || -1]
+    );
+    if (overrides.length) override = overrides[0];
+  } catch {
+    // emergency_overrides table may not exist yet on first boot — safe to ignore
+  }
+
+  res.json({ success: true, commands, override });
 }));
 
 /**
@@ -489,6 +515,23 @@ router.post('/:id/control',
     command: commands[0],
     message: 'Command queued for display'
   });
+}));
+
+/**
+ * POST /api/displays/:id/enable-pairing
+ * Open a 10-minute pairing window for this display (admin only)
+ */
+router.post('/:id/enable-pairing', requireAdmin, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const { id } = req.params;
+  const minutes = parseInt(req.body.minutes, 10) || 10;
+  const until = new Date(Date.now() + minutes * 60 * 1000);
+
+  const [existing] = await db.query('SELECT id FROM displays WHERE id = ?', [id]);
+  if (!existing.length) return res.status(404).json({ success: false, error: 'Display not found' });
+
+  await db.query('UPDATE displays SET pairing_enabled_until = ? WHERE id = ?', [until, id]);
+  res.json({ success: true, pairing_enabled_until: until, message: `Pairing window open for ${minutes} min` });
 }));
 
 module.exports = router;
