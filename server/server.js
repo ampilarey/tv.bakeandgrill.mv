@@ -38,8 +38,6 @@ const scenesRoutes = require('./routes/scenes');
 const templatesRoutes = require('./routes/templates');
 const announcementsRoutes = require('./routes/announcements');
 
-// Phase 2: Uploads - TEMPORARILY DISABLED (requires multer/sharp)
-// const uploadsRoutes = require('./routes/uploads');
 
 // Background services
 const channelChecker = require('./services/channelChecker');
@@ -217,7 +215,6 @@ app.use('/api/templates', templatesRoutes);
 app.use('/api/announcements', announcementsRoutes);
 
 // Phase 2: File uploads - TEMPORARILY DISABLED (missing multer/sharp packages)
-// app.use('/api/uploads', uploadsRoutes);
 
 // Phase 6: Scene Activation
 const sceneActivationRoutes = require('./routes/sceneActivation');

@@ -23,13 +23,28 @@ const fs      = require('fs').promises;
 const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { asyncHandler }              = require('../middleware/errorHandler');
 const { getDatabase }               = require('../database/init');
-const {
-  optimizeImage,
-  createThumbnail,
-  validateImage,
-  generateUniqueFilename,
-  deleteImage
-} = require('../utils/imageOptimizer');
+// sharp is a native module — may not be available on all hosts
+let imgTools = null;
+try {
+  imgTools = require('../utils/imageOptimizer');
+} catch (e) {
+  console.warn('⚠️  Image optimizer (sharp) unavailable — uploads saved without optimization:', e.message);
+}
+
+// Fallback helpers when sharp is missing
+const generateUniqueFilename = imgTools
+  ? imgTools.generateUniqueFilename
+  : (orig) => {
+      const ts  = Date.now();
+      const rnd = Math.random().toString(36).slice(2, 8);
+      const ext = require('path').extname(orig);
+      const base = require('path').basename(orig, ext).replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      return `${base}-${ts}-${rnd}${ext}`;
+    };
+
+const deleteImage = imgTools
+  ? imgTools.deleteImage
+  : async (p) => { try { await fs.unlink(p); } catch { /* ignore */ } };
 
 // ── Magic-byte validation helpers ──────────────────────────────────────────
 
@@ -81,8 +96,12 @@ const imageUpload = multer({
   storage: diskStorage('images'),
   limits: { fileSize: MAX_IMAGE_MB * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    try { validateImage(file); cb(null, true); }
-    catch (e) { cb(e, false); }
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.mimetype)) return cb(new Error('Only JPEG, PNG, WebP images allowed'), false);
+    if (imgTools) {
+      try { imgTools.validateImage(file); } catch (e) { return cb(e, false); }
+    }
+    cb(null, true);
   }
 });
 
@@ -145,30 +164,45 @@ async function saveAsset(db, { type, originalName, storedName, url, thumbnailUrl
 }
 
 async function processImageFile(file, req, db) {
-  const origPath  = file.path;
-  const optName   = `opt-${file.filename}`;
-  const optPath   = path.join(path.dirname(origPath), optName);
-  const thumbName = `thumb-${file.filename}`;
-  const thumbPath = path.join(path.dirname(origPath), thumbName);
-
-  const magicOk = await checkMagic(origPath, 'image');
+  const origPath = file.path;
+  const magicOk  = await checkMagic(origPath, 'image');
   if (!magicOk) { await deleteImage(origPath); throw new Error('File signature mismatch — not a valid image'); }
 
-  const info  = await optimizeImage(origPath, optPath, { maxWidth: 1920, maxHeight: 1080, quality: 85 });
-  await createThumbnail(origPath, thumbPath, 400);
-  await deleteImage(origPath);
+  const base = baseUrl(req);
+  let storedName, url, thumbUrl, width, height, sizeBytes;
 
-  const base  = baseUrl(req);
-  const url   = `${base}/uploads/images/${optName}`;
-  const thumb = `${base}/uploads/images/${thumbName}`;
+  if (imgTools) {
+    // Optimize + thumbnail with sharp
+    const optName   = `opt-${file.filename}`;
+    const optPath   = path.join(path.dirname(origPath), optName);
+    const thumbName = `thumb-${file.filename}`;
+    const thumbPath = path.join(path.dirname(origPath), thumbName);
 
-  const asset = await saveAsset(db, {
-    type: 'image', originalName: file.originalname, storedName: optName,
-    url, thumbnailUrl: thumb, mimeType: file.mimetype,
-    sizeBytes: info.size, width: info.width, height: info.height,
-    uploadedBy: req.user?.id
+    const info = await imgTools.optimizeImage(origPath, optPath, { maxWidth: 1920, maxHeight: 1080, quality: 85 });
+    await imgTools.createThumbnail(origPath, thumbPath, 400);
+    await deleteImage(origPath);
+
+    storedName = optName;
+    url        = `${base}/uploads/images/${optName}`;
+    thumbUrl   = `${base}/uploads/images/${thumbName}`;
+    width      = info.width;
+    height     = info.height;
+    sizeBytes  = info.size;
+  } else {
+    // No sharp — serve original file as-is
+    storedName = file.filename;
+    url        = `${base}/uploads/images/${file.filename}`;
+    thumbUrl   = url;
+    width      = null;
+    height     = null;
+    sizeBytes  = file.size;
+  }
+
+  return saveAsset(db, {
+    type: 'image', originalName: file.originalname, storedName,
+    url, thumbnailUrl: thumbUrl, mimeType: file.mimetype,
+    sizeBytes, width, height, uploadedBy: req.user?.id
   });
-  return asset;
 }
 
 async function processVideoFile(file, req, db) {
