@@ -170,6 +170,51 @@ router.post('/report-failure', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/channels/health-report?playlistId=N
+ * Returns all health rows stored for a playlist (no M3U re-fetch).
+ */
+router.get('/health-report', asyncHandler(async (req, res) => {
+  const { playlistId } = req.query;
+  if (!playlistId) return res.status(400).json({ success: false, error: 'playlistId required' });
+
+  const db = getDatabase();
+  const [rows] = await db.query(
+    `SELECT url_hash, channel_name, url, is_live, last_checked,
+            consecutive_failures, last_seen_live
+     FROM channel_health
+     WHERE playlist_id = ?
+     ORDER BY is_live ASC, consecutive_failures DESC, channel_name ASC`,
+    [parseInt(playlistId)]
+  );
+
+  const live    = rows.filter(r => r.is_live === 1).length;
+  const dead    = rows.filter(r => r.is_live === 0).length;
+  const unknown = rows.filter(r => r.is_live === null).length;
+
+  res.json({ success: true, rows, summary: { live, dead, unknown, total: rows.length } });
+}));
+
+/**
+ * POST /api/channels/recheck?playlistId=N
+ * Admin-triggered manual health recheck for a specific playlist.
+ */
+router.post('/recheck', asyncHandler(async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ success: false, error: 'Admin only' });
+  const { playlistId } = req.query;
+  if (!playlistId) return res.status(400).json({ success: false, error: 'playlistId required' });
+
+  const db = getDatabase();
+  const [playlists] = await db.query('SELECT * FROM playlists WHERE id = ? AND is_active = 1', [parseInt(playlistId)]);
+  if (!playlists.length) return res.status(404).json({ success: false, error: 'Playlist not found' });
+
+  // Fire-and-forget — respond immediately so the admin doesn't wait
+  const channelChecker = require('../services/channelChecker');
+  channelChecker.recheckPlaylist(playlists[0]).catch(err => console.error('[recheck]', err.message));
+
+  res.json({ success: true, message: 'Health check started in background' });
+}));
+
+/**
  * GET /api/channels/:id
  */
 router.get('/:id', asyncHandler(async (req, res) => {

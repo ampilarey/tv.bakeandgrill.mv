@@ -58,6 +58,12 @@ export default function ZoneManagement() {
   const [overrideDur, setOverrideDur]             = useState(60);
   const [savingOverride, setSavingOverride]       = useState(false);
 
+  // Assign display to zone
+  const [showAssignModal, setShowAssignModal]     = useState(false);
+  const [assignZone, setAssignZone]               = useState(null);
+  const [allDisplays, setAllDisplays]             = useState([]);
+  const [assigningId, setAssigningId]             = useState(null);
+
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -156,6 +162,24 @@ export default function ZoneManagement() {
   const cancelOverride = async (id) => {
     await api.delete(`/zones/override/${id}`).catch(() => {});
     fetchAll();
+  };
+
+  // ── Assign display to zone ────────────────────────────────────────────────
+
+  const openAssign = async (zone) => {
+    setAssignZone(zone);
+    try { const r = await api.get('/displays'); setAllDisplays(r.data.displays || []); } catch { setAllDisplays([]); }
+    setShowAssignModal(true);
+  };
+
+  const assignDisplay = async (displayId, zoneId) => {
+    setAssigningId(displayId);
+    try {
+      await api.put(`/displays/${displayId}`, { zone_id: zoneId || null });
+      const r = await api.get('/displays'); setAllDisplays(r.data.displays || []);
+      fetchAll();
+    } catch (e) { setErr(e.response?.data?.error || 'Assign failed'); }
+    setAssigningId(null);
   };
 
   // ── Enable pairing window ─────────────────────────────────────────────────
@@ -259,6 +283,9 @@ export default function ZoneManagement() {
                     <Button size="sm" variant="secondary" onClick={() => openZoneDisplays(zone)}>
                       View Displays
                     </Button>
+                    <Button size="sm" variant="secondary" onClick={() => openAssign(zone)}>
+                      ➕ Assign Display
+                    </Button>
                     <Button size="sm" variant="secondary" onClick={() => pushRefresh(zone.id)}>
                       🔄 Refresh All
                     </Button>
@@ -343,6 +370,35 @@ export default function ZoneManagement() {
             <Button onClick={saveZone} disabled={savingZone || !zoneName.trim()}>
               {savingZone ? <Spinner size="sm" /> : editingZone ? 'Save' : 'Create'}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Assign Display modal ── */}
+      <Modal isOpen={showAssignModal} onClose={() => setShowAssignModal(false)} title={`Assign Displays — ${assignZone?.name}`}>
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          <p className="text-tv-textMuted text-sm">Click a display to move it into or out of this zone.</p>
+          {allDisplays.length === 0 && <p className="text-tv-textMuted text-sm text-center py-4">No displays found</p>}
+          {allDisplays.map(d => {
+            const inZone = d.zone_id === assignZone?.id;
+            return (
+              <div key={d.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${inZone ? 'border-tv-accent/50 bg-tv-accent/10' : 'border-tv-borderSubtle bg-tv-bgSoft'}`}>
+                <div>
+                  <p className="text-tv-text text-sm font-medium">{d.name}</p>
+                  <p className="text-tv-textMuted text-xs">{d.location || 'No location'} {d.zone_id && !inZone ? `· In another zone` : ''}</p>
+                </div>
+                <button
+                  onClick={() => assignDisplay(d.id, inZone ? null : assignZone?.id)}
+                  disabled={assigningId === d.id}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${inZone ? 'border-red-500/40 text-red-400 hover:bg-red-500/10' : 'border-tv-accent/40 text-tv-accent hover:bg-tv-accent/10'} disabled:opacity-50`}
+                >
+                  {assigningId === d.id ? '…' : inZone ? 'Remove' : 'Add to Zone'}
+                </button>
+              </div>
+            );
+          })}
+          <div className="pt-2 border-t border-tv-borderSubtle flex justify-end">
+            <Button variant="ghost" onClick={() => setShowAssignModal(false)}>Done</Button>
           </div>
         </div>
       </Modal>

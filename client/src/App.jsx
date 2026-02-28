@@ -28,6 +28,8 @@ import MediaPlaylistManagement from './pages/admin/MediaPlaylistManagement';
 import OverlayManagement from './pages/admin/OverlayManagement';
 import MonitoringDashboard from './pages/admin/MonitoringDashboard';
 import ContentSchedules from './pages/admin/ContentSchedules';
+import EmergencyOverride from './pages/admin/EmergencyOverride';
+import ChannelHealth from './pages/admin/ChannelHealth';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -303,6 +305,23 @@ function AppRouter() {
           element={
             <AdminRoute>
               <ContentSchedules />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/emergency"
+          element={
+            <AdminRoute>
+              <EmergencyOverride />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/channel-health"
+          element={
+            <AdminRoute>
+              <ChannelHealth />
             </AdminRoute>
           }
         />

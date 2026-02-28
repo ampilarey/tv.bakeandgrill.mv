@@ -267,4 +267,28 @@ function triggerRun() {
   runCheck().catch((err) => console.error('[ChannelChecker] Manual run error:', err.message));
 }
 
-module.exports = { start, stop, triggerRun, urlHash };
+/**
+ * Recheck a single playlist object { id, m3u_url }.
+ * Called by the admin recheck endpoint.
+ */
+async function recheckPlaylist(playlist) {
+  await ensureTable();
+  let channels = [];
+  try {
+    const res = await fetch(playlist.m3u_url, { timeout: 15000, headers: { 'User-Agent': 'BakeGrillTV/1.0' } });
+    channels = parseM3U(res.data);
+  } catch (err) {
+    console.warn(`[ChannelChecker] recheckPlaylist fetch error: ${err.message}`);
+    return;
+  }
+  if (!channels || channels.length === 0) return;
+  console.log(`[ChannelChecker] Manual recheck: ${channels.length} channels for playlist ${playlist.id}`);
+  for (let i = 0; i < channels.length; i += BATCH_SIZE) {
+    const batch = channels.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(ch => checkChannel(ch, playlist.id)));
+    if (i + BATCH_SIZE < channels.length) await delay(BATCH_DELAY_MS);
+  }
+  console.log(`[ChannelChecker] Manual recheck done for playlist ${playlist.id}`);
+}
+
+module.exports = { start, stop, triggerRun, recheckPlaylist, urlHash };

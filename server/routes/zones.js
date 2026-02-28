@@ -126,9 +126,9 @@ router.get('/overrides/active', requireAdmin, asyncHandler(async (req, res) => {
 
 /** POST /api/zones/override — create emergency override (admin only) */
 router.post('/override', requireAdmin, asyncHandler(async (req, res) => {
-  const { zone_id, display_id, playlist_id, override_message, duration_minutes } = req.body;
+  const { zone_id, display_id, playlist_id, override_message, duration_minutes, target_all } = req.body;
   if (!playlist_id) return res.status(400).json({ success: false, error: 'playlist_id is required' });
-  if (!zone_id && !display_id) return res.status(400).json({ success: false, error: 'zone_id or display_id is required' });
+  if (!target_all && !zone_id && !display_id) return res.status(400).json({ success: false, error: 'zone_id, display_id, or target_all is required' });
 
   const db = getDatabase();
   const dur = parseInt(duration_minutes, 10) || 60;
@@ -142,11 +142,15 @@ router.post('/override', requireAdmin, asyncHandler(async (req, res) => {
      override_message || 'Emergency override active', dur, req.user.id, expiresAt]
   );
 
-  // Immediately push a command to affected displays so they re-check
-  const selector = zone_id
-    ? 'SELECT id FROM displays WHERE zone_id = ? AND is_active = 1'
-    : 'SELECT id FROM displays WHERE id = ? AND is_active = 1';
-  const [targets] = await db.query(selector, [zone_id || display_id]);
+  // Determine affected displays
+  let targets;
+  if (target_all) {
+    [targets] = await db.query('SELECT id FROM displays WHERE is_active = 1');
+  } else if (zone_id) {
+    [targets] = await db.query('SELECT id FROM displays WHERE zone_id = ? AND is_active = 1', [zone_id]);
+  } else {
+    [targets] = await db.query('SELECT id FROM displays WHERE id = ? AND is_active = 1', [display_id]);
+  }
 
   for (const d of targets) {
     await db.query(

@@ -42,6 +42,7 @@ const announcementsRoutes = require('./routes/announcements');
 
 // Background services
 const channelChecker = require('./services/channelChecker');
+const displayMonitor = require('./services/displayMonitor');
 
 // Initialize database
 console.log('🚀 Starting Bake & Grill TV Server...');
@@ -309,6 +310,7 @@ app.listen(PORT, () => {
   console.log('✅ Server started successfully!');
   // Start background channel health checker
   channelChecker.start();
+  displayMonitor.start();
   console.log('');
   console.log(`🌐 Server running on: http://localhost:${PORT}`);
   console.log(`📡 API endpoints: http://localhost:${PORT}/api/health`);
