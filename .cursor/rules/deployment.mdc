@@ -5,32 +5,56 @@ alwaysApply: true
 
 # Deployment — tv.bakeandgrill.mv
 
-After every `git push`, always provide the cPanel pull & deploy instructions:
+## RULE: After EVERY `git push`, ALWAYS print this exact block — no exceptions
 
-## After Every Push
-
-The `client/dist/` folder is pre-built locally and committed to the repo.
-**NEVER run `npm run build` on the cPanel server** — vite is not installed there.
-
-### Full deploy command (cPanel server)
-```bash
-cd ~/tv.bakeandgrill.mv && \
-  GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main
 ```
+─────────────────────────────────────────
+ cPanel Pull & Deploy
+─────────────────────────────────────────
+ 1. SSH into cPanel, then run:
 
-Then: **cPanel → Setup Node.js App → RESTART** (click the restart button)
+    cd ~/tv.bakeandgrill.mv && GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main
 
-### Verify
-```bash
-curl https://tv.bakeandgrill.mv/api/health
+ 2. cPanel → Setup Node.js App → RESTART
+
+ 3. Verify:
+    curl https://tv.bakeandgrill.mv/api/health
+─────────────────────────────────────────
 ```
 
 ---
 
-## Key Info
-- **Server path:** `~/tv.bakeandgrill.mv`
-- **SSH key:** `~/.ssh/id_ed25519`
-- **GitHub repo:** `git@github.com:ampilarey/tv.bakeandgrill.mv.git`
-- **Node app root:** `tv.bakeandgrill.mv/server`
-- **Startup file:** `server.js`
-- **Build runs on your Mac** (local), dist is committed — server only needs `git pull` + restart
+## Key Facts
+
+| Item | Value |
+|---|---|
+| Server path | `~/tv.bakeandgrill.mv` |
+| SSH deploy key | `~/.ssh/id_ed25519` |
+| GitHub repo (SSH) | `git@github.com:ampilarey/tv.bakeandgrill.mv.git` |
+| Node app root | `tv.bakeandgrill.mv/server` |
+| Startup file | `server.js` |
+| Frontend build | Run on **local Mac only** — `client/dist/` is committed to the repo |
+
+---
+
+## NEVER do these on the cPanel server
+- `npm run build` — vite is not installed on the server
+- `cd /home/bakegril/tv.bakeandgrill.mv` — wrong path, use `~/tv.bakeandgrill.mv`
+- `git pull origin main` alone (without `GIT_SSH_COMMAND`) — will fail with "Repository not found"
+
+---
+
+## Local build + push workflow (on your Mac)
+
+```bash
+# 1. Build frontend
+cd /Users/vigani/Website/tv/client && npm run build
+
+# 2. Commit and push
+cd /Users/vigani/Website/tv
+git add -A
+git commit -m "your message"
+git push origin main
+```
+
+Then run the cPanel pull command above.
