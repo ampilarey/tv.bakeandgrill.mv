@@ -907,10 +907,10 @@ export default function PlayerPage() {
         video.removeEventListener('click', handleVideoClick);
         video.removeEventListener('tap', handleVideoClick);
         // Clean up iOS-specific handlers
-        if (iosCanPlayHandler) video.removeEventListener('canplay', iosCanPlayHandler);
-        if (iosMetadataHandler) video.removeEventListener('loadedmetadata', iosMetadataHandler);
-        if (iosDataHandler) video.removeEventListener('loadeddata', iosDataHandler);
-        if (iosPlayingHandler) video.removeEventListener('playing', iosPlayingHandler);
+        if (storedHandlers.iosCanPlayHandler) video.removeEventListener('canplay', storedHandlers.iosCanPlayHandler);
+        if (storedHandlers.iosMetadataHandler) video.removeEventListener('loadedmetadata', storedHandlers.iosMetadataHandler);
+        if (storedHandlers.iosDataHandler) video.removeEventListener('loadeddata', storedHandlers.iosDataHandler);
+        if (storedHandlers.iosPlayingHandler) video.removeEventListener('playing', storedHandlers.iosPlayingHandler);
         video.src = '';
       };
       
