@@ -47,12 +47,12 @@ class ErrorBoundary extends Component {
                 {this.props.fallbackMessage || "We encountered an unexpected error. Don't worry, your data is safe."}
               </p>
 
-              {import.meta.env.DEV && this.state.error && (
+              {this.state.error && (
                 <details className="text-left mb-6 p-4 bg-tv-bgSoft rounded-lg border border-tv-borderSubtle">
                   <summary className="cursor-pointer text-tv-accent font-medium mb-2">
-                    Error Details (Development Only)
+                    Error Details
                   </summary>
-                  <pre className="text-xs text-tv-text overflow-auto">
+                  <pre className="text-xs text-tv-text overflow-auto whitespace-pre-wrap break-words">
                     {this.state.error.toString()}
                     {this.state.errorInfo?.componentStack}
                   </pre>

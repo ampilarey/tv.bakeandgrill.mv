@@ -40,6 +40,7 @@ export default function PlayerPage() {
   const [showAllRecent, setShowAllRecent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [isAutoPlay, setIsAutoPlay] = useState(false);
@@ -315,9 +316,9 @@ export default function PlayerPage() {
       });
     }
 
-    // Search filter (apply last)
-    if (searchQuery && searchQuery.trim() !== '') {
-      const query = searchQuery.toLowerCase().trim();
+    // Search filter (apply last) — uses debounced query to avoid filtering on every keystroke
+    if (debouncedSearchQuery && debouncedSearchQuery.trim() !== '') {
+      const query = debouncedSearchQuery.toLowerCase().trim();
       result = result.filter(ch => 
         (ch.name && ch.name.toLowerCase().includes(query)) ||
         (ch.group && ch.group.toLowerCase().includes(query))
@@ -325,14 +326,19 @@ export default function PlayerPage() {
     }
 
     setFilteredChannels(result);
-  }, [searchQuery, selectedGroup, showFavoritesOnly, channels, favorites]);
+  }, [debouncedSearchQuery, selectedGroup, showFavoritesOnly, channels, favorites]);
 
   // Video player setup
   useEffect(() => {
     if (!currentChannel || !videoRef.current) return;
+    if (!currentChannel.url) {
+      setVideoError('This channel has no stream URL.');
+      setVideoLoading(false);
+      return;
+    }
 
     const video = videoRef.current;
-    const isHLS = (() => { try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); } catch { return currentChannel.url.toLowerCase().includes('.m3u8'); } })();
+    const isHLS = (() => { try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); } catch { return currentChannel.url?.toLowerCase().includes('.m3u8') ?? false; } })();
     
     // 🚨 CRITICAL: Use iOS detection from top level (already calculated)
     // Re-check iOS detection to be absolutely sure
@@ -1774,17 +1780,24 @@ export default function PlayerPage() {
   };
 
   const handleSearch = (value) => {
-    // Update search query with 250ms debounce for better performance with large channel lists
+    // Update input value immediately (keeps controlled input in sync)
+    setSearchQuery(value);
+    
+    // Debounce only the filter query so large channel lists don't re-filter on every keystroke
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
-      setSearchQuery(value);
+      setDebouncedSearchQuery(value);
     }, 250);
     
-    // Save to search history if not empty and different from last search
+    // Save to search history only when user pauses (not on every keystroke)
     if (value.trim() && value !== searchHistory[0]) {
       const newHistory = [value, ...searchHistory.filter(h => h !== value)].slice(0, 10);
       setSearchHistory(newHistory);
-      localStorage.setItem('searchHistory', JSON.stringify(newHistory));
+      try {
+        localStorage.setItem('searchHistory', JSON.stringify(newHistory));
+      } catch {
+        // localStorage write failed (quota exceeded etc.) — ignore
+      }
     }
   };
 
