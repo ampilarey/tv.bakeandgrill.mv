@@ -44,6 +44,14 @@ router.post('/login', validateLogin, asyncHandler(async (req, res) => {
   
   // Update last_login
   await db.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+
+  // Log successful login
+  const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  const ua = (req.headers['user-agent'] || '').slice(0, 255);
+  db.query(
+    'INSERT IGNORE INTO auth_log (user_id, event, ip_address, user_agent) VALUES (?, ?, ?, ?)',
+    [user.id, 'login', ip, ua]
+  ).catch(() => {});
   
   // Generate JWT token (tv = token_version for invalidation on password change)
   const tokenPayload = {

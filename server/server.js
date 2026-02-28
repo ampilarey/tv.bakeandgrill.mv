@@ -31,6 +31,8 @@ const uploadsRoutes          = require('./routes/uploads');
 const mediaPlaylistsRoutes   = require('./routes/mediaPlaylists');
 const contentSchedulesRoutes = require('./routes/contentSchedules');
 const overlaysRoutes         = require('./routes/overlays');
+const broadcastsRoutes       = require('./routes/broadcasts');
+const systemRoutes           = require('./routes/system');
 
 // Phase 1: New content routes (featuresRoutes already declared above)
 const playlistItemsRoutes = require('./routes/playlistItems');
@@ -209,6 +211,8 @@ app.use('/api/uploads',           uploadsRoutes);
 app.use('/api/media-playlists',   mediaPlaylistsRoutes);
 app.use('/api/content-schedules', contentSchedulesRoutes);
 app.use('/api/overlays',          overlaysRoutes);
+app.use('/api/broadcasts',        broadcastsRoutes);
+app.use('/api/system',            systemRoutes);
 
 // Phase 1: Content routes (features already mounted above as public route)
 app.use('/api/playlist-items', playlistItemsRoutes);

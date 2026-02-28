@@ -220,6 +220,14 @@ export default function AdminDashboard() {
               Media Playlists
             </Button>
 
+            {/* System Health */}
+            <Button variant="primary" size="lg" onClick={() => navigate('/admin/system')} className="justify-start">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+              </svg>
+              System Health
+            </Button>
+
             {/* Emergency Override */}
             <Button variant="primary" size="lg" onClick={() => navigate('/admin/emergency')} className="justify-start bg-red-700 hover:bg-red-600 border-red-600">
               <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -30,6 +30,7 @@ import MonitoringDashboard from './pages/admin/MonitoringDashboard';
 import ContentSchedules from './pages/admin/ContentSchedules';
 import EmergencyOverride from './pages/admin/EmergencyOverride';
 import ChannelHealth from './pages/admin/ChannelHealth';
+import SystemHealth from './pages/admin/SystemHealth';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -322,6 +323,15 @@ function AppRouter() {
           element={
             <AdminRoute>
               <ChannelHealth />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/system"
+          element={
+            <AdminRoute>
+              <SystemHealth />
             </AdminRoute>
           }
         />

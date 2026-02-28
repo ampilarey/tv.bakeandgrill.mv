@@ -10,6 +10,8 @@ import api from '../../services/api';
 import MobileMenu from '../../components/MobileMenu';
 import Footer from '../../components/Footer';
 import Spinner from '../../components/common/Spinner';
+import Modal from '../../components/common/Modal';
+import Button from '../../components/common/Button';
 
 const REFRESH_MS = 15_000;
 
@@ -35,12 +37,15 @@ function isOnline(d) {
 
 const OVERLAY_LABELS = { none: '—', bottom_bar: 'Bar', bottom_bar_popup: 'Bar+Card', split_right: 'Split' };
 
-function DisplayTile({ d }) {
+function DisplayTile({ d, onSelect }) {
   const online = isOnline(d);
   const nowPlaying = d.now_playing || d.current_channel_id || null;
 
   return (
-    <div className={`relative rounded-xl border p-4 transition-all ${online ? 'border-green-500/40 bg-green-500/5' : 'border-tv-borderSubtle bg-tv-bgSoft'}`}>
+    <button
+      onClick={() => onSelect(d)}
+      className={`relative rounded-xl border p-4 transition-all text-left w-full hover:border-tv-accent/50 active:scale-[0.98] ${online ? 'border-green-500/40 bg-green-500/5' : 'border-tv-borderSubtle bg-tv-bgSoft'}`}
+    >
       {/* Status dot */}
       <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${online ? 'bg-green-400 shadow-[0_0_6px_2px_rgba(74,222,128,0.5)]' : 'bg-red-500/60'}`} />
 
@@ -77,7 +82,8 @@ function DisplayTile({ d }) {
         {d.zone_name && <span className="col-span-2">Zone: <strong className="text-tv-text">{d.zone_name}</strong></span>}
         {d.last_status && <span className="col-span-2">Status: <strong className="text-tv-text">{d.last_status}</strong></span>}
       </div>
-    </div>
+      <p className="text-xs text-tv-accent mt-2 opacity-60">Tap for quick actions →</p>
+    </button>
   );
 }
 
@@ -87,6 +93,9 @@ export default function MonitoringDashboard() {
   const [displays, setDisplays]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [selected, setSelected]   = useState(null);  // display quick-action panel
+  const [cmdResult, setCmdResult] = useState('');
+  const [cmdSending, setCmdSending] = useState(false);
   const intervalRef = useRef(null);
 
   const fetchDisplays = async () => {
@@ -113,6 +122,17 @@ export default function MonitoringDashboard() {
 
   const online  = displays.filter(isOnline).length;
   const offline = displays.length - online;
+
+  const sendCmd = async (action, extra = {}) => {
+    if (!selected) return;
+    setCmdSending(true);
+    try {
+      await api.post(`/displays/${selected.id}/control`, { action, ...extra });
+      setCmdResult(`✅ ${action} sent`);
+    } catch (e) { setCmdResult(`❌ ${e.response?.data?.error || 'Failed'}`); }
+    setCmdSending(false);
+    setTimeout(() => setCmdResult(''), 3000);
+  };
 
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col">
@@ -183,13 +203,71 @@ export default function MonitoringDashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {displays
                 .sort((a, b) => (isOnline(b) ? 1 : 0) - (isOnline(a) ? 1 : 0))
-                .map(d => <DisplayTile key={d.id} d={d} />)}
+                .map(d => <DisplayTile key={d.id} d={d} onSelect={setSelected} />)}
             </div>
           </>
         )}
       </div>
 
       <Footer />
+
+      {/* Quick-action drawer */}
+      <Modal isOpen={!!selected} onClose={() => { setSelected(null); setCmdResult(''); }} title={`Quick Actions — ${selected?.name}`}>
+        {selected && (
+          <div className="space-y-4">
+            {/* Status */}
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${isOnline(selected) ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
+              <div className={`w-3 h-3 rounded-full ${isOnline(selected) ? 'bg-green-400' : 'bg-red-500'}`} />
+              <div className="flex-1">
+                <p className="text-tv-text text-sm font-medium">{isOnline(selected) ? 'Online' : 'Offline'}</p>
+                <p className="text-tv-textMuted text-xs">Last seen: {timeAgo(selected.last_heartbeat)} · Uptime: {uptimeFmt(selected.uptime_seconds)}</p>
+                {(selected.now_playing || selected.current_channel_id) && (
+                  <p className="text-tv-textMuted text-xs mt-0.5">▶ {selected.now_playing || selected.current_channel_id}</p>
+                )}
+              </div>
+            </div>
+
+            {cmdResult && <p className="text-sm text-center py-1 text-tv-text">{cmdResult}</p>}
+
+            {/* Remote commands */}
+            <div>
+              <p className="text-xs text-tv-textMuted font-medium uppercase tracking-wider mb-2">Remote Commands</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  ['🔇 Mute',       () => sendCmd('mute')],
+                  ['🔊 Unmute',     () => sendCmd('unmute')],
+                  ['⛶ Fullscreen', () => sendCmd('toggle_fullscreen')],
+                  ['🔄 Refresh',    () => sendCmd('refresh_playlist')],
+                ].map(([label, fn]) => (
+                  <button key={label} onClick={fn} disabled={cmdSending}
+                    className="bg-tv-bgSoft border border-tv-borderSubtle text-tv-text text-sm px-3 py-2 rounded-lg hover:border-tv-accent/50 disabled:opacity-50 transition-colors">
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick links */}
+            <div>
+              <p className="text-xs text-tv-textMuted font-medium uppercase tracking-wider mb-2">Jump To</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="ghost" size="sm" onClick={() => { setSelected(null); navigate('/admin/displays'); }}>
+                  ⚙️ Full Settings
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => { setSelected(null); navigate('/admin/emergency'); }}>
+                  🚨 Override
+                </Button>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-tv-borderSubtle text-xs text-tv-textMuted space-y-0.5">
+              <p>Type: {selected.display_type || 'stream'} · Overlay: {OVERLAY_LABELS[selected.overlay_mode] || 'none'}</p>
+              {selected.zone_name && <p>Zone: {selected.zone_name}</p>}
+              {selected.app_version && <p>App version: v{selected.app_version}</p>}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

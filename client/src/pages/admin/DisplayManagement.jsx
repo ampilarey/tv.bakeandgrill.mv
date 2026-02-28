@@ -27,6 +27,17 @@ export default function DisplayManagement() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsForm, setSettingsForm] = useState({});
+  // Bulk actions
+  const [selected, setSelected] = useState(new Set());
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkField, setBulkField] = useState('');
+  const [bulkValue, setBulkValue] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
+  // Broadcast
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [broadcastText, setBroadcastText] = useState('');
+  const [broadcastDur, setBroadcastDur] = useState(30);
+  const [broadcastSaving, setBroadcastSaving] = useState(false);
   const [createdDisplay, setCreatedDisplay] = useState(null);
   const [selectedDisplay, setSelectedDisplay] = useState(null);
   const [channels, setChannels] = useState([]);
@@ -229,6 +240,38 @@ export default function DisplayManagement() {
       setError(err.response?.data?.error || 'Save failed');
     }
     setSavingSettings(false);
+  };
+
+  const toggleSelect = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const selectAll  = () => setSelected(new Set(displays.map(d => d.id)));
+  const clearSelect = () => setSelected(new Set());
+
+  const applyBulk = async () => {
+    if (!bulkField || selected.size === 0) return;
+    setBulkSaving(true);
+    const body = { [bulkField]: bulkValue || null };
+    await Promise.all([...selected].map(id => api.put(`/displays/${id}`, body).catch(() => {})));
+    setShowBulkModal(false);
+    setSelected(new Set());
+    fetchDisplays();
+    setBulkSaving(false);
+  };
+
+  const sendBroadcast = async () => {
+    if (!broadcastText.trim()) return;
+    setBroadcastSaving(true);
+    try {
+      const { data } = await api.post('/broadcasts', { text: broadcastText, duration_minutes: broadcastDur });
+      setShowBroadcastModal(false);
+      setBroadcastText('');
+      setError(`✅ ${data.message}`);
+      setTimeout(() => setError(''), 4000);
+    } catch (e) { setError(e.response?.data?.error || 'Broadcast failed'); }
+    setBroadcastSaving(false);
   };
 
   const enablePairing = async (displayId) => {
@@ -656,17 +699,30 @@ export default function DisplayManagement() {
           </div>
         </Card>
 
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-wrap justify-between items-center mb-6 gap-2">
           <h2 className="text-xl font-semibold text-tv-text">Displays ({displays.length})</h2>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="ghost" size="sm" onClick={() => setShowBroadcastModal(true)}>
+              📢 Broadcast
+            </Button>
+            {selected.size > 0 ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setShowBulkModal(true)}>
+                  ✏️ Bulk Edit ({selected.size})
+                </Button>
+                <Button variant="ghost" size="sm" onClick={clearSelect}>✕ Clear</Button>
+              </>
+            ) : (
+              <Button variant="ghost" size="sm" onClick={selectAll}>☑ All</Button>
+            )}
             <Button variant="primary" onClick={() => setShowPairModal(true)}>
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
               </svg>
               Pair Display
             </Button>
             <Button variant="ghost" onClick={() => setShowCreateModal(true)}>
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Manual
@@ -687,8 +743,14 @@ export default function DisplayManagement() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {displays.map((display) => (
-              <Card key={display.id}>
+              <Card key={display.id} className={selected.has(display.id) ? 'ring-2 ring-tv-accent' : ''}>
                 <div className="flex items-start justify-between mb-4">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(display.id)}
+                    onChange={() => toggleSelect(display.id)}
+                    className="w-4 h-4 mt-1 mr-2 accent-tv-accent flex-shrink-0"
+                  />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="text-lg font-semibold text-tv-text">{display.name}</h3>
@@ -1290,6 +1352,81 @@ export default function DisplayManagement() {
         message={confirmModal.message}
         variant={confirmModal.variant}
       />
+
+      {/* ── Broadcast Modal ──────────────────────────────────── */}
+      <Modal isOpen={showBroadcastModal} onClose={() => setShowBroadcastModal(false)} title="📢 Broadcast to All TVs">
+        <div className="space-y-4">
+          <p className="text-tv-textMuted text-sm">Push an instant ticker message to every display. Appears on the bottom bar overlay within seconds.</p>
+          <div>
+            <label className="block text-xs font-medium text-tv-textMuted mb-1">Message *</label>
+            <input type="text" className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" placeholder="e.g. Kitchen closing in 30 minutes" value={broadcastText} onChange={e => setBroadcastText(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-tv-textMuted mb-1">Duration: <strong className="text-tv-text">{broadcastDur} minutes</strong></label>
+            <input type="range" min={5} max={240} step={5} value={broadcastDur} onChange={e => setBroadcastDur(parseInt(e.target.value))} className="w-full accent-tv-accent" />
+            <div className="flex justify-between text-xs text-tv-textMuted mt-1"><span>5 min</span><span>1 h</span><span>4 h</span></div>
+          </div>
+          <p className="text-xs text-tv-textMuted bg-tv-bgSoft border border-tv-borderSubtle rounded-lg px-3 py-2">
+            ⚡ Displays must have an overlay mode enabled (bottom bar or similar) to show ticker messages.
+            If a display has overlay_mode = "none", the message won't be visible on screen.
+          </p>
+          <div className="flex gap-3 justify-end pt-2 border-t border-tv-borderSubtle">
+            <Button variant="ghost" onClick={() => setShowBroadcastModal(false)}>Cancel</Button>
+            <Button onClick={sendBroadcast} disabled={broadcastSaving || !broadcastText.trim()}>
+              {broadcastSaving ? <Spinner size="sm" /> : '📢 Send Broadcast'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Bulk Edit Modal ───────────────────────────────────── */}
+      <Modal isOpen={showBulkModal} onClose={() => setShowBulkModal(false)} title={`Bulk Edit (${selected.size} displays)`}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-tv-textMuted mb-1">Field to change</label>
+            <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={bulkField} onChange={e => { setBulkField(e.target.value); setBulkValue(''); }}>
+              <option value="">Select field…</option>
+              <option value="overlay_mode">Overlay Mode</option>
+              <option value="overlay_safe_area">Safe Area</option>
+              <option value="display_type">Display Type</option>
+              <option value="mute_audio">Mute Audio</option>
+              <option value="show_brand_overlay">Brand Overlay</option>
+            </select>
+          </div>
+          {bulkField === 'overlay_mode' && (
+            <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={bulkValue} onChange={e => setBulkValue(e.target.value)}>
+              <option value="none">None</option>
+              <option value="bottom_bar">Bottom Bar</option>
+              <option value="bottom_bar_popup">Bottom Bar + Popup</option>
+              <option value="split_right">Split Right</option>
+            </select>
+          )}
+          {bulkField === 'overlay_safe_area' && (
+            <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={bulkValue} onChange={e => setBulkValue(e.target.value)}>
+              <option value="standard">Standard</option>
+              <option value="sports">Sports</option>
+            </select>
+          )}
+          {bulkField === 'display_type' && (
+            <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={bulkValue} onChange={e => setBulkValue(e.target.value)}>
+              <option value="stream">Stream</option>
+              <option value="media">Media</option>
+            </select>
+          )}
+          {(bulkField === 'mute_audio' || bulkField === 'show_brand_overlay') && (
+            <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={bulkValue} onChange={e => setBulkValue(e.target.value)}>
+              <option value="1">Yes / On</option>
+              <option value="0">No / Off</option>
+            </select>
+          )}
+          <div className="flex gap-3 justify-end pt-2 border-t border-tv-borderSubtle">
+            <Button variant="ghost" onClick={() => setShowBulkModal(false)}>Cancel</Button>
+            <Button onClick={applyBulk} disabled={bulkSaving || !bulkField || bulkValue === ''}>
+              {bulkSaving ? <Spinner size="sm" /> : `Apply to ${selected.size} displays`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Display Settings Modal ─────────────────────────────── */}
       <Modal

@@ -90,6 +90,10 @@ export default function MediaPlaylistManagement() {
   const [editDur, setEditDur]         = useState(8);
   const [editFull, setEditFull]       = useState(true);
 
+  // Preview modal
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewIdx, setPreviewIdx]   = useState(0);
+
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -264,9 +268,14 @@ export default function MediaPlaylistManagement() {
               </Card>
             ) : (
               <Card>
-                <div className="p-4 border-b border-tv-borderSubtle flex items-center justify-between">
+                <div className="p-4 border-b border-tv-borderSubtle flex items-center justify-between gap-2">
                   <h2 className="font-bold text-tv-text">{activePlaylist.name}</h2>
-                  <Button size="sm" variant="secondary" onClick={() => setShowAddModal(true)}>+ Add Media</Button>
+                  <div className="flex gap-2">
+                    {items.length > 0 && (
+                      <Button size="sm" variant="ghost" onClick={() => { setPreviewIdx(0); setShowPreview(true); }}>👁 Preview</Button>
+                    )}
+                    <Button size="sm" variant="secondary" onClick={() => setShowAddModal(true)}>+ Add Media</Button>
+                  </div>
                 </div>
                 <div className="p-4">
                   {loadingItems ? (
@@ -379,6 +388,46 @@ export default function MediaPlaylistManagement() {
           </div>
         </Modal>
       )}
+
+      {/* Preview modal */}
+      <Modal isOpen={showPreview} onClose={() => setShowPreview(false)} title={`Preview — ${activePlaylist?.name}`} size="lg">
+        {items.length > 0 && (
+          <div className="space-y-4">
+            {/* Current item display */}
+            <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+              {items[previewIdx]?.type === 'video' ? (
+                <video key={items[previewIdx]?.url} src={items[previewIdx]?.url} autoPlay muted controls className="w-full h-full object-contain" />
+              ) : (
+                <img key={items[previewIdx]?.url} src={items[previewIdx]?.url} alt={items[previewIdx]?.original_name} className="w-full h-full object-contain" />
+              )}
+              {/* Overlay info */}
+              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                <span className="bg-black/60 text-white text-xs px-2 py-1 rounded">{items[previewIdx]?.original_name}</span>
+                <span className="bg-black/60 text-white text-xs px-2 py-1 rounded">{previewIdx + 1} / {items.length}</span>
+              </div>
+            </div>
+            {/* Nav */}
+            <div className="flex items-center justify-between">
+              <button onClick={() => setPreviewIdx(i => Math.max(0, i - 1))} disabled={previewIdx === 0}
+                className="px-4 py-2 rounded-lg border border-tv-borderSubtle text-tv-text hover:border-tv-accent/50 disabled:opacity-30 text-sm">← Prev</button>
+              {/* Thumbnail strip */}
+              <div className="flex gap-1 overflow-x-auto max-w-xs">
+                {items.map((it, i) => (
+                  <button key={it.id} onClick={() => setPreviewIdx(i)}
+                    className={`w-12 h-8 rounded overflow-hidden flex-shrink-0 border-2 transition-all ${i === previewIdx ? 'border-tv-accent' : 'border-transparent'}`}>
+                    {it.type === 'video'
+                      ? <video src={it.url} className="w-full h-full object-cover" muted />
+                      : <img src={it.thumbnail_url || it.url} alt={it.original_name} className="w-full h-full object-cover" />
+                    }
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setPreviewIdx(i => Math.min(items.length - 1, i + 1))} disabled={previewIdx === items.length - 1}
+                className="px-4 py-2 rounded-lg border border-tv-borderSubtle text-tv-text hover:border-tv-accent/50 disabled:opacity-30 text-sm">Next →</button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

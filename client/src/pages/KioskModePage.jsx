@@ -318,6 +318,19 @@ export default function KioskModePage() {
             // Already handled above via override field
           } else if (cmd.command_type === 'refresh_playlist') {
             verifyDisplay();
+          } else if (cmd.command_type === 'refresh_overlays') {
+            // Immediately re-fetch overlays (used by broadcasts)
+            if (overlayFetchRef.current) {
+              clearInterval(overlayFetchRef.current);
+            }
+            // fetch inline
+            try {
+              const { data } = await displayApi.get(`/overlays/for-display?token=${displayToken}`);
+              if (data.success) setOverlayData(data);
+            } catch { /* ignore */ }
+            overlayFetchRef.current = setInterval(async () => {
+              try { const { data } = await displayApi.get(`/overlays/for-display?token=${displayToken}`); if (data.success) setOverlayData(data); } catch { /* ignore */ }
+            }, 5 * 60 * 1000);
           }
 
           await displayApi.patch(`/displays/commands/${cmd.id}/execute`).catch(() => {});
