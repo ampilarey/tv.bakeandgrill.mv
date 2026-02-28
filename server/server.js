@@ -35,6 +35,9 @@ const announcementsRoutes = require('./routes/announcements');
 // Phase 2: Uploads - TEMPORARILY DISABLED (requires multer/sharp)
 // const uploadsRoutes = require('./routes/uploads');
 
+// Background services
+const channelChecker = require('./services/channelChecker');
+
 // Initialize database
 console.log('🚀 Starting Bake & Grill TV Server...');
 
@@ -162,6 +165,23 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Admin: manually trigger a channel health check run
+app.post('/api/admin/check-channels', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { verifyToken: verify } = require('./middleware/auth');
+    // Quick inline token check
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    channelChecker.triggerRun();
+    res.json({ success: true, message: 'Channel health check triggered' });
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
 app.get('/api/version', (req, res) => {
   res.json({
     version: '1.0.8',
@@ -284,6 +304,8 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log('');
   console.log('✅ Server started successfully!');
+  // Start background channel health checker
+  channelChecker.start();
   console.log('');
   console.log(`🌐 Server running on: http://localhost:${PORT}`);
   console.log(`📡 API endpoints: http://localhost:${PORT}/api/health`);

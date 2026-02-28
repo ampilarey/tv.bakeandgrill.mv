@@ -10,6 +10,18 @@ import Badge from '../components/common/Badge';
 import SkeletonLoader from '../components/SkeletonLoader';
 import VideoControls from '../components/VideoControls';
 
+/** Small coloured dot showing channel live-status */
+function LiveStatusDot({ isLive, size = 'sm' }) {
+  const s = size === 'lg' ? 'w-3 h-3' : 'w-2 h-2';
+  if (isLive === 1 || isLive === true) {
+    return <span className={`${s} rounded-full bg-green-500 flex-shrink-0 animate-pulse`} title="Live" />;
+  }
+  if (isLive === 0 || isLive === false) {
+    return <span className={`${s} rounded-full bg-red-500 flex-shrink-0`} title="Offline" />;
+  }
+  return <span className={`${s} rounded-full bg-gray-500/40 flex-shrink-0`} title="Status unknown" />;
+}
+
 export default function PlayerPage() {
   // Debug logging helper (dev-only)
   const isDev = import.meta.env.MODE !== 'production';
@@ -752,6 +764,16 @@ export default function PlayerPage() {
               setVideoError('Unable to play this channel. The stream may be offline. Tap play to retry.');
           }
           setVideoLoading(false);
+
+          // Report playback failure to server so health checker can mark channel as down
+          if (currentChannel?.url && playlistId &&
+              errorCode !== video.error.MEDIA_ERR_ABORTED) {
+            api.post('/channels/report-failure', {
+              url: currentChannel.url,
+              playlistId: parseInt(playlistId),
+              channelName: currentChannel.name,
+            }).catch(() => {}); // fire-and-forget
+          }
         }
       };
       
@@ -1669,9 +1691,12 @@ export default function PlayerPage() {
                   
                   {/* Channel name + category */}
                   <div className="flex-1 min-w-0">
-                    <h3 className={`font-medium truncate ${
-                      currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
-                    }`}>{channel.name}</h3>
+                    <div className="flex items-center gap-1.5">
+                      <LiveStatusDot isLive={channel.is_live} />
+                      <h3 className={`font-medium truncate ${
+                        currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
+                      }`}>{channel.name}</h3>
+                    </div>
                     {channel.group && (
                       <p className="text-xs text-tv-textMuted truncate">{channel.group}</p>
                     )}
@@ -1725,11 +1750,14 @@ export default function PlayerPage() {
                             📺
                           </div>
                         )}
-                        <h3 className={`font-medium text-sm truncate mb-1 ${
-                          currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
-                        }`}>
-                          {channel.name}
-                        </h3>
+                        <div className="flex items-center justify-center gap-1.5 mb-1">
+                          <LiveStatusDot isLive={channel.is_live} />
+                          <h3 className={`font-medium text-sm truncate ${
+                            currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
+                          }`}>
+                            {channel.name}
+                          </h3>
+                        </div>
                         {channel.group && (
                           <p className="text-xs text-tv-textMuted truncate">{channel.group}</p>
                         )}
@@ -2438,7 +2466,15 @@ export default function PlayerPage() {
                   </div>
                   <div className="flex items-center justify-between py-1.5 border-b border-tv-borderSubtle/50">
                     <span className="text-tv-textSecondary">Status</span>
-                    <span className="text-tv-success font-medium">● Live</span>
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <LiveStatusDot isLive={currentChannel.is_live} size="lg" />
+                      {currentChannel.is_live === 1 || currentChannel.is_live === true
+                        ? <span className="text-green-400">Live</span>
+                        : currentChannel.is_live === 0 || currentChannel.is_live === false
+                          ? <span className="text-red-400">Offline</span>
+                          : <span className="text-tv-textMuted">Unknown</span>
+                      }
+                    </span>
                   </div>
                   <div className="flex items-center justify-between py-1.5">
                     <span className="text-tv-textSecondary">Favorite</span>
