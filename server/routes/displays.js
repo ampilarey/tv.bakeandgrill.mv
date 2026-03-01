@@ -99,7 +99,11 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
       `SELECT COALESCE(media_playlist_id, playlist_id) AS pid
        FROM emergency_overrides
        WHERE is_active=1 AND expires_at > NOW()
-         AND (display_id=? OR zone_id=? OR target_type='all')
+         AND (
+           display_id = ? OR
+           zone_id    = ? OR
+           (display_id IS NULL AND zone_id IS NULL)
+         )
        ORDER BY started_at DESC LIMIT 1`,
       [display.id, display.zone_id || -1]
     );

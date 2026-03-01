@@ -134,12 +134,14 @@ router.post('/override', requireAdmin, asyncHandler(async (req, res) => {
   const dur = parseInt(duration_minutes, 10) || 60;
   const expiresAt = new Date(Date.now() + dur * 60 * 1000);
 
+  const targetType = target_all ? 'all' : (zone_id ? 'zone' : 'display');
+
   const [result] = await db.query(
     `INSERT INTO emergency_overrides
-       (zone_id, display_id, playlist_id, override_message, duration_minutes, started_by, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (zone_id, display_id, playlist_id, override_message, duration_minutes, started_by, expires_at, target_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [zone_id || null, display_id || null, playlist_id,
-     override_message || 'Emergency override active', dur, req.user.id, expiresAt]
+     override_message || 'Emergency override active', dur, req.user.id, expiresAt, targetType]
   );
 
   // Determine affected displays
