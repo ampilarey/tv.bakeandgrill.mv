@@ -262,7 +262,11 @@ router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => 
        LEFT JOIN playlists p ON p.id = eo.playlist_id
        WHERE eo.is_active = 1
          AND eo.expires_at > NOW()
-         AND (eo.display_id = ? OR eo.zone_id = ?)
+         AND (
+           eo.display_id = ? OR
+           eo.zone_id    = ? OR
+           (eo.display_id IS NULL AND eo.zone_id IS NULL)
+         )
        ORDER BY eo.started_at DESC
        LIMIT 1`,
       [display.id, display.zone_id || -1]
