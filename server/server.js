@@ -34,7 +34,6 @@ const overlaysRoutes         = require('./routes/overlays');
 const broadcastsRoutes       = require('./routes/broadcasts');
 const systemRoutes           = require('./routes/system');
 const displayScenesRoutes    = require('./routes/displayScenes');
-const analyticsRoutes        = require('./routes/analytics');
 
 // Phase 1: New content routes (featuresRoutes already declared above)
 const playlistItemsRoutes = require('./routes/playlistItems');
@@ -216,7 +215,6 @@ app.use('/api/overlays',          overlaysRoutes);
 app.use('/api/broadcasts',        broadcastsRoutes);
 app.use('/api/system',            systemRoutes);
 app.use('/api/display-scenes',    displayScenesRoutes);
-app.use('/api/analytics',         analyticsRoutes);
 
 // Phase 1: Content routes (features already mounted above as public route)
 app.use('/api/playlist-items', playlistItemsRoutes);
