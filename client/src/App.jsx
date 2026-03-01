@@ -273,7 +273,7 @@ function AppRouter() {
           }
         />
         <Route
-          path="/admin/analytics"
+          path="/admin/display-analytics"
           element={
             <AdminRoute>
               <DisplayAnalytics />
