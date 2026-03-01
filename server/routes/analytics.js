@@ -53,6 +53,35 @@ function computeDayUptime(eventsForDay, dayStr, prevStatusOnline) {
   return Math.min(100, Math.round((onlineMinutes / DAY_MINUTES) * 100));
 }
 
+/**
+ * GET /api/analytics/overview
+ * Legacy endpoint used by AdminDashboard stats cards.
+ * Returns quick counts for users, playlists, displays.
+ */
+router.get('/overview', asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const now = Date.now();
+
+  const [[{ totalUsers }]]    = await db.query('SELECT COUNT(*) AS totalUsers FROM users WHERE is_active = 1').catch(() => [[{ totalUsers: 0 }]]);
+  const [[{ totalPlaylists }]]= await db.query('SELECT COUNT(*) AS totalPlaylists FROM playlists WHERE is_active = 1').catch(() => [[{ totalPlaylists: 0 }]]);
+  const [displays]            = await db.query('SELECT last_heartbeat FROM displays WHERE is_active = 1').catch(() => [[]]);
+
+  const totalDisplays  = displays.length;
+  const activeDisplays = displays.filter(d =>
+    d.last_heartbeat && (now - new Date(d.last_heartbeat).getTime()) < 90_000
+  ).length;
+
+  res.json({
+    success: true,
+    overview: {
+      totalUsers:      Number(totalUsers),
+      totalPlaylists:  Number(totalPlaylists),
+      totalDisplays,
+      activeDisplays,
+    }
+  });
+}));
+
 /** GET /api/analytics/displays */
 router.get('/displays', asyncHandler(async (req, res) => {
   const days = lastNDays(7);
