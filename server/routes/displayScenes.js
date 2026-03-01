@@ -74,7 +74,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const db = getDatabase();
   await db.query(
     'UPDATE display_scenes SET name = COALESCE(?, name), description = COALESCE(?, description) WHERE id = ?',
-    [name || null, description !== undefined ? description : undefined, req.params.id]
+    [name || null, description !== undefined ? (description || null) : null, req.params.id]
   );
   const [rows] = await db.query('SELECT * FROM display_scenes WHERE id = ?', [req.params.id]);
   if (!rows.length) return res.status(404).json({ success: false, error: 'Scene not found' });

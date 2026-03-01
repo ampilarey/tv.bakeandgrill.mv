@@ -3,9 +3,13 @@
  * 7-day uptime bars per TV + live status summary.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import Spinner from '../../components/common/Spinner';
 import Button from '../../components/common/Button';
+import MobileMenu from '../../components/MobileMenu';
+import Footer from '../../components/Footer';
 
 function timeAgo(iso) {
   if (!iso) return 'never';
@@ -44,10 +48,12 @@ function dayLabel(dateStr) {
 }
 
 export default function DisplayAnalytics() {
+  const { user }    = useAuth();
+  const navigate    = useNavigate();
   const [data, setData]       = useState(null);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter]   = useState('all'); // all | online | offline
+  const [filter, setFilter]   = useState('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,7 +68,10 @@ export default function DisplayAnalytics() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (user?.role !== 'admin') { navigate('/admin/dashboard'); return; }
+    load();
+  }, [user, navigate, load]);
 
   const displays = data?.displays || [];
   const days     = data?.days     || [];
@@ -74,15 +83,26 @@ export default function DisplayAnalytics() {
   });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-tv-bg flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-tv-text">Display Analytics</h1>
-          <p className="text-sm text-tv-textMuted mt-1">7-day uptime overview for all active displays.</p>
+      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/admin/dashboard')} className="text-white/70 hover:text-white">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <MobileMenu />
+            <div>
+              <h1 className="text-xl font-bold text-white">Display Analytics</h1>
+              <p className="text-xs text-white/70 hidden sm:block">7-day uptime overview for all active displays</p>
+            </div>
+          </div>
+          <Button variant="ghost" onClick={load} disabled={loading} className="border-white/30 text-white hover:bg-white/10">↺ Refresh</Button>
         </div>
-        <Button variant="ghost" onClick={load} disabled={loading}>↺ Refresh</Button>
       </div>
+      <div className="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full pb-24 space-y-6">
 
       {/* Summary cards */}
       {summary && (
@@ -167,6 +187,9 @@ export default function DisplayAnalytics() {
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-500" /> &lt;40%</div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-tv-borderSubtle" /> No data</div>
       </div>
+      </div>
+
+      <Footer />
     </div>
   );
 }

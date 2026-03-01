@@ -4,7 +4,11 @@
  * State is persisted in localStorage so progress survives page reloads.
  */
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/common/Button';
+import MobileMenu from '../../components/MobileMenu';
+import Footer from '../../components/Footer';
 
 const SECTIONS = [
   {
@@ -172,8 +176,14 @@ function loadState() {
 }
 
 export default function TestChecklist() {
+  const { user }  = useAuth();
+  const navigate  = useNavigate();
   const [checked, setChecked] = useState(loadState);
   const [filter, setFilter]   = useState('all');
+
+  useEffect(() => {
+    if (user?.role !== 'admin') { navigate('/admin/dashboard'); return; }
+  }, [user, navigate]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(checked));
@@ -194,20 +204,32 @@ export default function TestChecklist() {
   const statusColor = pct === 100 ? 'text-green-400' : pct >= 60 ? 'text-yellow-400' : 'text-red-400';
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-tv-text">Test Checklist</h1>
-          <p className="text-sm text-tv-textMuted mt-1">Verify all features before going live or after a deployment.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <span className={`text-3xl font-bold ${statusColor}`}>{pct}%</span>
-            <p className="text-xs text-tv-textMuted">{done}/{total} passed</p>
+    <div className="min-h-screen bg-tv-bg flex flex-col">
+      {/* Header */}
+      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/admin/dashboard')} className="text-white/70 hover:text-white">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <MobileMenu />
+            <div>
+              <h1 className="text-xl font-bold text-white">Test Checklist</h1>
+              <p className="text-xs text-white/70 hidden sm:block">Verify all features before going live or after deployment</p>
+            </div>
           </div>
-          <Button variant="ghost" onClick={resetAll}>Reset</Button>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <span className={`text-2xl font-bold ${statusColor}`}>{pct}%</span>
+              <p className="text-xs text-white/60">{done}/{total} passed</p>
+            </div>
+            <Button variant="ghost" onClick={resetAll} className="border-white/30 text-white hover:bg-white/10">Reset</Button>
+          </div>
         </div>
       </div>
+      <div className="flex-1 p-4 md:p-6 max-w-4xl mx-auto w-full pb-24 space-y-6">
 
       {/* Progress bar */}
       <div className="w-full h-3 bg-tv-bgSoft rounded-full overflow-hidden">
@@ -289,6 +311,9 @@ export default function TestChecklist() {
           <p className="text-sm text-green-300/70 mt-1">Bake &amp; Grill TV is ready to go live.</p>
         </div>
       )}
+      </div>
+
+      <Footer />
     </div>
   );
 }

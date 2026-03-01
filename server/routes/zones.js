@@ -175,14 +175,19 @@ router.delete('/override/:id', requireAdmin, asyncHandler(async (req, res) => {
     [req.params.id]
   );
 
-  // Get affected displays and push revert command
+  // Push revert command to all affected displays
   const [ovr] = await db.query('SELECT * FROM emergency_overrides WHERE id = ?', [req.params.id]);
   if (ovr.length) {
     const o = ovr[0];
-    const selector = o.zone_id
-      ? 'SELECT id FROM displays WHERE zone_id = ? AND is_active = 1'
-      : 'SELECT id FROM displays WHERE id = ? AND is_active = 1';
-    const [targets] = await db.query(selector, [o.zone_id || o.display_id]);
+    let targets;
+    if (!o.zone_id && !o.display_id) {
+      // target_all override — revert every active display
+      [targets] = await db.query('SELECT id FROM displays WHERE is_active = 1');
+    } else if (o.zone_id) {
+      [targets] = await db.query('SELECT id FROM displays WHERE zone_id = ? AND is_active = 1', [o.zone_id]);
+    } else {
+      [targets] = await db.query('SELECT id FROM displays WHERE id = ? AND is_active = 1', [o.display_id]);
+    }
     for (const d of targets) {
       await db.query(
         'INSERT INTO display_commands (display_id, command_type, command_data) VALUES (?, ?, ?)',
