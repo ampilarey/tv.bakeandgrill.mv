@@ -141,6 +141,7 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
             key={item.id}
             src={item.url}
             alt={item.original_name}
+            data-slide="true"
             className="w-full h-full object-contain"
             onError={handleError}
             draggable={false}
