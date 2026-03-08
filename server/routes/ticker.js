@@ -76,7 +76,7 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
       `INSERT INTO ticker_messages (
         text, text_dv, display_id, priority, start_date, end_date, created_by
       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [text, text_dv, display_id, priority || 0, start_date, end_date, req.user.userId]
+      [text, text_dv, display_id, priority || 0, start_date, end_date, req.user.id]
     );
 
     res.status(201).json({
@@ -106,10 +106,28 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
     delete updates.created_at;
     delete updates.created_by;
 
+    // Whitelist allowed columns to prevent SQL injection
+    const allowed = ['text', 'text_dv', 'display_id', 'is_active', 'priority', 'start_date', 'end_date'];
+    const setClauses = [];
+    const params = [];
+    for (const key of allowed) {
+      if (updates[key] !== undefined) {
+        setClauses.push(`${key} = ?`);
+        params.push(updates[key]);
+      }
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid fields to update' });
+    }
+
+    setClauses.push('updated_at = NOW()');
+    params.push(id);
+
     const db = getDatabase();
     const [result] = await db.query(
-      'UPDATE ticker_messages SET ?, updated_at = NOW() WHERE id = ?',
-      [updates, id]
+      `UPDATE ticker_messages SET ${setClauses.join(', ')} WHERE id = ?`,
+      params
     );
 
     if (result.affectedRows === 0) {

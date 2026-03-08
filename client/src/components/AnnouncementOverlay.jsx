@@ -3,7 +3,7 @@
  * Full-screen or modal announcement for displays
  * Phase 3: Info Ticker & Announcements
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import api from '../services/api';
 import useFeatureFlag from '../hooks/useFeatureFlag';
@@ -12,12 +12,14 @@ function AnnouncementOverlay({ displayId, onDismiss }) {
   const [announcement, setAnnouncement] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const announcementsEnabled = useFeatureFlag('announcements');
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => { onDismissRef.current = onDismiss; }, [onDismiss]);
 
   useEffect(() => {
     if (!announcementsEnabled || !displayId) return;
 
     checkForAnnouncements();
-    
+
     // Check for new announcements every 10 seconds
     const interval = setInterval(checkForAnnouncements, 10000);
     return () => clearInterval(interval);
@@ -32,7 +34,8 @@ function AnnouncementOverlay({ displayId, onDismiss }) {
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleDismiss();
+          setAnnouncement(null);
+          if (onDismissRef.current) onDismissRef.current();
           return 0;
         }
         return prev - 1;

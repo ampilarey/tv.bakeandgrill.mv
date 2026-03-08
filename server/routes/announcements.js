@@ -64,7 +64,7 @@ router.post('/', verifyToken, async (req, res) => {
     const db = getDatabase();
     const [displays] = await db.query(
       'SELECT id FROM displays WHERE id = ? AND (created_by = ? OR user_id = ?)',
-      [display_id, req.user.userId, req.user.userId]
+      [display_id, req.user.id, req.user.id]
     );
 
     if (displays.length === 0) {
@@ -120,7 +120,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
       `SELECT a.id FROM announcements a
        INNER JOIN displays d ON a.display_id = d.id
        WHERE a.id = ? AND (d.created_by = ? OR d.user_id = ?)`,
-      [req.params.id, req.user.userId, req.user.userId]
+      [req.params.id, req.user.id, req.user.id]
     );
 
     if (announcements.length === 0) {
@@ -156,7 +156,7 @@ router.delete('/display/:displayId/clear', verifyToken, async (req, res) => {
     // Verify user has access to this display
     const [displays] = await db.query(
       'SELECT id FROM displays WHERE id = ? AND (created_by = ? OR user_id = ?)',
-      [req.params.displayId, req.user.userId, req.user.userId]
+      [req.params.displayId, req.user.id, req.user.id]
     );
 
     if (displays.length === 0) {

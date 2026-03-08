@@ -115,10 +115,11 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
     retryRef.current += 1;
     if (retryRef.current <= 3) {
       // Retry after 1 s
+      clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         if (!mountedRef.current) return;
         if (videoRef.current) { videoRef.current.load(); videoRef.current.play().catch(() => {}); }
-        if (item?.type === 'image') { /* force re-render */ setFade(f => !f); setTimeout(() => setFade(f => !f), 50); }
+        if (item?.type === 'image') { setFade(false); timerRef.current = setTimeout(() => { if (mountedRef.current) setFade(true); }, 50); }
       }, 1000);
     } else {
       next(); // skip

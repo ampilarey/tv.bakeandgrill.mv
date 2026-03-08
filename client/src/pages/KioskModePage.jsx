@@ -90,9 +90,13 @@ export default function KioskModePage() {
   const retryCountdownRef   = useRef(null);
   const startTimeRef        = useRef(Date.now());
   const normalPlaylistRef   = useRef(null);
+  const channelsRef         = useRef([]);
   const rebootTimerRef      = useRef(null);
   const failoverTimerRef    = useRef(null);
   const failoverActiveRef   = useRef(false);
+
+  // Keep channelsRef in sync for use in polling closure
+  useEffect(() => { channelsRef.current = channels; }, [channels]);
 
   // ── Kiosk lockdown ──────────────────────────────────────────────────────
 
@@ -307,13 +311,14 @@ export default function KioskModePage() {
         }
 
         for (const cmd of commands) {
-          const d = cmd.command_data ? JSON.parse(cmd.command_data) : {};
+          let d = {};
+          try { d = cmd.command_data ? JSON.parse(cmd.command_data) : {}; } catch { /* malformed JSON — skip */ }
           setLastCommand({ type: cmd.command_type, data: d, time: new Date().toLocaleTimeString() });
           clearTimeout(commandTimeoutRef.current);
           commandTimeoutRef.current = setTimeout(() => setLastCommand(null), 3000);
 
           if (cmd.command_type === 'change_channel') {
-            const ch = channels.find(c => c.id === d.channel_id);
+            const ch = channelsRef.current.find(c => c.id === d.channel_id);
             if (ch) setCurrentChannel(ch);
           } else if (cmd.command_type === 'set_volume' && videoRef.current) {
             videoRef.current.volume = (parseInt(d.volume) || 50) / 100;
@@ -350,16 +355,16 @@ export default function KioskModePage() {
                 const canvas = document.createElement('canvas');
                 canvas.width  = videoRef.current.videoWidth  || 1280;
                 canvas.height = videoRef.current.videoHeight || 720;
-                canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
-                imageData = canvas.toDataURL('image/jpeg', 0.6);
+                const ctx = canvas.getContext('2d');
+                if (ctx) { ctx.drawImage(videoRef.current, 0, 0); imageData = canvas.toDataURL('image/jpeg', 0.6); }
               } else {
                 // Slideshow — grab first visible img
                 const img = document.querySelector('img[data-slide]');
                 if (img && img.complete) {
                   const canvas = document.createElement('canvas');
                   canvas.width = img.naturalWidth || 1280; canvas.height = img.naturalHeight || 720;
-                  canvas.getContext('2d').drawImage(img, 0, 0);
-                  imageData = canvas.toDataURL('image/jpeg', 0.6);
+                  const ctx = canvas.getContext('2d');
+                  if (ctx) { ctx.drawImage(img, 0, 0); imageData = canvas.toDataURL('image/jpeg', 0.6); }
                 }
               }
               if (imageData) {
@@ -376,7 +381,7 @@ export default function KioskModePage() {
     poll();
     commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
     return () => clearInterval(commandPollRef.current);
-  }, [displayToken, display, channels, activeOverride, enterFullscreen, verifyDisplay]);
+  }, [displayToken, display, activeOverride, enterFullscreen, verifyDisplay]);
 
   // ── Video player ─────────────────────────────────────────────────────────
 

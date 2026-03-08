@@ -90,7 +90,7 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
       if (isNight  && display.night_playlist_id) resolvedMediaPlaylistId = display.night_playlist_id;
       else if (display.day_playlist_id)           resolvedMediaPlaylistId = display.day_playlist_id;
     }
-  } catch { /* content_schedules may not exist yet */ }
+  } catch (err) { if (err.code !== 'ER_NO_SUCH_TABLE') console.error('Schedule resolution error:', err.message); }
 
   // Active emergency override
   let activeOverridePlaylistId = null;
@@ -108,7 +108,7 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
       [display.id, display.zone_id || -1]
     );
     if (ovrs.length && ovrs[0].pid) activeOverridePlaylistId = ovrs[0].pid;
-  } catch { /* ignore */ }
+  } catch (err) { if (err.code !== 'ER_NO_SUCH_TABLE') console.error('Override resolution error:', err.message); }
 
   res.json({
     success: true,
@@ -287,12 +287,19 @@ router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => 
  * PATCH /api/displays/commands/:id/execute
  * Mark command as executed (public endpoint for displays)
  */
-router.patch('/commands/:id/execute', asyncHandler(async (req, res) => {
+router.patch('/commands/:id/execute', displayLimiter, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
-  
-  await db.query('UPDATE display_commands SET is_executed = TRUE, executed_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
-  
+
+  const [result] = await db.query(
+    'UPDATE display_commands SET is_executed = TRUE, executed_at = CURRENT_TIMESTAMP WHERE id = ? AND is_executed = FALSE',
+    [id]
+  );
+
+  if (result.affectedRows === 0) {
+    return res.status(404).json({ success: false, error: 'Command not found or already executed' });
+  }
+
   res.json({
     success: true,
     message: 'Command marked as executed'
@@ -397,7 +404,7 @@ router.post('/',
  * GET /api/displays/:id
  * Get display details (Admin only)
  */
-router.get('/:id', asyncHandler(async (req, res) => {
+router.get('/:id', checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
   
@@ -421,7 +428,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
  * PUT /api/displays/:id
  * Update display (Admin only)
  */
-router.put('/:id', asyncHandler(async (req, res) => {
+router.put('/:id', checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
   const { name, location, playlist_id, current_channel_id, is_active, auto_play, schedule_enabled,
@@ -511,7 +518,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
  * DELETE /api/displays/:id
  * Delete display (Admin only)
  */
-router.delete('/:id', asyncHandler(async (req, res) => {
+router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
   
@@ -538,7 +545,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
  * GET /api/displays/:id/status
  * Get display status and details (Admin only)
  */
-router.get('/:id/status', asyncHandler(async (req, res) => {
+router.get('/:id/status', checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
   
@@ -646,7 +653,8 @@ router.post('/:id/control',
 router.post('/:id/enable-pairing', requireAdmin, asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
-  const minutes = parseInt(req.body.minutes, 10) || 10;
+  const parsed = parseInt(req.body.minutes, 10);
+  const minutes = (Number.isFinite(parsed) && parsed > 0 && parsed <= 60) ? parsed : 10;
   const until = new Date(Date.now() + minutes * 60 * 1000);
 
   const [existing] = await db.query('SELECT id FROM displays WHERE id = ?', [id]);
