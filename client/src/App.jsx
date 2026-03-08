@@ -34,6 +34,8 @@ import ContentSchedules from './pages/admin/ContentSchedules';
 import EmergencyOverride from './pages/admin/EmergencyOverride';
 import ChannelHealth from './pages/admin/ChannelHealth';
 import SystemHealth from './pages/admin/SystemHealth';
+import FeatureFlags from './pages/admin/FeatureFlags';
+import SlideTemplates from './pages/admin/SlideTemplates';
 
 // Mobile Components
 import BottomNav from './components/BottomNav';
@@ -359,6 +361,24 @@ function AppRouter() {
           element={
             <AdminRoute>
               <SystemHealth />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/features"
+          element={
+            <AdminRoute>
+              <FeatureFlags />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/templates"
+          element={
+            <AdminRoute>
+              <SlideTemplates />
             </AdminRoute>
           }
         />

@@ -283,6 +283,22 @@ export default function AdminDashboard() {
               </svg>
               Content Schedules
             </Button>
+
+            {/* Slide Templates */}
+            <Button variant="primary" size="lg" onClick={() => navigate('/admin/templates')} className="justify-start">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm8-8a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+              </svg>
+              Slide Templates
+            </Button>
+
+            {/* Feature Flags */}
+            <Button variant="primary" size="lg" onClick={() => navigate('/admin/features')} className="justify-start">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H7.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+              </svg>
+              Feature Flags
+            </Button>
           </div>
         </div>
 
