@@ -3,13 +3,13 @@
  * Display QR code with optional image/text
  * Phase 2: Images & QR Codes
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { QRCodeSVG } from 'qrcode.react';
 
-function QRCodeSlide({ 
-  qrUrl, 
-  title, 
+function QRCodeSlide({
+  qrUrl,
+  title,
   description,
   imageUrl,
   duration = 15,
@@ -20,15 +20,18 @@ function QRCodeSlide({
   className = ''
 }) {
   const [timeRemaining, setTimeRemaining] = useState(duration);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
 
   useEffect(() => {
     if (duration <= 0) return;
+    setTimeRemaining(duration);
 
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          if (onComplete) onComplete();
+          if (onCompleteRef.current) onCompleteRef.current();
           return 0;
         }
         return prev - 1;
@@ -36,7 +39,7 @@ function QRCodeSlide({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [duration, onComplete]);
+  }, [duration]);
 
   const renderQRCode = () => (
     <QRCodeSVG

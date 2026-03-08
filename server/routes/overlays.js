@@ -33,8 +33,8 @@ function filterActive(items, displayId, zoneId) {
     if (item.end_at   && new Date(item.end_at)   < now) return false;
 
     if (item.target_type === 'all') return true;
-    if (item.target_type === 'display' && item.target_id == displayId) return true;
-    if (item.target_type === 'zone'    && zoneId && item.target_id == zoneId) return true;
+    if (item.target_type === 'display' && String(item.target_id) === String(displayId)) return true;
+    if (item.target_type === 'zone'    && zoneId && String(item.target_id) === String(zoneId)) return true;
     return false;
   });
 }
@@ -48,7 +48,9 @@ function filterActive(items, displayId, zoneId) {
  */
 router.get('/for-display', asyncHandler(async (req, res) => {
   const { token } = req.query;
-  if (!token) return res.status(400).json({ success: false, error: 'token required' });
+  if (!token || typeof token !== 'string' || token.length > 255) {
+    return res.status(400).json({ success: false, error: 'token required' });
+  }
 
   const db = getDatabase();
   const [displays] = await db.query(

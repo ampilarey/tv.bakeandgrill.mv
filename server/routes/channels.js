@@ -148,6 +148,18 @@ router.post('/report-failure', asyncHandler(async (req, res) => {
   }
 
   const db = getDatabase();
+
+  // Verify user has access to this playlist (admin bypasses)
+  if (req.user.role !== 'admin') {
+    const [access] = await db.query(
+      'SELECT 1 FROM user_assigned_playlists WHERE user_id = ? AND playlist_id = ?',
+      [req.user.id, playlistId]
+    );
+    if (access.length === 0) {
+      return res.status(403).json({ success: false, error: 'Access denied to this playlist' });
+    }
+  }
+
   const hash = urlHash(url);
 
   try {
@@ -163,7 +175,9 @@ router.post('/report-failure', asyncHandler(async (req, res) => {
       [hash, parseInt(playlistId), url, channelName || null]
     );
   } catch (err) {
-    console.error('[channels] report-failure DB error:', err.message);
+    if (err.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('[channels] report-failure DB error:', err.message);
+    }
   }
 
   res.json({ success: true });

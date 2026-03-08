@@ -227,7 +227,7 @@ export default function KioskModePage() {
           const now = new Date();
           const [hh, mm] = d.autoRebootTime.split(':').map(Number);
           if (now.getHours() === hh && now.getMinutes() === mm) {
-            console.log('[Kiosk] Auto-reboot triggered at', d.autoRebootTime);
+            if (import.meta.env.DEV) console.log('[Kiosk] Auto-reboot triggered at', d.autoRebootTime);
             window.location.reload();
           }
         }, 60_000); // check every minute
@@ -295,10 +295,8 @@ export default function KioskModePage() {
             setActiveOverride(override);
             // Fetch override playlist channels if different from current
             if (override.m3u_url) {
-              try {
-                const { data: vData } = await displayApi.post('/displays/verify', { token: displayToken });
-                // override playlist channels aren't fetched here — handled by change_channel command or refresh
-              } catch { /* ignore */ }
+              // Refresh display config to pick up override playlist
+              verifyDisplay();
             }
           }
         } else if (activeOverride) {
@@ -329,7 +327,10 @@ export default function KioskModePage() {
             videoRef.current.muted = true; setIsMuted(true);
           } else if (cmd.command_type === 'unmute' && videoRef.current) {
             videoRef.current.muted = false; setIsMuted(false);
-            videoRef.current.play().catch(() => { videoRef.current.muted = true; videoRef.current.play().catch(() => {}); });
+            videoRef.current.play().catch(() => {
+              // Autoplay policy requires muted — fall back gracefully
+              if (videoRef.current) { videoRef.current.muted = true; setIsMuted(true); videoRef.current.play().catch(() => {}); }
+            });
           } else if (cmd.command_type === 'toggle_fullscreen') {
             const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
             if (!inFS) await enterFullscreen().catch(() => {});
@@ -380,7 +381,10 @@ export default function KioskModePage() {
 
     poll();
     commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
-    return () => clearInterval(commandPollRef.current);
+    return () => {
+      clearInterval(commandPollRef.current);
+      clearTimeout(commandTimeoutRef.current);
+    };
   }, [displayToken, display, activeOverride, enterFullscreen, verifyDisplay]);
 
   // ── Video player ─────────────────────────────────────────────────────────
@@ -404,12 +408,16 @@ export default function KioskModePage() {
 
     const clearPT = () => { if (playTimeout) { clearTimeout(playTimeout); playTimeout = null; } };
 
+    let retryDelayTimeout = null;
+    const clearRDT = () => { if (retryDelayTimeout) { clearTimeout(retryDelayTimeout); retryDelayTimeout = null; } };
+
     const startPT = () => {
       clearPT();
       playTimeout = setTimeout(() => {
         if (!hasStarted && retryCount < maxRetries) {
           retryCount++;
-          setTimeout(() => setupPlayer(), 2000);
+          clearRDT();
+          retryDelayTimeout = setTimeout(() => setupPlayer(), 2000);
         }
       }, 15_000);
     };
@@ -458,6 +466,7 @@ export default function KioskModePage() {
 
     return () => {
       clearPT();
+      clearRDT();
       video.removeEventListener('playing', onPlaying);
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     };
@@ -484,7 +493,7 @@ export default function KioskModePage() {
     clearTimeout(failoverTimerRef.current);
     failoverTimerRef.current = setTimeout(() => {
       if (!videoRef.current || videoRef.current.paused || videoRef.current.readyState < 3) {
-        console.log('[Kiosk] Stream failing — switching to failover playlist', failoverId);
+        if (import.meta.env.DEV) console.log('[Kiosk] Stream failing — switching to failover playlist', failoverId);
         failoverActiveRef.current = true;
         setDisplay(prev => prev ? { ...prev, displayType: 'media', mediaPlaylistId: failoverId } : prev);
       }

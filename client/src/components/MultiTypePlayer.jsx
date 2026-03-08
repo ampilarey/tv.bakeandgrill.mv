@@ -4,7 +4,7 @@
  * Phase 2: Images & QR Codes
  * Phase 4: YouTube & Video Support
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import ImageSlide from './ImageSlide';
 import QRCodeSlide from './QRCodeSlide';
@@ -24,15 +24,17 @@ function MultiTypePlayer({
   const qrCodesEnabled = useFeatureFlag('qr_codes');
   const youtubeEnabled = useFeatureFlag('youtube_embed');
 
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+
   // Fallback for disabled features
   useEffect(() => {
     if (item.type === 'image' && !imageSlidesEnabled) {
       setError('Image slides feature is not enabled');
-      if (onComplete) {
-        setTimeout(onComplete, 1000);
-      }
+      const t = setTimeout(() => { if (onCompleteRef.current) onCompleteRef.current(); }, 1000);
+      return () => clearTimeout(t);
     }
-  }, [item.type, imageSlidesEnabled, onComplete]);
+  }, [item.type, imageSlidesEnabled]);
 
   const handleComplete = () => {
     if (onComplete) {
@@ -40,11 +42,15 @@ function MultiTypePlayer({
     }
   };
 
+  const errorTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(errorTimerRef.current), []);
+
   const handleError = (errorMsg) => {
-    console.error('Player error:', errorMsg);
+    if (import.meta.env.DEV) console.error('Player error:', errorMsg);
     setError(errorMsg);
     // Auto-skip to next item after 2 seconds on error
-    setTimeout(handleComplete, 2000);
+    clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(handleComplete, 2000);
   };
 
   // Error state

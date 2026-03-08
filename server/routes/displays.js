@@ -192,6 +192,8 @@ router.post('/heartbeat', displayLimiter, verifyDisplayToken, asyncHandler(async
 router.post('/screenshot', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
   const { token, imageData } = req.body;
   if (!imageData) return res.status(400).json({ success: false, error: 'No imageData' });
+  // Limit screenshot to ~2MB base64 (~1.5MB decoded)
+  if (imageData.length > 2 * 1024 * 1024) return res.status(413).json({ success: false, error: 'Screenshot too large' });
 
   const db = getDatabase();
   const [rows] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);

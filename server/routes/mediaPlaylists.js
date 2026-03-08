@@ -27,7 +27,7 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 /** POST /api/media-playlists */
-router.post('/', asyncHandler(async (req, res) => {
+router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   const { name, description, shuffle } = req.body;
   if (!name) return res.status(400).json({ success: false, error: 'name is required' });
   const db = getDatabase();
@@ -58,7 +58,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 /** PUT /api/media-playlists/:id */
-router.put('/:id', asyncHandler(async (req, res) => {
+router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const { name, description, shuffle } = req.body;
   const db = getDatabase();
   const updates = [];
@@ -98,7 +98,7 @@ router.get('/:id/items', asyncHandler(async (req, res) => {
 }));
 
 /** POST /api/media-playlists/:id/items */
-router.post('/:id/items', asyncHandler(async (req, res) => {
+router.post('/:id/items', requireAdmin, asyncHandler(async (req, res) => {
   const { media_id, image_duration_seconds, play_video_full } = req.body;
   if (!media_id) return res.status(400).json({ success: false, error: 'media_id is required' });
   const db = getDatabase();
@@ -127,7 +127,7 @@ router.post('/:id/items', asyncHandler(async (req, res) => {
 }));
 
 /** PUT /api/media-playlists/:id/items/:itemId */
-router.put('/:id/items/:itemId', asyncHandler(async (req, res) => {
+router.put('/:id/items/:itemId', requireAdmin, asyncHandler(async (req, res) => {
   const { image_duration_seconds, play_video_full, sort_order } = req.body;
   const db = getDatabase();
   const updates = [];
@@ -142,14 +142,14 @@ router.put('/:id/items/:itemId', asyncHandler(async (req, res) => {
 }));
 
 /** DELETE /api/media-playlists/:id/items/:itemId */
-router.delete('/:id/items/:itemId', asyncHandler(async (req, res) => {
+router.delete('/:id/items/:itemId', requireAdmin, asyncHandler(async (req, res) => {
   const db = getDatabase();
   await db.query('DELETE FROM media_playlist_items WHERE id = ? AND playlist_id = ?', [req.params.itemId, req.params.id]);
   res.json({ success: true, message: 'Item removed' });
 }));
 
 /** POST /api/media-playlists/:id/items/reorder — body: { order: [{ id, sort_order }] } */
-router.post('/:id/items/reorder', asyncHandler(async (req, res) => {
+router.post('/:id/items/reorder', requireAdmin, asyncHandler(async (req, res) => {
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ success: false, error: 'order array required' });
   const db = getDatabase();

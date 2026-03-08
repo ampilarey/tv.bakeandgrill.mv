@@ -99,20 +99,18 @@ async function runMigrations(connection) {
           try {
             await connection.query(statement);
           } catch (error) {
-            // Swallow idempotent/already-applied errors
-            if (
-              error.message.includes('does not exist') ||
-              error.message.includes('Unknown constraint') ||
-              error.message.includes('Duplicate column name') ||
-              error.message.includes('Duplicate key name') ||
-              error.message.includes('Duplicate foreign key') ||
-              error.message.includes('already exists') ||
-              error.code === 'ER_DUP_KEYNAME' ||
-              error.code === 'ER_DUP_FIELDNAME'
-            ) {
-              console.log(`⚠️  Migration ${file}: Skipping already-applied statement (${error.message.split('\n')[0]})`);
+            // Idempotent/already-applied errors — safe to skip
+            const idempotentCodes = ['ER_DUP_KEYNAME', 'ER_DUP_FIELDNAME', 'ER_TABLE_EXISTS_ERROR', 'ER_DUP_ENTRY'];
+            const idempotentMessages = ['does not exist', 'Unknown constraint', 'Duplicate column name',
+              'Duplicate key name', 'Duplicate foreign key', 'already exists'];
+            const isIdempotent = idempotentCodes.includes(error.code) ||
+              idempotentMessages.some(msg => error.message.includes(msg));
+
+            if (isIdempotent) {
+              // Already applied — silent skip
             } else {
-              console.error(`⚠️  Migration ${file} statement error (skipping): ${error.message.split('\n')[0]}`);
+              console.error(`❌ Migration ${file} statement FAILED: ${error.message.split('\n')[0]}`);
+              console.error(`   Statement: ${statement.substring(0, 120)}...`);
             }
           }
         }
