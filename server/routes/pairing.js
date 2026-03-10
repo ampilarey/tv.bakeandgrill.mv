@@ -18,9 +18,21 @@ const pinRequestLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// 10 PIN checks per IP per minute — prevents brute-force PIN enumeration
+const pinCheckLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: 'Too many PIN check attempts from this IP, please wait a minute',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Columns safe to return to a display device — never include token, location_pin, etc.
+const DISPLAY_SAFE_COLUMNS = 'id, name, location, playlist_id, is_active, last_seen, pairing_enabled_until, user_id';
 
 async function createSession(db, type, token, displayId = null, ttlMs = 5 * 60 * 1000) {
   const expiresAt = new Date(Date.now() + ttlMs);
@@ -79,7 +91,7 @@ router.post('/request-pin', pinRequestLimiter, asyncHandler(async (req, res) => 
  * POST /api/pairing/check-pin
  * Display checks if PIN has been paired by admin
  */
-router.post('/check-pin', asyncHandler(async (req, res) => {
+router.post('/check-pin', pinCheckLimiter, asyncHandler(async (req, res) => {
   const { pin } = req.body;
   const db = getDatabase();
 
@@ -94,7 +106,10 @@ router.post('/check-pin', asyncHandler(async (req, res) => {
   }
 
   if (session.display_id) {
-    const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [session.display_id]);
+    const [displays] = await db.query(
+      `SELECT ${DISPLAY_SAFE_COLUMNS}, token FROM displays WHERE id = ?`,
+      [session.display_id]
+    );
 
     if (displays.length > 0) {
       await deleteSession(db, pin);
@@ -166,7 +181,10 @@ router.post('/admin-pair-pin', verifyToken, checkPermission('can_manage_displays
     [result.insertId, pin]
   );
 
-  const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [result.insertId]);
+  const [displays] = await db.query(
+    `SELECT ${DISPLAY_SAFE_COLUMNS}, token FROM displays WHERE id = ?`,
+    [result.insertId]
+  );
 
   res.json({
     success: true,
@@ -223,7 +241,10 @@ router.post('/pair-with-qr', asyncHandler(async (req, res) => {
     });
   }
 
-  const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [session.display_id]);
+  const [displays] = await db.query(
+    `SELECT ${DISPLAY_SAFE_COLUMNS}, token FROM displays WHERE id = ?`,
+    [session.display_id]
+  );
 
   if (displays.length === 0) {
     return res.status(404).json({
@@ -267,15 +288,17 @@ router.post('/pair-with-location', pinRequestLimiter, asyncHandler(async (req, r
   const { location_id, pin } = req.body;
 
   const [displays] = await db.query(
-    'SELECT * FROM displays WHERE id = ? AND location_pin = ? AND is_active = 1',
-    [location_id, pin]
+    `SELECT ${DISPLAY_SAFE_COLUMNS}, token, location_pin FROM displays WHERE id = ? AND is_active = 1`,
+    [location_id]
   );
 
-  if (displays.length === 0) {
+  if (displays.length === 0 || displays[0].location_pin !== pin) {
     return res.status(401).json({ success: false, error: 'Invalid location or PIN' });
   }
 
   const display = displays[0];
+  // Remove location_pin before sending to client
+  delete display.location_pin;
 
   // Check pairing window — must be enabled by admin within last 10 min
   if (!display.pairing_enabled_until || new Date(display.pairing_enabled_until) < new Date()) {
@@ -292,30 +315,15 @@ router.post('/pair-with-location', pinRequestLimiter, asyncHandler(async (req, r
 }));
 
 /**
- * POST /api/pairing/auto-pair
- * Attempt to auto-pair display based on network/IP
+ * POST /api/pairing/auto-pair  — DISABLED
+ * Auto-pairing by IP was removed: any device on the same network could claim a
+ * display's token without any authentication.  Use PIN, QR, or location pairing.
  */
-router.post('/auto-pair', asyncHandler(async (req, res) => {
-  const db = getDatabase();
-  const clientIp = req.ip || req.connection.remoteAddress;
-
-  const [displays] = await db.query(
-    'SELECT * FROM displays WHERE last_ip = ? AND is_active = 1 LIMIT 1',
-    [clientIp]
-  );
-
-  if (displays.length > 0) {
-    return res.json({
-      success: true,
-      display: displays[0],
-      method: 'auto-ip'
-    });
-  }
-
-  res.status(404).json({
+router.post('/auto-pair', (req, res) => {
+  res.status(410).json({
     success: false,
-    error: 'No display found for auto-pairing'
+    error: 'Auto-pairing by IP is disabled. Use PIN, QR, or location-based pairing.'
   });
-}));
+});
 
 module.exports = router;

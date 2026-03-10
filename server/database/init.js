@@ -21,7 +21,8 @@ function createPool() {
     connectionLimit: 10,
     queueLimit: 0,
     enableKeepAlive: true,
-    keepAliveInitialDelay: 0
+    keepAliveInitialDelay: 0,
+    idleTimeout: 60000
   });
 
   return pool;
@@ -107,7 +108,8 @@ async function runMigrations(connection) {
               idempotentMessages.some(msg => error.message.includes(msg));
 
             if (isIdempotent) {
-              // Already applied — silent skip
+              // Already applied — log at debug level so we can audit skipped statements
+              console.log(`   ℹ️  Migration ${file}: skipped (already applied): ${error.message.split('\n')[0]}`);
             } else {
               console.error(`❌ Migration ${file} statement FAILED: ${error.message.split('\n')[0]}`);
               console.error(`   Statement: ${statement.substring(0, 120)}...`);

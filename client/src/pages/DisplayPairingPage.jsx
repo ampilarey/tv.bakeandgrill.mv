@@ -159,18 +159,10 @@ export default function DisplayPairingPage() {
   };
 
   const handlePairingSuccess = (display) => {
-    console.log('🎉 Pairing successful! Display info:', display);
-    console.log('📋 Display token:', display.token);
-    
     setDisplayInfo(display);
-    
-    // Redirect to kiosk mode after showing success message
-    console.log('⏱️ Will redirect to player in 2 seconds...');
     
     setTimeout(() => {
       const redirectUrl = `/#/display?token=${display.token}`;
-      console.log('🔄 Redirecting to:', redirectUrl);
-      console.log('🔄 Full URL:', window.location.origin + redirectUrl);
       
       // Use both navigate AND window.location as fallback
       try {

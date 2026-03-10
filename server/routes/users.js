@@ -114,7 +114,7 @@ router.put('/:id/first-time-setup', verifyToken, asyncHandler(async (req, res) =
   const { phone_number, email, first_name, last_name, new_password } = req.body;
   
   // Only the user themselves can complete their own setup
-  if (req.user.id != id) {
+  if (String(req.user.id) !== String(id)) {
     return res.status(403).json({
       success: false,
       error: 'Can only update your own profile',
@@ -355,7 +355,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   }
   
   // Prevent admin from deactivating themselves
-  if (id == req.user.id && is_active === 0) {
+  if (String(id) === String(req.user.id) && is_active === 0) {
     return res.status(400).json({
       success: false,
       error: 'Cannot deactivate your own account',
@@ -477,7 +477,7 @@ router.patch('/:id/password', asyncHandler(async (req, res) => {
   const { current_password, new_password } = req.body;
   
   // Only user themselves or admin can change password
-  if (req.user.id != id && req.user.role !== 'admin') {
+  if (String(req.user.id) !== String(id) && req.user.role !== 'admin') {
     return res.status(403).json({
       success: false,
       error: 'Cannot change another user\'s password',
@@ -507,7 +507,7 @@ router.patch('/:id/password', asyncHandler(async (req, res) => {
   const user = users[0];
   
   // If user is changing their own password, verify current password
-  if (req.user.id == id) {
+  if (String(req.user.id) === String(id)) {
     if (!current_password) {
       return res.status(400).json({
         success: false,
@@ -545,7 +545,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   const { permanent } = req.query;
   
   // Prevent admin from deleting themselves
-  if (id == req.user.id) {
+  if (String(id) === String(req.user.id)) {
     return res.status(400).json({
       success: false,
       error: 'Cannot delete your own account',

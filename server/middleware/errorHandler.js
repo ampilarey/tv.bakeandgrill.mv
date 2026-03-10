@@ -23,26 +23,24 @@ function errorHandler(err, req, res, next) {
     (typeof message === 'string' && message.includes('mysql'))
   );
   
-  if (isDatabaseError && process.env.NODE_ENV === 'production') {
+  // Default to production behaviour when NODE_ENV is not explicitly 'development'
+  const isDev = process.env.NODE_ENV === 'development';
+
+  if (isDatabaseError && !isDev) {
     message = 'A database error occurred. Please try again later.';
     code = 'DATABASE_ERROR';
   }
   
-  // Sanitize any error that might expose system internals
-  if (status === 500 && process.env.NODE_ENV === 'production') {
-    // Only send generic message in production for 500 errors
-    // unless it's an explicitly set user-facing message
-    if (!err.userFacing) {
-      message = 'An internal error occurred. Please try again later.';
-      code = 'INTERNAL_ERROR';
-    }
+  if (status === 500 && !isDev && !err.userFacing) {
+    message = 'An internal error occurred. Please try again later.';
+    code = 'INTERNAL_ERROR';
   }
   
   res.status(status).json({
     success: false,
     error: message,
     code: code,
-    ...(process.env.NODE_ENV === 'development' && { 
+    ...(isDev && { 
       stack: err.stack,
       originalError: err.message 
     })

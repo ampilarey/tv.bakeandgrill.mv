@@ -43,9 +43,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      console.log('🔐 AuthContext: Attempting login for:', email);
       const data = await authService.login(email, password);
-      console.log('🔐 AuthContext: Login response:', { success: data.success, hasToken: !!data.token, hasUser: !!data.user });
       
       if (data.success && data.token && data.user) {
         setToken(data.token);
@@ -53,20 +51,11 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(true);
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        console.log('✅ AuthContext: Login successful, user authenticated');
         return { success: true };
       } else {
-        console.error('❌ AuthContext: Login failed - missing data:', { success: data.success, hasToken: !!data.token, hasUser: !!data.user });
         throw new Error('Login failed - invalid response');
       }
     } catch (error) {
-      console.error('❌ AuthContext: Login error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        code: error.code
-      });
       const errorMessage = error.response?.data?.error || error.message || 'Login failed';
       return { success: false, error: errorMessage };
     }

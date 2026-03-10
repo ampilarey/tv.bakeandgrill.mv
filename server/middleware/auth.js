@@ -17,7 +17,9 @@ function verifyToken(req, res, next) {
     
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
     
-    // Try strict verification first; fall back for legacy tokens without iss/aud
+    // Try strict verification first; fall back for legacy tokens without iss/aud.
+    // DEPRECATION: The legacy fallback will be removed in a future release.
+    // All clients must re-login to receive properly-scoped tokens.
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET, {
@@ -26,7 +28,9 @@ function verifyToken(req, res, next) {
       });
     } catch (strictErr) {
       if (strictErr.name === 'JsonWebTokenError') {
-        // Legacy token — accept but don't enforce iss/aud
+        // Legacy token — accept but log deprecation so we know when traffic is
+        // still using old tokens.  Remove this fallback once all sessions expire.
+        console.warn('[AUTH] DEPRECATION: legacy token accepted without iss/aud — user should re-login');
         decoded = jwt.verify(token, process.env.JWT_SECRET);
       } else {
         throw strictErr;

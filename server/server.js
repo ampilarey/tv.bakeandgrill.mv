@@ -47,11 +47,6 @@ const announcementsRoutes = require('./routes/announcements');
 const channelChecker = require('./services/channelChecker');
 const displayMonitor = require('./services/displayMonitor');
 
-// Initialize database
-console.log('🚀 Starting Bake & Grill TV Server...');
-
-initDatabase();
-
 // Create Express app
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -69,7 +64,10 @@ const allowedOrigins = (process.env.CORS_ORIGINS || process.env.ALLOWED_ORIGINS 
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (process.env.NODE_ENV !== 'production') return callback(null, true);
+    // Only allow completely open CORS on an explicit local development setup
+    if (process.env.NODE_ENV === 'development' && /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
     if (allowedOrigins.includes(origin)) return callback(null, true);
     
     console.warn(`🚫 Blocked CORS origin: ${origin}`);
@@ -83,6 +81,7 @@ const isProd = process.env.NODE_ENV === 'production';
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -97,7 +96,7 @@ app.use(helmet({
       connectSrc: ["'self'", "https:", ...(isProd ? [] : ["http:"])],
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
-      frameSrc: ["'none'"],
+      frameSrc: ["'self'", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://onedrive.live.com", "https://1drv.ms"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
       ...(isProd ? { upgradeInsecureRequests: [] } : {})
@@ -128,13 +127,12 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// Public routes (BEFORE rate limiter)
-// Feature flags must be public for frontend to check
-const featuresRoutes = require('./routes/features');
-app.use('/api/features', featuresRoutes);
-
 app.use('/api/auth', authLimiter);
 app.use('/api/', apiLimiter);
+
+// Feature flags are public but still subject to the global API rate limiter above
+const featuresRoutes = require('./routes/features');
+app.use('/api/features', featuresRoutes);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -143,18 +141,14 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/api/health', async (req, res) => {
   try {
     const db = getDatabase();
-    const [userCount] = await db.query('SELECT COUNT(*) as count FROM users');
-    const [playlistCount] = await db.query('SELECT COUNT(*) as count FROM playlists');
-    
+    // Confirm DB is reachable without leaking platform stats to anonymous callers
+    await db.query('SELECT 1');
+
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       version: '1.0.8',
-      database: 'connected',
-      stats: {
-        users: userCount[0].count,
-        playlists: playlistCount[0].count
-      }
+      database: 'connected'
     });
   } catch (error) {
     console.error('❌ Health check failed:', error.message);
@@ -162,8 +156,7 @@ app.get('/api/health', async (req, res) => {
       status: 'error',
       timestamp: new Date().toISOString(),
       version: '1.0.8',
-      database: 'unavailable',
-      error: 'Database connection failed'
+      database: 'unavailable'
     });
   }
 });
@@ -256,31 +249,20 @@ if (process.env.NODE_ENV === 'production') {
     next();
   });
   
+  // Vite produces content-hashed filenames (e.g. assets/index-a1b2c3d.js).
+  // Those can be cached for a year.  Only HTML and service-worker files must
+  // be revalidated on every request.
+  const HASHED_ASSET_RE = /\/assets\/[^/]+-[a-f0-9]{8,}\.(js|css|woff2?|ttf|png|svg|webp)$/i;
+
   app.use(express.static(clientDistPath, {
     setHeaders: (res, filePath) => {
-      // Don't cache HTML files - always fetch fresh
-      if (filePath.endsWith('.html') || filePath.endsWith('/index.html')) {
-        res.set({
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        });
-      }
-      // Service worker files should never be cached
-      if (filePath.endsWith('sw.js') || filePath.endsWith('registerSW.js')) {
-        res.set({
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        });
-      }
-      // JS and CSS files - never cache to ensure fresh updates
-      if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-        res.set({
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        });
+      if (filePath.endsWith('.html')) {
+        res.set({ 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
+      } else if (filePath.endsWith('sw.js') || filePath.endsWith('registerSW.js')) {
+        res.set({ 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
+      } else if (HASHED_ASSET_RE.test(filePath)) {
+        // Content-hashed — safe to cache indefinitely
+        res.set({ 'Cache-Control': 'public, max-age=31536000, immutable' });
       }
     }
   }));
@@ -310,22 +292,31 @@ if (process.env.NODE_ENV === 'production') {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
-  console.log('');
-  console.log('✅ Server started successfully!');
-  // Start background channel health checker
-  channelChecker.start();
-  displayMonitor.start();
-  console.log('');
-  console.log(`🌐 Server running on: http://localhost:${PORT}`);
-  console.log(`📡 API endpoints: http://localhost:${PORT}/api/health`);
-  console.log(`🗄️  Database: MySQL (${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME || 'bakegrill_tv'})`);
-  console.log(`⚙️  Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log('');
-  console.log('🔥 Bake & Grill TV is ready!');
-  console.log('');
-});
+// Start server — database must be ready before accepting requests
+(async () => {
+  console.log('🚀 Starting Bake & Grill TV Server...');
+  try {
+    await initDatabase();
+  } catch (err) {
+    console.error('❌ Failed to initialize database — aborting startup:', err.message);
+    process.exit(1);
+  }
+
+  app.listen(PORT, () => {
+    console.log('');
+    console.log('✅ Server started successfully!');
+    channelChecker.start();
+    displayMonitor.start();
+    console.log('');
+    console.log(`🌐 Server running on: http://localhost:${PORT}`);
+    console.log(`📡 API endpoints: http://localhost:${PORT}/api/health`);
+    console.log(`🗄️  Database: MySQL (${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME || 'bakegrill_tv'})`);
+    console.log(`⚙️  Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log('');
+    console.log('🔥 Bake & Grill TV is ready!');
+    console.log('');
+  });
+})();
 
 // Graceful shutdown
 process.on('SIGINT', async () => {

@@ -73,7 +73,7 @@ async function checkMagic(filePath, type) {
       return buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70;
     }
     return true;
-  } catch { return true; /* best-effort */ }
+  } catch { return false; /* fail closed — unknown content type is rejected */ }
 }
 
 // ── Storage configs ────────────────────────────────────────────────────────
@@ -319,10 +319,12 @@ router.post('/video', verifyToken, videoUpload.single('video'), asyncHandler(asy
   });
 }));
 
+const SAFE_FILENAME_RE = /^[a-zA-Z0-9._-]+$/;
+
 /** DELETE /api/uploads/image/:filename (legacy) */
 router.delete('/image/:filename', verifyToken, asyncHandler(async (req, res) => {
-  const { filename } = req.params;
-  if (filename.includes('..') || filename.includes('/')) return res.status(400).json({ success: false, message: 'Invalid filename' });
+  const filename = path.basename(req.params.filename);
+  if (!SAFE_FILENAME_RE.test(filename)) return res.status(400).json({ success: false, message: 'Invalid filename' });
   const base = path.join(__dirname, '../uploads/images');
   await deleteImage(path.join(base, filename));
   await deleteImage(path.join(base, `thumb-${filename}`));
@@ -331,8 +333,8 @@ router.delete('/image/:filename', verifyToken, asyncHandler(async (req, res) => 
 
 /** DELETE /api/uploads/video/:filename (legacy) */
 router.delete('/video/:filename', verifyToken, asyncHandler(async (req, res) => {
-  const { filename } = req.params;
-  if (filename.includes('..') || filename.includes('/')) return res.status(400).json({ success: false, message: 'Invalid filename' });
+  const filename = path.basename(req.params.filename);
+  if (!SAFE_FILENAME_RE.test(filename)) return res.status(400).json({ success: false, message: 'Invalid filename' });
   await deleteImage(path.join(__dirname, '../uploads/videos', filename));
   res.json({ success: true, message: 'Video deleted' });
 }));
