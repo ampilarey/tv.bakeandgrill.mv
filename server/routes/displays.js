@@ -13,6 +13,16 @@ const { parseM3U } = require('../utils/m3uParser');
 
 const router = express.Router();
 
+// Strip location_pin before returning a display object to API consumers.
+// Admins need the token to configure displays, but location_pin is an
+// internal authentication secret used only during pairing and must never
+// appear in list/detail API responses.
+function sanitizeDisplay(display) {
+  if (!display) return display;
+  const { location_pin, ...safe } = display; // eslint-disable-line no-unused-vars
+  return safe;
+}
+
 // Rate limiter for display endpoints (60 requests per minute per display)
 const displayLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
@@ -328,24 +338,21 @@ router.get('/',
   const enrichedDisplays = displays.map(display => {
     let status = 'offline';
     
-    // Check if display has ever sent a heartbeat
     if (display.last_heartbeat && display.last_heartbeat !== null) {
       const lastHeartbeat = new Date(display.last_heartbeat);
       const secondsAgo = (now - lastHeartbeat) / 1000;
-      
-      // Display is online if heartbeat was within last 45 seconds (displays heartbeat every 30s)
       if (secondsAgo < 45) {
         status = 'online';
       }
     }
     
-    return {
+    return sanitizeDisplay({
       ...display,
       status,
       auto_play: display.auto_play === 1,
       schedule_enabled: display.schedule_enabled === 1,
       is_active: display.is_active === 1
-    };
+    });
   });
   
   res.json({
@@ -390,13 +397,12 @@ router.post('/',
     }
   }
   
-  // Get created display
   const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [result.insertId]);
   
   res.status(201).json({
     success: true,
     display: {
-      ...displays[0],
+      ...sanitizeDisplay(displays[0]),
       displayUrl: `/display?token=${token}`
     }
   });
@@ -422,7 +428,7 @@ router.get('/:id', checkPermission('can_manage_displays'), asyncHandler(async (r
   
   res.json({
     success: true,
-    display: displays[0]
+    display: sanitizeDisplay(displays[0])
   });
 }));
 
@@ -507,12 +513,11 @@ router.put('/:id', checkPermission('can_manage_displays'), asyncHandler(async (r
   
   await db.query(`UPDATE displays SET ${updates.join(', ')} WHERE id = ?`, params);
   
-  // Get updated display
   const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [id]);
   
   res.json({
     success: true,
-    display: displays[0]
+    display: sanitizeDisplay(displays[0])
   });
 }));
 
@@ -563,7 +568,6 @@ router.get('/:id/status', checkPermission('can_manage_displays'), asyncHandler(a
   
   const display = displays[0];
   
-  // Calculate status
   let status = 'offline';
   let minutesSinceHeartbeat = null;
   
@@ -571,7 +575,6 @@ router.get('/:id/status', checkPermission('can_manage_displays'), asyncHandler(a
     const now = new Date();
     const lastHeartbeat = new Date(display.last_heartbeat);
     minutesSinceHeartbeat = (now - lastHeartbeat) / 1000 / 60;
-    
     if (minutesSinceHeartbeat < 5) {
       status = 'online';
     }
@@ -580,7 +583,7 @@ router.get('/:id/status', checkPermission('can_manage_displays'), asyncHandler(a
   res.json({
     success: true,
     status,
-    display,
+    display: sanitizeDisplay(display),
     minutesSinceHeartbeat: minutesSinceHeartbeat ? Math.round(minutesSinceHeartbeat) : null
   });
 }));
