@@ -303,9 +303,10 @@ router.get('/schedules/current/:displayId', asyncHandler(async (req, res) => {
 async function checkScheduleConflicts(db, displayId, schedule) {
   const { day_of_week, start_time, end_time, date_start, date_end } = schedule;
   
+  // Two time ranges [s1,e1] and [s2,e2] overlap when s1 < e2 AND e1 > s2
   const [conflicts] = await db.query(
-    `SELECT * FROM display_schedules 
-     WHERE display_id = ? 
+    `SELECT * FROM display_schedules
+     WHERE display_id = ?
      AND is_active = TRUE
      AND (
        (date_start IS NULL AND date_end IS NULL) OR
@@ -314,11 +315,7 @@ async function checkScheduleConflicts(db, displayId, schedule) {
      )
      AND (
        (day_of_week = ? OR day_of_week IS NULL) AND
-       (
-         (start_time <= ? AND end_time >= ?) OR
-         (start_time <= ? AND end_time >= ?) OR
-         (start_time >= ? AND end_time <= ?)
-       )
+       (start_time < ? AND end_time > ?)
      )`,
     [
       displayId,
@@ -327,10 +324,8 @@ async function checkScheduleConflicts(db, displayId, schedule) {
       date_start || '1900-01-01',
       date_end || '2099-12-31',
       day_of_week,
-      start_time, end_time,
-      start_time, start_time,
-      end_time, end_time,
-      start_time, end_time
+      end_time,
+      start_time
     ]
   );
   

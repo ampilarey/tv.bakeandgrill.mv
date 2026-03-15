@@ -163,6 +163,14 @@ router.post('/import', asyncHandler(async (req, res) => {
       code: 'VALIDATION_ERROR'
     });
   }
+
+  if (favorites.length > 500) {
+    return res.status(400).json({
+      success: false,
+      error: 'Import limited to 500 favorites at a time',
+      code: 'VALIDATION_ERROR'
+    });
+  }
   
   let imported = 0;
   let skipped = 0;

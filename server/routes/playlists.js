@@ -133,14 +133,14 @@ router.post('/',
 
 /**
  * GET /api/playlists/:id
- * Get single playlist
+ * Get single playlist (admin sees all; non-admin must have assignment)
  */
 router.get('/:id', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
-  
+
   const [playlists] = await db.query('SELECT * FROM playlists WHERE id = ?', [id]);
-  
+
   if (playlists.length === 0) {
     return res.status(404).json({
       success: false,
@@ -148,7 +148,22 @@ router.get('/:id', asyncHandler(async (req, res) => {
       code: 'PLAYLIST_NOT_FOUND'
     });
   }
-  
+
+  // Non-admin users must be assigned to this playlist
+  if (req.user.role !== 'admin') {
+    const [access] = await db.query(
+      'SELECT 1 FROM user_assigned_playlists WHERE user_id = ? AND playlist_id = ?',
+      [req.user.id, id]
+    );
+    if (access.length === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have access to this playlist',
+        code: 'PLAYLIST_ACCESS_DENIED'
+      });
+    }
+  }
+
   res.json({
     success: true,
     playlist: playlists[0]

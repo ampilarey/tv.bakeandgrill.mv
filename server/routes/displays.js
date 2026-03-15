@@ -299,13 +299,20 @@ router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => 
  * PATCH /api/displays/commands/:id/execute
  * Mark command as executed (public endpoint for displays)
  */
-router.patch('/commands/:id/execute', displayLimiter, asyncHandler(async (req, res) => {
+router.patch('/commands/:id/execute', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
 
+  // Verify the command belongs to the display making the request
+  const { token } = req.body;
+  const [displayRows] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);
+  if (!displayRows.length) {
+    return res.status(404).json({ success: false, error: 'Display not found' });
+  }
+
   const [result] = await db.query(
-    'UPDATE display_commands SET is_executed = TRUE, executed_at = CURRENT_TIMESTAMP WHERE id = ? AND is_executed = FALSE',
-    [id]
+    'UPDATE display_commands SET is_executed = TRUE, executed_at = CURRENT_TIMESTAMP WHERE id = ? AND display_id = ? AND is_executed = FALSE',
+    [id, displayRows[0].id]
   );
 
   if (result.affectedRows === 0) {
@@ -333,15 +340,15 @@ router.get('/',
   
   const [displays] = await db.query('SELECT * FROM displays ORDER BY created_at DESC');
   
-  // Calculate status for each display (online if heartbeat < 45 seconds ago)
+  // Calculate status for each display (online if heartbeat < 90 seconds ago)
   const now = new Date();
   const enrichedDisplays = displays.map(display => {
     let status = 'offline';
-    
+
     if (display.last_heartbeat && display.last_heartbeat !== null) {
       const lastHeartbeat = new Date(display.last_heartbeat);
       const secondsAgo = (now - lastHeartbeat) / 1000;
-      if (secondsAgo < 45) {
+      if (secondsAgo < 90) {
         status = 'online';
       }
     }
@@ -575,7 +582,7 @@ router.get('/:id/status', checkPermission('can_manage_displays'), asyncHandler(a
     const now = new Date();
     const lastHeartbeat = new Date(display.last_heartbeat);
     minutesSinceHeartbeat = (now - lastHeartbeat) / 1000 / 60;
-    if (minutesSinceHeartbeat < 5) {
+    if (minutesSinceHeartbeat < 1.5) { // 90 seconds, consistent with list endpoint
       status = 'online';
     }
   }

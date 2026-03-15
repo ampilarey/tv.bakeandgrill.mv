@@ -178,11 +178,12 @@ router.put('/:id/first-time-setup', verifyToken, asyncHandler(async (req, res) =
   // Hash new password
   const newPasswordHash = await bcrypt.hash(new_password, 10);
   
-  // Update everything in one go
+  // Update everything in one go, bumping token_version to invalidate old JWTs
   await db.query(
-    `UPDATE users 
-     SET phone_number = ?, email = ?, first_name = ?, last_name = ?, 
-         password_hash = ?, force_password_change = FALSE 
+    `UPDATE users
+     SET phone_number = ?, email = ?, first_name = ?, last_name = ?,
+         password_hash = ?, force_password_change = FALSE,
+         token_version = token_version + 1
      WHERE id = ?`,
     [phone_number, email || null, first_name, last_name || null, newPasswordHash, id]
   );

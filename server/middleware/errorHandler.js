@@ -51,11 +51,12 @@ function errorHandler(err, req, res, next) {
  * 404 Not Found handler
  */
 function notFoundHandler(req, res) {
+  const isDev = process.env.NODE_ENV === 'development';
   res.status(404).json({
     success: false,
     error: 'Route not found',
     code: 'ROUTE_NOT_FOUND',
-    path: req.originalUrl
+    ...(isDev && { path: req.originalUrl })
   });
 }
 
