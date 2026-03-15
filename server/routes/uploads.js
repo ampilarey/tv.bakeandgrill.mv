@@ -322,7 +322,7 @@ router.post('/video', verifyToken, videoUpload.single('video'), asyncHandler(asy
 const SAFE_FILENAME_RE = /^[a-zA-Z0-9._-]+$/;
 
 /** DELETE /api/uploads/image/:filename (legacy) */
-router.delete('/image/:filename', verifyToken, asyncHandler(async (req, res) => {
+router.delete('/image/:filename', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
   const filename = path.basename(req.params.filename);
   if (!SAFE_FILENAME_RE.test(filename)) return res.status(400).json({ success: false, message: 'Invalid filename' });
   const base = path.join(__dirname, '../uploads/images');
@@ -332,7 +332,7 @@ router.delete('/image/:filename', verifyToken, asyncHandler(async (req, res) => 
 }));
 
 /** DELETE /api/uploads/video/:filename (legacy) */
-router.delete('/video/:filename', verifyToken, asyncHandler(async (req, res) => {
+router.delete('/video/:filename', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
   const filename = path.basename(req.params.filename);
   if (!SAFE_FILENAME_RE.test(filename)) return res.status(400).json({ success: false, message: 'Invalid filename' });
   await deleteImage(path.join(__dirname, '../uploads/videos', filename));

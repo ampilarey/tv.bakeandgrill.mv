@@ -87,7 +87,7 @@ router.get('/for-display', asyncHandler(async (req, res) => {
 
 // ── Messages CRUD ──────────────────────────────────────────────────────────
 
-router.get('/messages', verifyToken, asyncHandler(async (req, res) => {
+router.get('/messages', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
   const db = getDatabase();
   const [rows] = await db.query('SELECT * FROM overlay_messages ORDER BY priority DESC, id ASC');
   res.json({ success: true, messages: rows });
@@ -134,7 +134,7 @@ router.delete('/messages/:id', verifyToken, requireAdmin, asyncHandler(async (re
 
 // ── Promo Cards CRUD ───────────────────────────────────────────────────────
 
-router.get('/cards', verifyToken, asyncHandler(async (req, res) => {
+router.get('/cards', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
   const db = getDatabase();
   const [rows] = await db.query(`
     SELECT pc.*, ma.url AS asset_url, ma.thumbnail_url AS asset_thumb
