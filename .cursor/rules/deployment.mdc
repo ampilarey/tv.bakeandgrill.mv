@@ -13,12 +13,12 @@ alwaysApply: true
 ─────────────────────────────────────────
  1. SSH into cPanel, then run:
 
-    cd ~/tv.bakeandgrill.mv && GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main
+ cd ~/tv.bakeandgrill.mv && GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main
 
  2. cPanel → Setup Node.js App → RESTART
 
  3. Verify:
-    curl https://tv.bakeandgrill.mv/api/health
+ curl https://tv.bakeandgrill.mv/api/health
 ─────────────────────────────────────────
 ```
 
@@ -33,7 +33,18 @@ alwaysApply: true
 | GitHub repo (SSH) | `git@github.com:ampilarey/tv.bakeandgrill.mv.git` |
 | Node app root | `tv.bakeandgrill.mv/server` |
 | Startup file | `server.js` |
+| Node version | **18** |
+| nodevenv activate | `~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate` |
 | Frontend build | Run on **local Mac only** — `client/dist/` is committed to the repo |
+
+---
+
+## If you need to run npm install on the server
+
+```bash
+source ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate
+npm install --prefix ~/tv.bakeandgrill.mv/server --omit=dev
+```
 
 ---
 
@@ -41,6 +52,7 @@ alwaysApply: true
 - `npm run build` — vite is not installed on the server
 - `cd /home/bakegril/tv.bakeandgrill.mv` — wrong path, use `~/tv.bakeandgrill.mv`
 - `git pull origin main` alone (without `GIT_SSH_COMMAND`) — will fail with "Repository not found"
+- `source ~/nodevenv/tv.bakeandgrill.mv/server/20/bin/activate` — Node 20 is not installed, use 18
 
 ---
 

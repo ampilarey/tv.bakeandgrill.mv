@@ -21,6 +21,13 @@ function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const videoRef = useRef(null);
 
+  // Keep onEnd in a ref so it can be called from event handlers without
+  // making the effect depend on an unstable function reference.  Without this,
+  // an inline `onEnd` prop would tear down and re-add all listeners on every
+  // parent re-render, potentially missing the loadeddata event.
+  const onEndRef = useRef(onEnd);
+  useEffect(() => { onEndRef.current = onEnd; }, [onEnd]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -32,29 +39,23 @@ function VideoPlayer({
       }
     };
 
-    const handleError = (e) => {
-      console.error('Video error:', e);
+    const handleError = () => {
       setError('Failed to load video');
       setIsLoading(false);
-      if (onEnd) {
-        setTimeout(onEnd, 2000);
+      if (onEndRef.current) {
+        setTimeout(onEndRef.current, 2000);
       }
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
-      if (onEnd && !loop) {
-        onEnd();
+      if (onEndRef.current && !loop) {
+        onEndRef.current();
       }
     };
 
-    const handlePlay = () => {
-      setIsPlaying(true);
-    };
-
-    const handlePause = () => {
-      setIsPlaying(false);
-    };
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
 
     video.addEventListener('loadeddata', handleLoadedData);
     video.addEventListener('error', handleError);
@@ -69,7 +70,8 @@ function VideoPlayer({
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
     };
-  }, [autoplay, loop, onEnd]);
+  // onEnd intentionally omitted — accessed via onEndRef
+  }, [autoplay, loop]);
 
   const playVideo = async () => {
     try {

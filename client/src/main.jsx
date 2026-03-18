@@ -1,10 +1,26 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import App from './App.jsx';
 import './index.css';
-import { APP_VERSION, checkVersion } from './utils/version.js';
-import { setupGlobalErrorHandlers } from './utils/errorTracking.js';
+import { APP_VERSION } from './utils/version.js';
+import { initSentry, setupGlobalErrorHandlers } from './utils/errorTracking.js';
+
+// Init Sentry before anything else (no-op when VITE_SENTRY_DSN is not set)
+initSentry();
+
+// TanStack Query client with sensible defaults for a TV dashboard
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,        // 30 s before background refetch
+      gcTime: 5 * 60_000,       // 5 min cache retention
+      retry: 2,
+      refetchOnWindowFocus: false, // avoid surprise refetches on TV displays
+    },
+  },
+});
 
 // Setup global error tracking
 setupGlobalErrorHandlers();
@@ -12,138 +28,95 @@ setupGlobalErrorHandlers();
 // Store version for debugging
 if (typeof window !== 'undefined') {
   window.APP_VERSION = APP_VERSION;
-  console.log('📱 App Version:', APP_VERSION);
-  
-  // Version-based cache clearing - only clear on version change
+
+  // Version-based cache clearing + service worker registration.
+  // ReactDOM.render is deferred until after the async setup so that the app
+  // never boots on a stale cache if a version change was detected.
   (async () => {
     try {
       const storedVersion = localStorage.getItem('tv_app_version');
       const versionChanged = storedVersion && storedVersion !== APP_VERSION;
-      
+
       if (versionChanged) {
-        console.log(`🔄 Version changed: ${storedVersion} → ${APP_VERSION} - Clearing caches`);
-        
         // 1. Unregister ALL service workers
         if ('serviceWorker' in navigator) {
           const registrations = await navigator.serviceWorker.getRegistrations();
-          for (let registration of registrations) {
+          for (const registration of registrations) {
             await registration.unregister();
-            console.log('✅ Unregistered service worker:', registration.scope);
           }
         }
-        
+
         // 2. Delete ALL caches
         if ('caches' in window) {
           const cacheNames = await caches.keys();
           for (const cacheName of cacheNames) {
             await caches.delete(cacheName);
-            console.log('🗑️ Deleted cache:', cacheName);
           }
-          console.log('✅ All caches cleared');
         }
-        
-        // Update stored version BEFORE reload to prevent loop
+
+        // Update stored version BEFORE render to prevent a loop
         localStorage.setItem('tv_app_version', APP_VERSION);
-        
-        // Optional: Reload once after clearing (commented out - let user continue)
-        // window.location.reload();
       } else if (!storedVersion) {
-        // First visit - just store version
         localStorage.setItem('tv_app_version', APP_VERSION);
-        console.log('📝 First visit - stored version');
-      } else {
-        // Same version - no cache clearing needed
-        console.log('✅ Same version - no cache clear needed');
       }
-      
+
       // Register service worker (always, regardless of version)
       if ('serviceWorker' in navigator) {
         try {
           const registration = await navigator.serviceWorker.register('/sw.js', {
             scope: '/',
-            updateViaCache: 'none' // Don't cache the service worker itself
+            updateViaCache: 'none',
           });
-          
-          console.log('✅ Service worker registered:', registration.scope);
-          
-          // Function to check for updates
+
           const checkForUpdates = async () => {
-            try {
-              await registration.update();
-              console.log('🔄 Checked for service worker updates');
-            } catch (error) {
-              console.error('❌ Update check error:', error);
-            }
+            try { await registration.update(); } catch { /* silent */ }
           };
-          
-          // Check for updates immediately
+
           await checkForUpdates();
-          
-          // Check for updates every 5 minutes (mobile PWAs need frequent checks)
+
           const updateInterval = setInterval(checkForUpdates, 5 * 60 * 1000);
-          
-          // Check for updates when app comes to foreground (mobile)
-          document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-              console.log('📱 App visible - checking for updates...');
-              checkForUpdates();
-            }
-          });
-          
-          // Check for updates when window gains focus
-          window.addEventListener('focus', () => {
-            console.log('👁️ Window focused - checking for updates...');
-            checkForUpdates();
-          });
-          
-          // Listen for updates
+
+          // Track handlers so they can be removed when the controller changes
+          const onVisibilityChange = () => { if (!document.hidden) checkForUpdates(); };
+          const onFocus = () => checkForUpdates();
+
+          document.addEventListener('visibilitychange', onVisibilityChange);
+          window.addEventListener('focus', onFocus);
+
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;
-            if (newWorker) {
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed') {
-                  if (navigator.serviceWorker.controller) {
-                    // New service worker available - activate it silently
-                    // Do NOT reload: let the user finish watching; update takes effect on next navigation
-                    console.log('🔄 New service worker ready - will activate on next page load');
-                    newWorker.postMessage({ type: 'SKIP_WAITING' });
-                    localStorage.setItem('tv_app_version', APP_VERSION);
-                  } else {
-                    // First time installation
-                    console.log('✅ Service worker installed for first time');
-                  }
-                }
-              });
-            }
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+                localStorage.setItem('tv_app_version', APP_VERSION);
+              }
+            });
           });
-          
-          // Service worker controller changed - do NOT reload automatically
-          // Reloading mid-playback disrupts the user experience
+
+          // Clean up listeners when the controller changes (SW activated)
           navigator.serviceWorker.addEventListener('controllerchange', () => {
-            console.log('🔄 Service worker controller changed - update applied silently');
             clearInterval(updateInterval);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            window.removeEventListener('focus', onFocus);
             localStorage.setItem('tv_app_version', APP_VERSION);
-          });
-          
-          // Store registration globally for manual refresh
+          }, { once: true });
+
           window.swRegistration = registration;
-          
-        } catch (error) {
-          console.error('❌ Service worker registration error:', error);
-        }
+        } catch { /* SW not supported or blocked — continue without */ }
       }
-      
-    } catch (error) {
-      console.error('❌ Version/cache management error:', error);
-    }
+    } catch { /* version/cache management failed — continue */ }
+
+    // Mount the React tree only after all async setup above completes so the
+    // app never races with in-flight cache deletion.
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <React.StrictMode>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
+            <App />
+          </ThemeProvider>
+        </QueryClientProvider>
+      </React.StrictMode>,
+    );
   })();
 }
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
-  </React.StrictMode>,
-);
-

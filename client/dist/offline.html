@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#B03A48" />
+  <title>Bake &amp; Grill TV — Offline</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      background: #1a0f0a;
+      color: #FFF8EE;
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 2rem;
+      text-align: center;
+    }
+    .logo { width: 72px; height: 72px; border-radius: 16px; }
+    h1 { font-size: 1.5rem; font-weight: 700; color: #FFF8EE; }
+    p  { color: #b0988a; font-size: 0.9rem; max-width: 320px; line-height: 1.6; }
+    button {
+      margin-top: 0.5rem;
+      background: #B03A48;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.7rem 1.6rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:active { opacity: 0.8; }
+    .icon {
+      font-size: 3rem;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="icon">📡</div>
+  <h1>You're offline</h1>
+  <p>Bake &amp; Grill TV needs an internet connection to stream channels. Check your connection and try again.</p>
+  <button onclick="location.reload()">Try again</button>
+</body>
+</html>

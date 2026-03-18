@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import Hls from 'hls.js';
+import { QRCodeSVG } from 'qrcode.react';
 import SlideshowPlayer from '../components/SlideshowPlayer';
 import BottomBarOverlay  from '../components/overlays/BottomBarOverlay';
 import PopupCardOverlay  from '../components/overlays/PopupCardOverlay';
@@ -25,6 +26,29 @@ const getBase = () => {
 };
 
 const displayApi = axios.create({ baseURL: getBase(), headers: { 'Content-Type': 'application/json' } });
+
+// ---------------------------------------------------------------------------
+// WiFi QR overlay — uses qrcode.react (client-side, no external API call)
+// ---------------------------------------------------------------------------
+function WifiQrOverlay({ ssid, password = '', security = 'WPA', position = 'bottom-right' }) {
+  const wifiString = useMemo(
+    () => `WIFI:T:${security};S:${ssid};P:${password};;`,
+    [ssid, password, security]
+  );
+  const posClass = position === 'bottom-left' ? 'bottom-6 left-6'
+    : position === 'top-right'  ? 'top-6 right-6'
+    : position === 'top-left'   ? 'top-6 left-6'
+    : 'bottom-6 right-6';
+
+  return (
+    <div className={`absolute ${posClass} pointer-events-none z-20`} style={{ zIndex: 1000 }}>
+      <div className="bg-black/80 backdrop-blur-sm rounded-xl p-2 border border-white/10 flex flex-col items-center gap-1">
+        <QRCodeSVG value={wifiString} size={80} bgColor="#000000" fgColor="#ffffff" />
+        <p className="text-white text-xs font-medium text-center leading-tight">📶 {ssid}</p>
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Branded fallback screen
@@ -97,6 +121,18 @@ export default function KioskModePage() {
 
   // Keep channelsRef in sync for use in polling closure
   useEffect(() => { channelsRef.current = channels; }, [channels]);
+
+  // Cleanup all long-running timers on unmount so they don't fire after the
+  // component is gone (e.g. navigation away from kiosk page).
+  useEffect(() => () => {
+    clearInterval(rebootTimerRef.current);
+    clearTimeout(failoverTimerRef.current);
+  }, []);
+
+  // Keep verifyDisplay in a ref so the command polling effect can call the
+  // latest version without listing it as a dependency (which would restart
+  // the poll interval every time verifyDisplay re-creates due to its own deps).
+  const verifyDisplayRef = useRef(null);
 
   // ── Kiosk lockdown ──────────────────────────────────────────────────────
 
@@ -208,6 +244,8 @@ export default function KioskModePage() {
       setLoading(false);
       return;
     }
+    // Guard against concurrent calls (e.g. polling + scheduleRetry firing together)
+    if (verifyDisplayRef.current?._inProgress) return;
     try {
       const { data } = await displayApi.post('/displays/verify', { token: displayToken });
       const { display: d, channels: ch } = data;
@@ -239,6 +277,9 @@ export default function KioskModePage() {
       setLoading(false);
     }
   }, [displayToken, loadFromCache, saveToCache, scheduleRetry]);
+
+  // Keep ref current so polling closure always calls the latest version
+  useEffect(() => { verifyDisplayRef.current = verifyDisplay; }, [verifyDisplay]);
 
   useEffect(() => { verifyDisplay(); }, [verifyDisplay]);
 
@@ -278,7 +319,10 @@ export default function KioskModePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayToken]);
 
-  // ── Command + override polling ───────────────────────────────────────────
+  // ── Command delivery: SSE-first with polling fallback ───────────────────
+  // A ref to the shared command handler keeps it available to both the SSE
+  // and polling code paths without duplicating logic.
+  const handleCommandsRef = useRef(null);
 
   useEffect(() => {
     if (!displayToken || !display) return;
@@ -293,10 +337,9 @@ export default function KioskModePage() {
         if (override && new Date(override.expires_at) > new Date()) {
           if (!activeOverride || activeOverride.id !== override.id) {
             setActiveOverride(override);
-            // Fetch override playlist channels if different from current
+            // Refresh display config to pick up override playlist
             if (override.m3u_url) {
-              // Refresh display config to pick up override playlist
-              verifyDisplay();
+              verifyDisplayRef.current?.();
             }
           }
         } else if (activeOverride) {
@@ -338,7 +381,7 @@ export default function KioskModePage() {
           } else if (cmd.command_type === 'check_override' || cmd.command_type === 'revert_override') {
             // Already handled above via override field
           } else if (cmd.command_type === 'refresh_playlist') {
-            verifyDisplay();
+            verifyDisplayRef.current?.();
           } else if (cmd.command_type === 'refresh_overlays') {
             if (overlayFetchRef.current) clearInterval(overlayFetchRef.current);
             try {
@@ -379,13 +422,58 @@ export default function KioskModePage() {
       } catch { /* network down — silent */ }
     };
 
+    // Store the poll handler in a ref so the SSE path can reuse it
+    handleCommandsRef.current = poll;
+
+    // ── Try SSE first ────────────────────────────────────────────────────
+    const sseBase = displayApi.defaults.baseURL || '/api';
+    let es = null;
+    let usedSSE = false;
+
+    try {
+      es = new EventSource(`${sseBase}/displays/events/${displayToken}`);
+
+      es.addEventListener('connected', () => {
+        usedSSE = true;
+        // SSE is working — stop any polling fallback
+        clearInterval(commandPollRef.current);
+        commandPollRef.current = null;
+      });
+
+      es.addEventListener('command', (e) => {
+        try {
+          const { commands } = JSON.parse(e.data);
+          if (commands?.length) {
+            // Re-use the same poll handler for command processing
+            handleCommandsRef.current?.();
+          }
+        } catch { /* malformed data — ignore */ }
+      });
+
+      es.onerror = () => {
+        // SSE failed or not supported — fall back to polling
+        if (!usedSSE) {
+          poll();
+          commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
+        }
+      };
+    } catch {
+      // EventSource not available (very old browser) — use polling
+      poll();
+      commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
+    }
+
+    // Initial poll to pick up any commands that arrived before SSE connected
     poll();
-    commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
+
     return () => {
+      es?.close();
       clearInterval(commandPollRef.current);
       clearTimeout(commandTimeoutRef.current);
     };
-  }, [displayToken, display, activeOverride, enterFullscreen, verifyDisplay]);
+  // verifyDisplay intentionally excluded — accessed via verifyDisplayRef to
+  // prevent the interval from being torn down and recreated on every verify call.
+  }, [displayToken, display, activeOverride, enterFullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Video player ─────────────────────────────────────────────────────────
 
@@ -681,26 +769,14 @@ export default function KioskModePage() {
       )}
 
       {/* ── WiFi QR overlay ────────────────────────────────────────────── */}
-      {display?.showWifiQr && display?.wifiSsid && !showStartOverlay && (() => {
-        const ssid = display.wifiSsid;
-        const pass = display.wifiPassword || '';
-        const sec  = display.wifiSecurity || 'WPA';
-        const wifiString = `WIFI:T:${sec};S:${ssid};P:${pass};;`;
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(wifiString)}&bgcolor=000000&color=ffffff&margin=4`;
-        const pos = display.wifiQrPosition || 'bottom-right';
-        const posClass = pos === 'bottom-left' ? 'bottom-6 left-6'
-          : pos === 'top-right' ? 'top-6 right-6'
-          : pos === 'top-left'  ? 'top-6 left-6'
-          : 'bottom-6 right-6';
-        return (
-          <div className={`absolute ${posClass} pointer-events-none z-20`} style={{ zIndex: 1000 }}>
-            <div className="bg-black/80 backdrop-blur-sm rounded-xl p-2 border border-white/10 flex flex-col items-center gap-1">
-              <img src={qrUrl} alt="WiFi QR" width={80} height={80} className="rounded" />
-              <p className="text-white text-xs font-medium text-center leading-tight">📶 {ssid}</p>
-            </div>
-          </div>
-        );
-      })()}
+      {display?.showWifiQr && display?.wifiSsid && !showStartOverlay && (
+        <WifiQrOverlay
+          ssid={display.wifiSsid}
+          password={display.wifiPassword}
+          security={display.wifiSecurity}
+          position={display.wifiQrPosition}
+        />
+      )}
     </div>
   );
 }

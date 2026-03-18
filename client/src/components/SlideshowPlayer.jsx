@@ -8,6 +8,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const getBase = () => {
   if (import.meta.env.DEV) {
@@ -80,6 +81,10 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
 
   useEffect(() => { loadItems(); }, [loadItems]);
 
+  // Keep a ref so next() always sees the current length without being recreated
+  const itemsLenRef = useRef(items.length);
+  useEffect(() => { itemsLenRef.current = items.length; }, [items.length]);
+
   // Advance to next item
   const next = useCallback(() => {
     if (!mountedRef.current) return;
@@ -87,10 +92,10 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
     setFade(false);
     setTimeout(() => {
       if (!mountedRef.current) return;
-      setIdx(i => (i + 1) % Math.max(items.length, 1));
+      setIdx(i => (i + 1) % Math.max(itemsLenRef.current, 1));
       setFade(true);
     }, 400); // fade duration
-  }, [items.length]);
+  }, []); // no dependency — reads length via ref
 
   const item = items[idx] || null;
 
@@ -133,26 +138,26 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-black">
-      <div
-        className="w-full h-full transition-opacity duration-400"
-        style={{ opacity: fade ? 1 : 0 }}
-      >
+      <AnimatePresence mode="crossfade">
         {item?.type === 'image' && (
-          <img
-            key={item.id}
+          <motion.img
+            key={`img-${item.id}`}
             src={item.url}
             alt={item.original_name}
             data-slide="true"
-            className="w-full h-full object-contain"
+            className="absolute inset-0 w-full h-full object-contain"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 0.5 } }}
+            exit={{ opacity: 0, transition: { duration: 0.4 } }}
             onError={handleError}
             draggable={false}
           />
         )}
         {item?.type === 'video' && (
-          <video
-            key={item.id}
+          <motion.video
+            key={`vid-${item.id}`}
             ref={videoRef}
-            className="w-full h-full object-contain"
+            className="absolute inset-0 w-full h-full object-contain"
             src={item.url}
             autoPlay
             playsInline
@@ -160,9 +165,12 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
             onEnded={handleVideoEnd}
             onError={handleError}
             controls={false}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 0.4 } }}
+            exit={{ opacity: 0 }}
           />
         )}
-      </div>
+      </AnimatePresence>
 
       {/* Clock overlay */}
       {showClockOverlay && clock && (

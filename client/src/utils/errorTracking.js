@@ -1,14 +1,52 @@
 /**
  * Error Tracking Utility
- * Track and log app errors for debugging
+ * Wraps Sentry for production monitoring; falls back to localStorage logging
+ * when VITE_SENTRY_DSN is not set (local / staging environments).
  */
+import * as Sentry from '@sentry/react';
 
 // Store errors in localStorage for persistence
 const ERROR_STORAGE_KEY = 'app_errors';
 const MAX_STORED_ERRORS = 50;
 
+let _sentryEnabled = false;
+
 /**
- * Log an error to console and storage
+ * Call once, early in main.jsx, before ReactDOM.render.
+ * DSN is read from the VITE_SENTRY_DSN env variable.
+ */
+export function initSentry() {
+  const dsn = import.meta.env.VITE_SENTRY_DSN;
+  if (!dsn) return; // skip in dev / when not configured
+
+  Sentry.init({
+    dsn,
+    environment: import.meta.env.MODE,
+    // Only send traces in production to keep quota low
+    tracesSampleRate: import.meta.env.PROD ? 0.1 : 0,
+    // Replay 10 % of sessions; 100 % of sessions with errors
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration(),
+    ],
+    // Don't send noisy network / script errors that aren't actionable
+    ignoreErrors: [
+      'ResizeObserver loop limit exceeded',
+      'ResizeObserver loop completed with undelivered notifications',
+      'Network request failed',
+      'Failed to fetch',
+      /Loading chunk \d+ failed/,
+    ],
+  });
+
+  _sentryEnabled = true;
+  console.log('[Sentry] Initialized for environment:', import.meta.env.MODE);
+}
+
+/**
+ * Log an error to Sentry (when enabled) and to localStorage.
  */
 export function logError(error, context = {}) {
   const errorEntry = {
@@ -17,22 +55,22 @@ export function logError(error, context = {}) {
     stack: error?.stack || '',
     context,
     userAgent: navigator.userAgent,
-    url: window.location.href
+    url: window.location.href,
   };
 
-  // Log to console
   console.error('❌ App Error:', errorEntry);
 
-  // Store in localStorage
+  if (_sentryEnabled) {
+    Sentry.withScope((scope) => {
+      scope.setExtras(context);
+      Sentry.captureException(error instanceof Error ? error : new Error(String(error)));
+    });
+  }
+
   try {
     const storedErrors = JSON.parse(localStorage.getItem(ERROR_STORAGE_KEY) || '[]');
     storedErrors.unshift(errorEntry);
-    
-    // Keep only last MAX_STORED_ERRORS
-    if (storedErrors.length > MAX_STORED_ERRORS) {
-      storedErrors.splice(MAX_STORED_ERRORS);
-    }
-    
+    if (storedErrors.length > MAX_STORED_ERRORS) storedErrors.splice(MAX_STORED_ERRORS);
     localStorage.setItem(ERROR_STORAGE_KEY, JSON.stringify(storedErrors));
   } catch (e) {
     console.error('Failed to store error:', e);
@@ -41,9 +79,7 @@ export function logError(error, context = {}) {
   return errorEntry;
 }
 
-/**
- * Get stored errors
- */
+/** Get stored errors from localStorage */
 export function getStoredErrors() {
   try {
     return JSON.parse(localStorage.getItem(ERROR_STORAGE_KEY) || '[]');
@@ -52,9 +88,7 @@ export function getStoredErrors() {
   }
 }
 
-/**
- * Clear stored errors
- */
+/** Clear stored errors */
 export function clearStoredErrors() {
   try {
     localStorage.removeItem(ERROR_STORAGE_KEY);
@@ -65,7 +99,7 @@ export function clearStoredErrors() {
 }
 
 /**
- * Safe API call wrapper
+ * Safe API call wrapper — logs errors without throwing.
  */
 export async function safeApiCall(apiCall, fallbackValue = null, context = '') {
   try {
@@ -77,25 +111,29 @@ export async function safeApiCall(apiCall, fallbackValue = null, context = '') {
 }
 
 /**
- * Setup global error handlers
+ * Setup global error handlers.
+ * Call once after initSentry().
  */
 export function setupGlobalErrorHandlers() {
-  // Handle unhandled promise rejections
   window.addEventListener('unhandledrejection', (event) => {
     logError(event.reason, { type: 'UNHANDLED_REJECTION' });
-    event.preventDefault(); // Prevent console error
+    // Do NOT call event.preventDefault() — that silences browser devtools reporting.
   });
 
-  // Handle global errors
   window.addEventListener('error', (event) => {
     logError(event.error || new Error(event.message), {
       type: 'GLOBAL_ERROR',
       filename: event.filename,
       lineno: event.lineno,
-      colno: event.colno
+      colno: event.colno,
     });
   });
 
   console.log('✅ Global error handlers installed');
 }
 
+/**
+ * Sentry-aware ErrorBoundary — re-exported for convenience.
+ * Usage: import { SentryErrorBoundary } from '../utils/errorTracking';
+ */
+export const SentryErrorBoundary = Sentry.ErrorBoundary;

@@ -6,6 +6,22 @@
 import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 
+// Module-level singleton so multiple YouTubeEmbed instances don't overwrite
+// window.onYouTubeIframeAPIReady — last-writer-wins would leave earlier
+// instances stuck on the loading spinner forever.
+let _ytPromise = null;
+function loadYouTubeAPI() {
+  if (_ytPromise) return _ytPromise;
+  _ytPromise = new Promise(resolve => {
+    if (window.YT?.Player) { resolve(); return; }
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+    window.onYouTubeIframeAPIReady = resolve;
+  });
+  return _ytPromise;
+}
+
 function YouTubeEmbed({
   videoId,
   playlistId,
@@ -67,25 +83,19 @@ function YouTubeEmbed({
       return;
     }
 
-    // Load YouTube IFrame API
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-      window.onYouTubeIframeAPIReady = () => {
-        setIsReady(true);
-      };
-    } else if (window.YT && window.YT.Player) {
-      setIsReady(true);
-    }
+    let cancelled = false;
+    loadYouTubeAPI().then(() => {
+      if (!cancelled) setIsReady(true);
+    });
 
     return () => {
-      if (playerRef.current && playerRef.current.destroy) {
+      cancelled = true;
+      if (playerRef.current?.destroy) {
         playerRef.current.destroy();
+        playerRef.current = null;
       }
     };
+  // Re-run only when the video/playlist identity changes, not on every render
   }, [actualVideoId, actualPlaylistId]);
 
   useEffect(() => {

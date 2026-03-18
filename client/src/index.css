@@ -3,20 +3,64 @@
 @tailwind utilities;
 
 @layer base {
+  /* ─── Light (default) token values ─────────────────────────────────────── */
   :root {
-    /* Soft Maroon + Gold + Cream Theme */
+    /* Legacy aliases kept for backward-compat */
     --maroon-soft: #B03A48;
     --gold-accent: #DDAE5B;
     --cream-bg: #FFF8EE;
     --beige-light: #F2E6D0;
     --text-primary: #4A3F3F;
     --text-secondary: #6A5A5A;
-    --tv-bg: #FFF8EE;
-    --tv-text: #4A3F3F;
     --primary-maroon: #B03A48;
     --primary-maroon-hover: #C64756;
     --accent-gold: #DDAE5B;
     --bg-soft: #FFF8EE;
+
+    /* ── TV design tokens (light) ── */
+    --tv-bg:             #FFF8EE;
+    --tv-bg-elevated:    #FFFFFF;
+    --tv-bg-soft:        #F2E6D0;
+    --tv-bg-hover:       #E8D9C0;
+    --tv-text:           #4A3F3F;
+    --tv-text-secondary: #6A5A5A;
+    --tv-text-muted:     #8A7A7A;
+    --tv-border-subtle:  #E0D4C4;
+    --tv-accent:         #B03A48;
+    --tv-accent-hover:   #C64756;
+    --tv-accent-dark:    #9B2E3C;
+    --tv-accent-light:   #E57A85;
+    --tv-gold:           #DDAE5B;
+    --tv-gold-hover:     #F5C87A;
+    --tv-gold-dark:      #C89A4A;
+    --tv-success:        #2E7D32;
+    --tv-error:          #C62828;
+    --tv-warning:        #DDAE5B;
+    --tv-info:           #B03A48;
+  }
+
+  /* ─── Dark theme token overrides ───────────────────────────────────────── */
+  .dark-theme {
+    --tv-bg:             #111010;
+    --tv-bg-elevated:    #1C1A1A;
+    --tv-bg-soft:        #261E1E;
+    --tv-bg-hover:       #302828;
+    --tv-text:           #F5EDE3;
+    --tv-text-secondary: #B8A8A0;
+    --tv-text-muted:     #7A6A62;
+    --tv-border-subtle:  #3A2E2E;
+    /* Accent stays brand-consistent; slightly lighter for dark bg */
+    --tv-accent:         #C64756;
+    --tv-accent-hover:   #D85462;
+    --tv-accent-dark:    #B03A48;
+    --tv-accent-light:   #E57A85;
+    --tv-gold:           #F5C87A;
+    --tv-gold-hover:     #FFD899;
+    --tv-gold-dark:      #DDAE5B;
+    --tv-success:        #4CAF50;
+    --tv-error:          #EF5350;
+    --tv-warning:        #F5C87A;
+    --tv-info:           #C64756;
   }
   
   * {
@@ -27,20 +71,20 @@
   
   body {
     @apply antialiased;
-    background-color: #FFF8EE;
-    color: #4A3F3F;
+    background-color: var(--tv-bg);
+    color: var(--tv-text);
   }
   
   html,
   body {
     @apply h-full w-full m-0 p-0;
-    background-color: #FFF8EE;
+    background-color: var(--tv-bg);
     overflow-x: hidden;
   }
   
   #root {
     @apply min-h-full w-full m-0 p-0;
-    background-color: #FFF8EE;
+    background-color: var(--tv-bg);
     /* Allow scrolling on root for admin pages */
   }
 

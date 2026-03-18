@@ -4,29 +4,33 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // Activate dark: variants when the .dark-theme class is on <html>
+  darkMode: ['class', '.dark-theme'],
   theme: {
     extend: {
       colors: {
-        // TV UI Color Scheme - Soft Maroon + Gold + Cream Theme
+        // TV UI Color Scheme — token values come from CSS variables so dark mode
+        // is handled in a single CSS block rather than per-component dark: prefixes.
         tv: {
-          bg: '#FFF8EE',           // Cream background (main)
-          bgElevated: '#FFFFFF',   // Pure white (cards, elevated)
-          bgSoft: '#F2E6D0',       // Beige light (sidebars, hover)
-          bgHover: '#E8D9C0',      // Beige hover state
-          text: '#4A3F3F',         // Text primary (soft brown-gray)
-          textSecondary: '#6A5A5A', // Text secondary
-          textMuted: '#8A7A7A',    // Text muted
-          borderSubtle: '#E0D4C4', // Subtle borders
-          accent: '#B03A48',       // Soft maroon - primary accent
-          accentHover: '#C64756',  // Brighter maroon - hover
-          accentDark: '#9B2E3C',   // Darker maroon - pressed
-          gold: '#DDAE5B',         // Gold accent - secondary
-          goldHover: '#F5C87A',    // Light gold - hover (+10%)
-          goldDark: '#C89A4A',     // Deep gold - active
-          success: '#B03A48',      // Maroon for success states
-          error: '#C64756',        // Brighter maroon for errors
-          warning: '#DDAE5B',      // Gold for warnings
-          info: '#B03A48',         // Maroon for info
+          bg:            'var(--tv-bg)',
+          bgElevated:    'var(--tv-bg-elevated)',
+          bgSoft:        'var(--tv-bg-soft)',
+          bgHover:       'var(--tv-bg-hover)',
+          text:          'var(--tv-text)',
+          textSecondary: 'var(--tv-text-secondary)',
+          textMuted:     'var(--tv-text-muted)',
+          borderSubtle:  'var(--tv-border-subtle)',
+          accent:        'var(--tv-accent)',
+          accentHover:   'var(--tv-accent-hover)',
+          accentDark:    'var(--tv-accent-dark)',
+          accentLight:   'var(--tv-accent-light)',
+          gold:          'var(--tv-gold)',
+          goldHover:     'var(--tv-gold-hover)',
+          goldDark:      'var(--tv-gold-dark)',
+          success:       'var(--tv-success)',
+          error:         'var(--tv-error)',
+          warning:       'var(--tv-warning)',
+          info:          'var(--tv-info)',
         },
         // Legacy colors updated to match new maroon/gold theme
         primary: {

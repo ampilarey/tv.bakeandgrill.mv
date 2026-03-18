@@ -2,44 +2,78 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Spinner from './components/common/Spinner';
+import api from './services/api';
 
-// Pages
-import LoginPage from './pages/LoginPage';
-import FirstTimeSetupPage from './pages/FirstTimeSetupPage';
-import DashboardPage from './pages/DashboardPage';
-import PlayerPage from './pages/PlayerPage';
-import ProfilePage from './pages/ProfilePage';
-import HistoryPage from './pages/HistoryPage';
-import KioskModePage from './pages/KioskModePage';
-import DisplayPairingPage from './pages/DisplayPairingPage';
+// Lazy-loaded pages — split into separate chunks so the initial JS bundle
+// only includes the code needed for the first rendered route.
+const LoginPage          = React.lazy(() => import('./pages/LoginPage'));
+const FirstTimeSetupPage = React.lazy(() => import('./pages/FirstTimeSetupPage'));
+const DashboardPage      = React.lazy(() => import('./pages/DashboardPage'));
+const PlayerPage         = React.lazy(() => import('./pages/PlayerPage'));
+const ProfilePage        = React.lazy(() => import('./pages/ProfilePage'));
+const HistoryPage        = React.lazy(() => import('./pages/HistoryPage'));
+const KioskModePage      = React.lazy(() => import('./pages/KioskModePage'));
+const DisplayPairingPage = React.lazy(() => import('./pages/DisplayPairingPage'));
 
 // Admin Pages
-import AdminDashboard from './pages/admin/AdminDashboard';
-import UserManagement from './pages/admin/UserManagement';
-import DisplayManagement from './pages/admin/DisplayManagement';
-import Analytics from './pages/admin/Analytics';
-import Settings from './pages/admin/Settings';
-import TickerManagement from './pages/admin/TickerManagement';
-import ScheduleManagement from './pages/admin/ScheduleManagement';
-import SceneManagement from './pages/admin/SceneManagement';
-import TestChecklist from './pages/admin/TestChecklist';
-import DisplayAnalytics from './pages/admin/DisplayAnalytics';
-import OverlaySchedule from './pages/admin/OverlaySchedule';
-import ZoneManagement from './pages/admin/ZoneManagement';
-import MediaLibrary from './pages/admin/MediaLibrary';
-import MediaPlaylistManagement from './pages/admin/MediaPlaylistManagement';
-import OverlayManagement from './pages/admin/OverlayManagement';
-import MonitoringDashboard from './pages/admin/MonitoringDashboard';
-import ContentSchedules from './pages/admin/ContentSchedules';
-import EmergencyOverride from './pages/admin/EmergencyOverride';
-import ChannelHealth from './pages/admin/ChannelHealth';
-import SystemHealth from './pages/admin/SystemHealth';
-import FeatureFlags from './pages/admin/FeatureFlags';
-import SlideTemplates from './pages/admin/SlideTemplates';
+const AdminDashboard         = React.lazy(() => import('./pages/admin/AdminDashboard'));
+const UserManagement         = React.lazy(() => import('./pages/admin/UserManagement'));
+const DisplayManagement      = React.lazy(() => import('./pages/admin/DisplayManagement'));
+const Analytics              = React.lazy(() => import('./pages/admin/Analytics'));
+const Settings               = React.lazy(() => import('./pages/admin/Settings'));
+const TickerManagement       = React.lazy(() => import('./pages/admin/TickerManagement'));
+const ScheduleManagement     = React.lazy(() => import('./pages/admin/ScheduleManagement'));
+const SceneManagement        = React.lazy(() => import('./pages/admin/SceneManagement'));
+const TestChecklist          = React.lazy(() => import('./pages/admin/TestChecklist'));
+const DisplayAnalytics       = React.lazy(() => import('./pages/admin/DisplayAnalytics'));
+const OverlaySchedule        = React.lazy(() => import('./pages/admin/OverlaySchedule'));
+const ZoneManagement         = React.lazy(() => import('./pages/admin/ZoneManagement'));
+const MediaLibrary           = React.lazy(() => import('./pages/admin/MediaLibrary'));
+const MediaPlaylistManagement= React.lazy(() => import('./pages/admin/MediaPlaylistManagement'));
+const OverlayManagement      = React.lazy(() => import('./pages/admin/OverlayManagement'));
+const MonitoringDashboard    = React.lazy(() => import('./pages/admin/MonitoringDashboard'));
+const ContentSchedules       = React.lazy(() => import('./pages/admin/ContentSchedules'));
+const EmergencyOverride      = React.lazy(() => import('./pages/admin/EmergencyOverride'));
+const ChannelHealth          = React.lazy(() => import('./pages/admin/ChannelHealth'));
+const SystemHealth           = React.lazy(() => import('./pages/admin/SystemHealth'));
+const FeatureFlags           = React.lazy(() => import('./pages/admin/FeatureFlags'));
+const SlideTemplates         = React.lazy(() => import('./pages/admin/SlideTemplates'));
 
-// Mobile Components
+// Mobile Components (small — kept eager)
 import BottomNav from './components/BottomNav';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
+
+// Fallback shown while a lazy chunk is loading
+function PageLoader() {
+  return (
+    <div className="h-screen w-screen flex items-center justify-center bg-background">
+      <Spinner size="xl" />
+    </div>
+  );
+}
+
+// Wrapper that provides a subtle fade transition between routes
+const pageVariants = {
+  initial: { opacity: 0, y: 6 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
+  exit:    { opacity: 0, transition: { duration: 0.12 } },
+};
+
+function AnimatedPage({ children }) {
+  return (
+    <motion.div
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      style={{ flex: 1, display: 'contents' }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -89,6 +123,10 @@ function PermissionRoute({ children, requiredPermissions = [] }) {
   const { user, isAuthenticated, loading } = useAuth();
   const [hasAccess, setHasAccess] = React.useState(null);
 
+  // Stable string key prevents a new array literal on every render from
+  // triggering the effect infinitely (array identity changes each render).
+  const permsKey = requiredPermissions.join(',');
+
   React.useEffect(() => {
     const checkAccess = async () => {
       if (!user) {
@@ -102,31 +140,18 @@ function PermissionRoute({ children, requiredPermissions = [] }) {
         return;
       }
 
-      // Check permissions for non-admin users
+      // Use the configured api instance so the auth interceptor and base URL
+      // logic are applied consistently (raw fetch bypasses both).
       try {
-        const response = await fetch('/api/permissions/me', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const data = await response.json();
-        const perms = data.permissions;
-        
-        // Check if user has ANY of the required permissions
-        const canAccess = requiredPermissions.some(perm => 
-          perms?.[perm] === 1 || perms?.[perm] === true
+        const response = await api.get('/permissions/me');
+        const perms = response.data.permissions;
+
+        const canAccess = permsKey.split(',').some(perm =>
+          perm && (perms?.[perm] === 1 || perms?.[perm] === true)
         );
-        
-        console.log('🔐 Permission check:', {
-          required: requiredPermissions,
-          userPerms: perms,
-          hasAccess: canAccess
-        });
-        
+
         setHasAccess(canAccess);
-      } catch (error) {
-        console.error('Error checking permissions:', error);
+      } catch {
         setHasAccess(false);
       }
     };
@@ -134,7 +159,8 @@ function PermissionRoute({ children, requiredPermissions = [] }) {
     if (isAuthenticated) {
       checkAccess();
     }
-  }, [user, isAuthenticated, requiredPermissions]);
+  // permsKey is a stable primitive derived from the array
+  }, [user, isAuthenticated, permsKey]);
 
   if (loading || hasAccess === null) {
     return (
@@ -151,12 +177,12 @@ function PermissionRoute({ children, requiredPermissions = [] }) {
   return children;
 }
 
-// Router Component
-function AppRouter() {
+// Inner routing component — needs to be inside <Router> to use useLocation
+function AnimatedRoutes() {
+  const location = useLocation();
   return (
-    <Router>
-      <ErrorBoundary>
-      <Routes>
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/display" element={<KioskModePage />} />
@@ -387,6 +413,18 @@ function AppRouter() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+    </AnimatePresence>
+  );
+}
+
+// Router Component
+function AppRouter() {
+  return (
+    <Router>
+      <ErrorBoundary>
+      <React.Suspense fallback={<PageLoader />}>
+      <AnimatedRoutes />
+      </React.Suspense>
       <BottomNav />
       </ErrorBoundary>
     </Router>

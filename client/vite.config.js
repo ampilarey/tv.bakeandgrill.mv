@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    include: ['src/**/*.{test,spec}.{js,jsx}'],
+  },
   base: '/', // Ensure correct base path for production
   // Optimize build for lower memory usage
   build: {
@@ -84,14 +90,15 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
-        // Disable cache for JS/CSS during development
         cleanupOutdatedCaches: true,
-        // Force update check on navigation (mobile PWA fix)
         navigationPreload: true,
+        // Serve offline.html for navigation requests when the network is unavailable
+        navigateFallback: '/offline.html',
+        navigateFallbackDenylist: [/^\/api\//],
         // Only precache critical assets, NOT JS/HTML to avoid stale cache issues
-        globPatterns: ['**/*.{ico,png,svg,woff,woff2}'],
+        globPatterns: ['**/*.{ico,png,svg,woff,woff2}', 'offline.html'],
         // Exclude JS and HTML from precaching - they're handled by .htaccess
-        globIgnores: ['**/*.js', '**/*.html', '**/*.m3u8', '**/*.ts'],
+        globIgnores: ['**/*.js', '**/*.m3u8', '**/*.ts'],
         runtimeCaching: [
           {
             // 🚨 CRITICAL: HLS Streams - NEVER CACHE
@@ -159,6 +166,20 @@ export default defineConfig({
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 365 * 24 * 60 * 60 // 1 year
+              }
+            }
+          },
+          {
+            // Favorites & watch-history mutations — background sync so writes
+            // survive brief offline periods (e.g. flaky mobile connections)
+            urlPattern: /^https?:\/\/.*\/api\/(?:favorites|watch-history).*/i,
+            handler: 'NetworkOnly',
+            options: {
+              backgroundSync: {
+                name: 'bg-sync-api-mutations',
+                options: {
+                  maxRetentionTime: 24 * 60 // Retry for up to 24 hours (minutes)
+                }
               }
             }
           }

@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import Hls from 'hls.js';
 import Button from '../components/common/Button';
-import Input from '../components/common/Input';
 import Spinner from '../components/common/Spinner';
-import Badge from '../components/common/Badge';
 import SkeletonLoader from '../components/SkeletonLoader';
 import VideoControls from '../components/VideoControls';
+import ChannelSidebar from '../components/ChannelSidebar';
+import { useFavorites } from '../hooks/useFavorites';
+import { useChannelList } from '../hooks/useChannelList';
+import { useWatchHistory } from '../hooks/useWatchHistory';
+import { usePlayerKeyboardShortcuts } from '../hooks/usePlayerKeyboardShortcuts';
 
 /** Small coloured dot showing channel live-status */
 function LiveStatusDot({ isLive, size = 'sm' }) {
@@ -40,42 +43,21 @@ export default function PlayerPage() {
   
   const [searchParams] = useSearchParams();
   const playlistId = searchParams.get('playlistId');
-  const channelIdFromUrl = searchParams.get('channelId'); // From history click
-  const channelNameFromUrl = searchParams.get('channelName'); // From history click (fallback)
+  const channelIdFromUrl = searchParams.get('channelId');
+  const channelNameFromUrl = searchParams.get('channelName');
   
-  const [channels, setChannels] = useState([]);
-  const [filteredChannels, setFilteredChannels] = useState([]);
-  const [groups, setGroups] = useState([]);
-  const [currentChannel, setCurrentChannel] = useState(null); // Will be restored via useEffect
-  const [favorites, setFavorites] = useState([]);
-  const [recentlyWatched, setRecentlyWatched] = useState([]);
-  const [showAllRecent, setShowAllRecent] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState('');
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [currentChannel, setCurrentChannel] = useState(null);
   const [isAutoPlay, setIsAutoPlay] = useState(false);
+  const [showAllRecent, setShowAllRecent] = useState(false);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [videoError, setVideoError] = useState(null);
-  const [retryCount, setRetryCount] = useState(0);
   const [videoLoading, setVideoLoading] = useState(false);
+  // useRef instead of useState so the HLS error handler always reads the
+  // current value from its closure rather than a stale snapshot.
+  const retryCountRef = useRef(0);
   const [viewMode, setViewMode] = useState(
     typeof window !== 'undefined' ? localStorage.getItem('channelViewMode') || 'list' : 'list'
   );
-  const [displayedChannels, setDisplayedChannels] = useState(50); // Show 50 initially
-  const [searchHistory, setSearchHistory] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return JSON.parse(localStorage.getItem('searchHistory') || '[]');
-      } catch {
-        localStorage.removeItem('searchHistory');
-        return [];
-      }
-    }
-    return [];
-  });
-  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [useCustomControls, setUseCustomControls] = useState(false);
   const [isMobileView, setIsMobileView] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -89,10 +71,30 @@ export default function PlayerPage() {
   
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
-  const searchDebounceRef = useRef(null);
   const bufferingTimerRef = useRef(null);
   const navigate = useNavigate();
   const { logout } = useAuth();
+
+  // ── Composed hooks ──────────────────────────────────────────────────────
+  const { favorites, isFavorite, toggleFavorite } = useFavorites(playlistId);
+
+  const {
+    channels,
+    filteredChannels,
+    groups,
+    loading,
+    searchQuery,
+    selectedGroup, setSelectedGroup,
+    showFavoritesOnly, setShowFavoritesOnly,
+    displayedChannels,
+    loadMore,
+    searchHistory,
+    showSearchSuggestions, setShowSearchSuggestions,
+    handleSearch,
+    clearSearchHistory,
+  } = useChannelList({ playlistId, favorites });
+
+  const { recentlyWatched } = useWatchHistory(playlistId, channels);
 
   // Simple cleanup - let browser handle most of it naturally
   useEffect(() => {
@@ -178,53 +180,6 @@ export default function PlayerPage() {
     }
   }, [playlistId]);
 
-  // Don't auto-restore channels - let user select manually
-  // This prevents issues when navigating between tabs on mobile
-
-  // Fetch channels from playlist
-  useEffect(() => {
-    if (!playlistId) {
-      navigate('/dashboard');
-      return;
-    }
-
-    setLoading(true); // Ensure loading state is set
-
-    // Failsafe: Force loading=false after 10 seconds to prevent stuck screen
-    const loadingTimeout = setTimeout(() => {
-      console.warn('⚠️ Loading timeout - forcing loading=false');
-      setLoading(false);
-    }, 10000);
-
-    const fetchChannels = async () => {
-      try {
-        const response = await api.get(`/channels?playlistId=${playlistId}`);
-        const channelsList = response.data.channels || [];
-        const groupsList = response.data.groups || [];
-        
-        debugLog('Fetched channels:', channelsList.length);
-        debugLog('Groups found:', groupsList);
-        
-        setChannels(channelsList);
-        setFilteredChannels(channelsList);
-        setGroups(groupsList);
-        
-        // Don't auto-play any channel on page load
-        // User should manually select a channel to watch
-      } catch (error) {
-        console.error('Error fetching channels:', error);
-        // On error, still set loading to false to prevent stuck screen
-        setChannels([]);
-        setFilteredChannels([]);
-      } finally {
-        clearTimeout(loadingTimeout); // Clear timeout
-        setLoading(false); // Always clear loading state
-      }
-    };
-
-    fetchChannels();
-  }, [playlistId, navigate]);
-
   // Auto-play channel from history click
   useEffect(() => {
     if ((channelIdFromUrl || channelNameFromUrl) && channels.length > 0 && !currentChannel) {
@@ -250,95 +205,7 @@ export default function PlayerPage() {
     }
   }, [channelIdFromUrl, channelNameFromUrl, channels, currentChannel]);
 
-  // Fetch favorites
-  useEffect(() => {
-    const fetchFavorites = async () => {
-      try {
-        const response = await api.get(`/favorites?playlistId=${playlistId}`);
-        setFavorites(response.data.favorites || []);
-      } catch (error) {
-        console.error('Error fetching favorites:', error);
-      }
-    };
-
-    if (playlistId) {
-      fetchFavorites();
-    }
-  }, [playlistId]);
-
-  // Fetch recently watched channels
-  useEffect(() => {
-    const fetchRecentlyWatched = async () => {
-      try {
-        const response = await api.get(`/history?playlistId=${playlistId}&limit=100`);
-        const history = response.data.history || [];
-        
-        // Get unique channels (most recent first)
-        const uniqueChannels = [];
-        const seenIds = new Set();
-        
-        for (const item of history) {
-          if (!seenIds.has(item.channel_id) && uniqueChannels.length < 50) {
-            seenIds.add(item.channel_id);
-            
-            // Find full channel info from channels list
-            const channelInfo = channels.find(c => c.id === item.channel_id);
-            if (channelInfo) {
-              uniqueChannels.push({
-                ...channelInfo,
-                watched_at: item.watched_at
-              });
-            }
-          }
-        }
-        
-        setRecentlyWatched(uniqueChannels);
-      } catch (error) {
-        console.error('Error fetching watch history:', error);
-      }
-    };
-
-    if (playlistId && channels.length > 0) {
-      fetchRecentlyWatched();
-    }
-  }, [playlistId, channels]);
-
-  // Filter channels
-  useEffect(() => {
-    let result = [...channels]; // Create copy to avoid mutation
-
-    // Favorites filter (apply first if active)
-    if (showFavoritesOnly) {
-      const favChannelIds = favorites.map(f => f.channel_id);
-      result = result.filter(ch => favChannelIds.includes(ch.id));
-    }
-
-    // Group filter
-    if (selectedGroup && selectedGroup !== '') {
-      result = result.filter(ch => {
-        // Handle null/undefined groups
-        if (!ch.group) return false;
-        
-        // Normalize both values for comparison
-        const channelGroup = ch.group.trim();
-        const filterGroup = selectedGroup.trim();
-        
-        // Exact match (case-sensitive)
-        return channelGroup === filterGroup;
-      });
-    }
-
-    // Search filter (apply last) — uses debounced query to avoid filtering on every keystroke
-    if (debouncedSearchQuery && debouncedSearchQuery.trim() !== '') {
-      const query = debouncedSearchQuery.toLowerCase().trim();
-      result = result.filter(ch => 
-        (ch.name && ch.name.toLowerCase().includes(query)) ||
-        (ch.group && ch.group.toLowerCase().includes(query))
-      );
-    }
-
-    setFilteredChannels(result);
-  }, [debouncedSearchQuery, selectedGroup, showFavoritesOnly, channels, favorites]);
+  // (channel list, favorites, watch history, and filter logic are now in custom hooks)
 
   // Video player setup
   useEffect(() => {
@@ -409,7 +276,7 @@ export default function PlayerPage() {
     
     // Clear previous errors and set loading state
     setVideoError(null);
-    setRetryCount(0);
+    retryCountRef.current = 0;
     setVideoLoading(true);
     
     // 🚨 CRITICAL: Timeout guard to prevent infinite loading
@@ -878,14 +745,13 @@ export default function PlayerPage() {
         console.log('Video suspended');
       };
       
+      // On iOS the ios*Handler set already covers canplay/loadedmetadata/loadeddata/playing.
+      // Adding the generic handlers for those same events causes double state updates
+      // (setVideoLoading(false) called twice) and double play() calls on canplay.
       video.addEventListener('loadstart', handleLoadStart);
       video.addEventListener('error', handleError);
-      video.addEventListener('loadedmetadata', handleLoadedMetadata);
-      video.addEventListener('loadeddata', handleLoadedData);
-      video.addEventListener('canplay', handleCanPlay);
       video.addEventListener('canplaythrough', handleCanPlayThrough);
       video.addEventListener('waiting', handleWaiting);
-      video.addEventListener('playing', handlePlaying);
       video.addEventListener('stalled', handleStalled);
       video.addEventListener('suspend', handleSuspend);
       
@@ -927,17 +793,14 @@ export default function PlayerPage() {
         
         video.removeEventListener('loadstart', handleLoadStart);
         video.removeEventListener('error', handleError);
-        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-        video.removeEventListener('loadeddata', handleLoadedData);
-        video.removeEventListener('canplay', handleCanPlay);
         video.removeEventListener('canplaythrough', handleCanPlayThrough);
         video.removeEventListener('waiting', handleWaiting);
-        video.removeEventListener('playing', handlePlaying);
         video.removeEventListener('stalled', handleStalled);
         video.removeEventListener('suspend', handleSuspend);
         video.removeEventListener('click', handleVideoClick);
         video.removeEventListener('tap', handleVideoClick);
-        // Clean up iOS-specific handlers
+        // Remove iOS-specific handlers (these were the only ones registered for
+        // canplay/loadedmetadata/loadeddata/playing in the iOS path)
         if (storedHandlers.iosCanPlayHandler) video.removeEventListener('canplay', storedHandlers.iosCanPlayHandler);
         if (storedHandlers.iosMetadataHandler) video.removeEventListener('loadedmetadata', storedHandlers.iosMetadataHandler);
         if (storedHandlers.iosDataHandler) video.removeEventListener('loadeddata', storedHandlers.iosDataHandler);
@@ -1197,13 +1060,12 @@ export default function PlayerPage() {
           switch(data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               console.log('Network error, trying to recover...');
-              if (retryCount < 3) {
-                setRetryCount(prev => prev + 1);
+              if (retryCountRef.current < 3) {
+                retryCountRef.current += 1;
                 setVideoError('Network error. Retrying...');
                 setTimeout(() => {
                   hls.startLoad();
                   setVideoError(null);
-                  // Restart timeout after retry
                   startPlaybackTimeout();
                 }, 1000);
               } else {
@@ -1212,13 +1074,12 @@ export default function PlayerPage() {
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               console.log('Media error, trying to recover...');
-              if (retryCount < 3) {
-                setRetryCount(prev => prev + 1);
+              if (retryCountRef.current < 3) {
+                retryCountRef.current += 1;
                 setVideoError('Media error. Retrying...');
                 setTimeout(() => {
                   hls.recoverMediaError();
                   setVideoError(null);
-                  // Restart timeout after retry
                   startPlaybackTimeout();
                 }, 1000);
               } else {
@@ -1443,419 +1304,83 @@ export default function PlayerPage() {
     }
   };
   
-  const handleChannelClick = (channel) => {
+  const handleChannelClick = useCallback((channel) => {
     try {
       setCurrentChannel(channel);
-      setIsAutoPlay(false); // Mark as user-initiated
-      setVideoError(null); // Clear any previous errors
-      setRetryCount(0); // Reset retry counter
+      setIsAutoPlay(false);
+      setVideoError(null);
+      retryCountRef.current = 0;
 
       if (isMobileView) {
         setIsChannelDrawerOpen(false);
-        // Gently scroll video into view once the drawer closes
         setTimeout(() => {
           videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 300);
       }
-    } catch (error) {
-      console.error('Error setting channel:', error);
+    } catch {
       setVideoError('Error loading channel. Please try again.');
     }
-  };
+  }, [isMobileView]);
 
-  const renderSidebarContent = (variant = 'desktop') => {
-    const headerClasses =
-      variant === 'mobile'
-        ? 'p-4 pb-3 border-b border-tv-borderSubtle bg-tv-bgElevated sticky top-0 z-20 shadow-[0_-12px_32px_rgba(0,0,0,0.65)] flex-shrink-0'
-        : 'p-4 border-b border-tv-borderSubtle flex-shrink-0';
-
-    const listWrapperClasses =
-      variant === 'mobile'
-        ? 'flex-1 overflow-y-auto custom-scrollbar p-2 pb-32 bg-tv-bgElevated min-h-0'
-        : 'flex-1 overflow-y-auto custom-scrollbar p-3 bg-tv-bgElevated min-h-0';
-
-    const footerClasses =
-      variant === 'mobile'
-        ? 'p-3 border-t border-tv-borderSubtle text-xs text-tv-textMuted text-center bg-tv-bgElevated/95 sticky bottom-0 flex-shrink-0'
-        : 'p-3 border-t border-tv-borderSubtle text-sm text-tv-textMuted text-center flex-shrink-0';
-
-    return (
-      <>
-        <div className={headerClasses}>
-          <div className="flex items-center justify-between mb-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => {
-                if (currentChannel) {
-                  // If video is playing, just stop it and show channel list
-                  setCurrentChannel(null);
-                } else {
-                  // If no video playing, go back to dashboard
-                  navigate('/dashboard');
-                }
-              }}
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              {currentChannel ? 'Stop' : 'Back'}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={logout}>
-              Logout
-            </Button>
-          </div>
-
-          {/* Search with Autocomplete */}
-          <div className="relative mb-3">
-            <Input
-              placeholder="Search channels..."
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              onFocus={() => setShowSearchSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 200)}
-            />
-            
-            {/* Search History Dropdown */}
-            {showSearchSuggestions && searchHistory.length > 0 && !searchQuery && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-tv-bgSoft border-2 border-tv-borderSubtle rounded-xl shadow-2xl z-10 max-h-48 overflow-y-auto">
-                <div className="flex items-center justify-between p-3 border-b border-tv-borderSubtle bg-tv-bgHover/50">
-                  <span className="text-xs text-tv-textSecondary font-semibold uppercase tracking-wide">Recent Searches</span>
-                  <button
-                    onClick={clearSearchHistory}
-                    className="text-xs text-tv-error hover:text-tv-error/80 font-medium"
-                  >
-                    Clear
-                  </button>
-                </div>
-                {searchHistory.map((term, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      setSearchQuery(term);
-                      setShowSearchSuggestions(false);
-                    }}
-                    className="w-full text-left px-4 py-2.5 hover:bg-tv-bgHover text-tv-text text-sm transition-all flex items-center gap-3 border-b border-tv-borderSubtle/30 last:border-0"
-                  >
-                    <span className="text-tv-accent">🔍</span>
-                    <span>{term}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <Button
-              variant={showFavoritesOnly ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-            >
-              ⭐ Favorites
-            </Button>
-            <select
-              value={selectedGroup}
-              onChange={(e) => setSelectedGroup(e.target.value)}
-              className="px-3 py-1.5 text-sm font-medium rounded-lg bg-tv-bgSoft text-tv-text border-2 border-tv-borderSubtle focus:outline-none focus:ring-2 focus:ring-tv-accent focus:border-tv-accent"
-            >
-              <option value="">All Groups</option>
-              {groups.map(group => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
-            
-            {/* View Mode Toggle */}
-            <div className="ml-auto flex border-2 border-tv-borderSubtle rounded-lg overflow-hidden bg-tv-bgSoft">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-4 py-1.5 text-sm font-medium transition-all ${
-                  viewMode === 'list' 
-                    ? 'bg-tv-accent text-white shadow-md' 
-                    : 'bg-transparent text-tv-textSecondary hover:bg-tv-bgHover hover:text-tv-text'
-                }`}
-                title="List View"
-              >
-                ☰ List
-              </button>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`px-4 py-1.5 text-sm font-medium border-l-2 border-tv-borderSubtle transition-all ${
-                  viewMode === 'grid' 
-                    ? 'bg-tv-accent text-white shadow-md' 
-                    : 'bg-transparent text-tv-textSecondary hover:bg-tv-bgHover hover:text-tv-text'
-                }`}
-                title="Grid View"
-              >
-                ⊞ Grid
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className={listWrapperClasses}>
-          {/* Recently Watched Section - Mobile Only */}
-          {variant === 'mobile' && recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
-            <div className="p-2 border-b border-tv-borderSubtle">
-              <div className="flex items-center justify-between mb-2 px-1">
-                <h3 className="text-sm font-semibold text-tv-textSecondary uppercase tracking-wide">
-                  🕒 Recently Watched
-                </h3>
-                {recentlyWatched.length > 5 && (
-                  <button
-                    onClick={() => setShowAllRecent(!showAllRecent)}
-                    className="text-xs text-tv-accent hover:text-tv-accentSoft transition-colors"
-                  >
-                    {showAllRecent ? 'Show Less' : `Show All (${recentlyWatched.length})`}
-                  </button>
-                )}
-              </div>
-              <div className="space-y-1">
-                {(showAllRecent ? recentlyWatched : recentlyWatched.slice(0, 5)).map((channel) => (
-                  <div
-                    key={`recent-${channel.id}`}
-                    onClick={() => handleChannelClick(channel)}
-                    className={`
-                      p-3 rounded-lg cursor-pointer transition-all
-                      ${currentChannel?.id === channel.id 
-                        ? 'bg-tv-accent/20 border-l-3 border-tv-accent' 
-                        : 'bg-tv-bgSoft hover:bg-tv-bgHover border-l-3 border-transparent'
-                      }
-                    `}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className={`font-medium truncate text-sm ${
-                            currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
-                          }`}>{channel.name}</h3>
-                          {currentChannel?.id === channel.id && (
-                            <Badge color="success" size="sm">Playing</Badge>
-                          )}
-                        </div>
-                        {channel.group && (
-                          <p className="text-xs text-tv-textMuted">{channel.group}</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(channel);
-                        }}
-                        className="ml-2 p-1 hover:scale-110 transition-transform text-tv-accentSoft"
-                      >
-                        {isFavorite(channel.id) ? '⭐' : '☆'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* All Channels Section */}
-          {filteredChannels.length === 0 ? (
-            <div className="p-8 text-center text-tv-textMuted">
-              <p>No channels found</p>
-            </div>
-          ) : (
-            <div>
-              {variant === 'mobile' && recentlyWatched.length > 0 && !searchQuery && !selectedGroup && !showFavoritesOnly && (
-                <h3 className="text-sm font-semibold text-tv-textSecondary uppercase tracking-wide mb-2 px-1">
-                  📺 All Channels
-                </h3>
-              )}
-              {variant === 'desktop' && (
-                <h3 className="text-sm font-semibold text-tv-textSecondary uppercase tracking-wide mb-3 px-1">
-                  📺 All Channels
-                </h3>
-              )}
-              
-              {/* List View */}
-              {viewMode === 'list' && filteredChannels.slice(0, displayedChannels).map((channel) => (
-                <div
-                  key={channel.id}
-                  onClick={() => handleChannelClick(channel)}
-                    className={`
-                      flex items-center gap-3 px-3 py-3 mb-1.5 rounded-lg cursor-pointer transition-all
-                      ${currentChannel?.id === channel.id 
-                        ? 'bg-tv-accent/20 border-l-3 border-tv-accent shadow-lg' 
-                        : 'bg-transparent hover:bg-tv-bgHover border-l-3 border-transparent'
-                      }
-                    `}
-                >
-                  {/* Channel logo/avatar */}
-                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-tv-bgHover border border-tv-borderSubtle flex items-center justify-center overflow-hidden">
-                    {channel.logo ? (
-                      <img 
-                        src={channel.logo} 
-                        alt={channel.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                    ) : (
-                      <span className="text-xl text-tv-textMuted">📺</span>
-                    )}
-                  </div>
-                  
-                  {/* Channel name + category */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <LiveStatusDot isLive={channel.is_live} />
-                      <h3 className={`font-medium truncate ${
-                        currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
-                      }`}>{channel.name}</h3>
-                    </div>
-                    {channel.group && (
-                      <p className="text-xs text-tv-textMuted truncate">{channel.group}</p>
-                    )}
-                  </div>
-                  
-                  {/* Badge and favorite button */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {currentChannel?.id === channel.id && (
-                      <Badge color="success" size="sm">Playing</Badge>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(channel);
-                      }}
-                      className="p-1 hover:scale-110 transition-transform text-tv-accentSoft"
-                      title={isFavorite(channel.id) ? 'Remove from favorites' : 'Add to favorites'}
-                    >
-                      {isFavorite(channel.id) ? '⭐' : '☆'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {/* Grid View */}
-              {viewMode === 'grid' && (
-                <div className="grid grid-cols-2 gap-2">
-                  {filteredChannels.slice(0, displayedChannels).map((channel) => (
-                    <div
-                      key={channel.id}
-                      onClick={() => handleChannelClick(channel)}
-                      className={`
-                        p-3 rounded-lg cursor-pointer transition-all relative
-                        ${currentChannel?.id === channel.id 
-                          ? 'bg-tv-accent/20 border-2 border-tv-accent shadow-lg' 
-                          : 'bg-tv-bgSoft hover:bg-tv-bgHover border-2 border-transparent'
-                        }
-                      `}
-                    >
-                      <div className="text-center">
-                        {channel.logo ? (
-                          <img 
-                            src={channel.logo} 
-                            alt={channel.name}
-                            loading="lazy"
-                            className="w-16 h-16 mx-auto mb-2 rounded-lg object-cover"
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
-                        ) : (
-                          <div className="w-16 h-16 mx-auto mb-2 bg-tv-bgHover border border-tv-borderSubtle rounded-lg flex items-center justify-center text-2xl">
-                            📺
-                          </div>
-                        )}
-                        <div className="flex items-center justify-center gap-1.5 mb-1">
-                          <LiveStatusDot isLive={channel.is_live} />
-                          <h3 className={`font-medium text-sm truncate ${
-                            currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'
-                          }`}>
-                            {channel.name}
-                          </h3>
-                        </div>
-                        {channel.group && (
-                          <p className="text-xs text-tv-textMuted truncate">{channel.group}</p>
-                        )}
-                        {currentChannel?.id === channel.id && (
-                          <Badge color="success" size="sm" className="mt-2">▶️</Badge>
-                        )}
-                        
-                        {/* Favorite button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(channel);
-                          }}
-                          className="absolute top-2 right-2 p-1 bg-tv-bgElevated/80 rounded hover:scale-110 transition-transform text-tv-accentSoft"
-                        >
-                          {isFavorite(channel.id) ? '⭐' : '☆'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Load More Button */}
-              {filteredChannels.length > displayedChannels && (
-                <div className="mt-4 text-center">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setDisplayedChannels(prev => prev + 50)}
-                    className="w-full"
-                  >
-                    Load More ({filteredChannels.length - displayedChannels} remaining)
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className={footerClasses}>
-          <span className="text-tv-textMuted">
-            Showing {Math.min(displayedChannels, filteredChannels.length)} of {filteredChannels.length} channels
-            {filteredChannels.length !== channels.length && ` (${channels.length} total)`}
-          </span>
-        </div>
-      </>
-    );
-  };
-
-  const handleSearch = (value) => {
-    // Update input value immediately (keeps controlled input in sync)
-    setSearchQuery(value);
-    
-    // Debounce only the filter query so large channel lists don't re-filter on every keystroke
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => {
-      setDebouncedSearchQuery(value);
-    }, 250);
-    
-    // Save to search history only when user pauses (not on every keystroke)
-    if (value.trim() && value !== searchHistory[0]) {
-      const newHistory = [value, ...searchHistory.filter(h => h !== value)].slice(0, 10);
-      setSearchHistory(newHistory);
-      try {
-        localStorage.setItem('searchHistory', JSON.stringify(newHistory));
-      } catch {
-        // localStorage write failed (quota exceeded etc.) — ignore
-      }
-    }
-  };
-
-  const clearSearchHistory = () => {
-    setSearchHistory([]);
-    localStorage.removeItem('searchHistory');
-  };
-
-  const togglePictureInPicture = async () => {
+  const togglePictureInPicture = useCallback(async () => {
     if (!videoRef.current) return;
-
     try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      } else if (document.pictureInPictureEnabled) {
-        await videoRef.current.requestPictureInPicture();
-      }
-    } catch (error) {
-      console.error('PiP error:', error);
-    }
-  };
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      else if (document.pictureInPictureEnabled) await videoRef.current.requestPictureInPicture();
+    } catch { /* user denied or not supported */ }
+  }, []);
+
+  // Wire up keyboard shortcuts via hook (stable refs prevent re-registration)
+  usePlayerKeyboardShortcuts({
+    videoRef,
+    currentChannel,
+    filteredChannels,
+    onChannelSelect: handleChannelClick,
+    onToggleHelp: () => setShowKeyboardHelp(prev => !prev),
+    onTogglePiP: togglePictureInPicture,
+    showKeyboardHelp,
+  });
+
+  // Thin wrapper delegating to the ChannelSidebar component
+  // The 350-line inline JSX was extracted to client/src/components/ChannelSidebar.jsx
+  const renderSidebarContent = (variant = 'desktop') => (
+    <ChannelSidebar
+      variant={variant}
+      channels={channels}
+      filteredChannels={filteredChannels}
+      groups={groups}
+      currentChannel={currentChannel}
+      favorites={favorites}
+      recentlyWatched={recentlyWatched}
+      searchQuery={searchQuery}
+      selectedGroup={selectedGroup}
+      showFavoritesOnly={showFavoritesOnly}
+      viewMode={viewMode}
+      displayedChannels={displayedChannels}
+      showAllRecent={showAllRecent}
+      searchHistory={searchHistory}
+      showSearchSuggestions={showSearchSuggestions}
+      onSearch={handleSearch}
+      onSearchFocus={() => setShowSearchSuggestions(true)}
+      onSearchBlur={() => setTimeout(() => setShowSearchSuggestions(false), 200)}
+      onSearchHistorySelect={(term) => { handleSearch(term); setShowSearchSuggestions(false); }}
+      onClearSearchHistory={clearSearchHistory}
+      onGroupChange={setSelectedGroup}
+      onFavoritesToggle={() => setShowFavoritesOnly(prev => !prev)}
+      onViewModeChange={setViewMode}
+      onChannelClick={handleChannelClick}
+      onToggleFavorite={toggleFavorite}
+      isFavorite={isFavorite}
+      onLoadMore={loadMore}
+      onBack={() => currentChannel ? setCurrentChannel(null) : navigate('/dashboard')}
+      onLogout={logout}
+      onShowAllRecentToggle={() => setShowAllRecent(prev => !prev)}
+    />
+  );
+
+  // handleSearch and clearSearchHistory are now provided by useChannelList
+
+  // togglePictureInPicture is defined earlier (before usePlayerKeyboardShortcuts hook call)
 
   // Swipe gestures for mobile
   useEffect(() => {
@@ -1902,114 +1427,9 @@ export default function PlayerPage() {
     };
   }, [currentChannel, filteredChannels]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      // Don't trigger if typing in input field
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  // Keyboard shortcuts — handled by the usePlayerKeyboardShortcuts hook below
 
-      const video = videoRef.current;
-      if (!video) return;
-
-      switch(e.key.toLowerCase()) {
-        case ' ':
-        case 'k':
-          e.preventDefault();
-          if (video.paused) {
-            video.play();
-          } else {
-            video.pause();
-          }
-          break;
-        
-        case 'f':
-          e.preventDefault();
-          if (document.fullscreenElement) {
-            document.exitFullscreen();
-          } else {
-            video.requestFullscreen();
-          }
-          break;
-        
-        case 'm':
-          e.preventDefault();
-          video.muted = !video.muted;
-          break;
-        
-        case 'p':
-          e.preventDefault();
-          togglePictureInPicture();
-          break;
-        
-        case 'arrowup':
-          e.preventDefault();
-          video.volume = Math.min(1, video.volume + 0.1);
-          break;
-        
-        case 'arrowdown':
-          e.preventDefault();
-          video.volume = Math.max(0, video.volume - 0.1);
-          break;
-        
-        case 'arrowright':
-          e.preventDefault();
-          // Next channel
-          if (currentChannel && filteredChannels.length > 0) {
-            const currentIndex = filteredChannels.findIndex(ch => ch.id === currentChannel.id);
-            const nextIndex = (currentIndex + 1) % filteredChannels.length;
-            handleChannelClick(filteredChannels[nextIndex]);
-          }
-          break;
-        
-        case 'arrowleft':
-          e.preventDefault();
-          // Previous channel
-          if (currentChannel && filteredChannels.length > 0) {
-            const currentIndex = filteredChannels.findIndex(ch => ch.id === currentChannel.id);
-            const prevIndex = currentIndex === 0 ? filteredChannels.length - 1 : currentIndex - 1;
-            handleChannelClick(filteredChannels[prevIndex]);
-          }
-          break;
-        
-        case '?':
-        case '/':
-          e.preventDefault();
-          setShowKeyboardHelp(!showKeyboardHelp);
-          break;
-        
-        default:
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentChannel, filteredChannels, showKeyboardHelp]);
-
-  const toggleFavorite = async (channel) => {
-    const isFavorite = favorites.some(f => f.channel_id === channel.id);
-
-    try {
-      if (isFavorite) {
-        const fav = favorites.find(f => f.channel_id === channel.id);
-        await api.delete(`/favorites/${fav.id}`);
-        setFavorites(favorites.filter(f => f.id !== fav.id));
-      } else {
-        const response = await api.post('/favorites', {
-          playlist_id: parseInt(playlistId),
-          channel_id: channel.id,
-          channel_name: channel.name
-        });
-        setFavorites([...favorites, response.data.favorite]);
-      }
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-    }
-  };
-
-  const isFavorite = (channelId) => {
-    return favorites.some(f => f.channel_id === channelId);
-  };
+  // toggleFavorite and isFavorite are now provided by useFavorites hook
 
   if (loading) {
     console.log('📱 PlayerPage in loading state');
@@ -2325,7 +1745,7 @@ export default function PlayerPage() {
                               <Button
                                 onClick={() => {
                                   setVideoError(null);
-                                  setRetryCount(0);
+                                  retryCountRef.current = 0;
                                   // Force reload channel
                                   const current = currentChannel;
                                   setCurrentChannel(null);

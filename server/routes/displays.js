@@ -296,6 +296,75 @@ router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => 
 }));
 
 /**
+ * GET /api/displays/events/:token
+ * Server-Sent Events stream for real-time kiosk command delivery.
+ * Falls back gracefully: clients that can't connect revert to the 2s polling
+ * endpoint above.  The stream sends:
+ *   - "connected" event on open
+ *   - "command" event whenever a new unexecuted command exists
+ *   - "keepalive" comment every 25 s to prevent proxy timeouts
+ */
+const sseClients = new Map(); // token → Set<res>
+
+router.get('/events/:token', displayLimiter, asyncHandler(async (req, res) => {
+  const { token } = req.params;
+  const db = getDatabase();
+
+  const [displays] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);
+  if (displays.length === 0) {
+    return res.status(404).json({ success: false, error: 'Display not found' });
+  }
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // nginx
+  res.flushHeaders();
+
+  // Register client
+  if (!sseClients.has(token)) sseClients.set(token, new Set());
+  const clients = sseClients.get(token);
+  clients.add(res);
+
+  res.write('event: connected\ndata: {}\n\n');
+
+  // Keepalive every 25 s
+  const keepalive = setInterval(() => {
+    res.write(': keepalive\n\n');
+  }, 25_000);
+
+  // Send any currently pending commands immediately on connect
+  db.query(
+    'SELECT * FROM display_commands WHERE display_id = ? AND is_executed = FALSE ORDER BY created_at ASC',
+    [displays[0].id]
+  ).then(([cmds]) => {
+    if (cmds.length) {
+      res.write(`event: command\ndata: ${JSON.stringify({ commands: cmds })}\n\n`);
+    }
+  }).catch(() => {});
+
+  req.on('close', () => {
+    clearInterval(keepalive);
+    clients.delete(res);
+    if (clients.size === 0) sseClients.delete(token);
+  });
+}));
+
+/**
+ * Internal helper used by the command-creation route to push events to
+ * any connected SSE clients for a given display token.
+ */
+function pushCommandToSSE(token, commands) {
+  const clients = sseClients.get(token);
+  if (!clients || clients.size === 0) return;
+  const payload = `event: command\ndata: ${JSON.stringify({ commands })}\n\n`;
+  for (const res of clients) {
+    try { res.write(payload); } catch { /* client disconnected */ }
+  }
+}
+
+/**
  * PATCH /api/displays/commands/:id/execute
  * Mark command as executed (public endpoint for displays)
  */
