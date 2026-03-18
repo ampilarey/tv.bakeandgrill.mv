@@ -592,6 +592,18 @@ export default function PlayerPage() {
       video.addEventListener('loadedmetadata', storedHandlers.iosMetadataHandler);
       video.addEventListener('loadeddata', storedHandlers.iosDataHandler);
       video.addEventListener('playing', storedHandlers.iosPlayingHandler);
+
+      // timeupdate fires whenever playback position advances — proof the stream
+      // is running even if 'playing' didn't re-fire after a buffer gap.
+      // This clears any spinner left behind by the 'waiting' handler.
+      storedHandlers.iosTimeUpdateHandler = () => {
+        if (bufferingTimerRef.current) {
+          clearTimeout(bufferingTimerRef.current);
+          bufferingTimerRef.current = null;
+        }
+        setVideoLoading(false);
+      };
+      video.addEventListener('timeupdate', storedHandlers.iosTimeUpdateHandler);
       
       // Also try immediate play (might work on some iOS versions/situations)
       tryPlayWithFallback();
@@ -710,13 +722,13 @@ export default function PlayerPage() {
       
       const handleWaiting = () => {
         console.log('Video waiting for data');
-        // Debounce: only show loading spinner after 3s of sustained buffering.
-        // Normal HLS segment fetches resolve in < 3s; only genuinely stalled
-        // streams will trigger the spinner.
+        // Debounce: only show loading spinner after 5s of sustained buffering.
+        // Normal HLS segment fetches can take 2-4s on mobile; only genuinely
+        // stalled streams should trigger the spinner.
         if (!bufferingTimerRef.current) {
           bufferingTimerRef.current = setTimeout(() => {
             setVideoLoading(true);
-          }, 3000);
+          }, 5000);
         }
       };
       
@@ -737,7 +749,7 @@ export default function PlayerPage() {
         if (!bufferingTimerRef.current) {
           bufferingTimerRef.current = setTimeout(() => {
             setVideoLoading(true);
-          }, 3000);
+          }, 5000);
         }
       };
       
@@ -805,6 +817,7 @@ export default function PlayerPage() {
         if (storedHandlers.iosMetadataHandler) video.removeEventListener('loadedmetadata', storedHandlers.iosMetadataHandler);
         if (storedHandlers.iosDataHandler) video.removeEventListener('loadeddata', storedHandlers.iosDataHandler);
         if (storedHandlers.iosPlayingHandler) video.removeEventListener('playing', storedHandlers.iosPlayingHandler);
+        if (storedHandlers.iosTimeUpdateHandler) video.removeEventListener('timeupdate', storedHandlers.iosTimeUpdateHandler);
         video.src = '';
       };
       
@@ -1013,13 +1026,27 @@ export default function PlayerPage() {
         hasStartedPlaying = true;
         clearPlaybackTimeout();
         setVideoLoading(false);
-        // Clear error when video actually plays
         setVideoError(null);
       };
       video.addEventListener('playing', handlePlaying);
-      
+
+      // timeupdate = playback is actually progressing — clear any stale spinner
+      const handleTimeUpdate = () => {
+        if (bufferingTimerRef.current) {
+          clearTimeout(bufferingTimerRef.current);
+          bufferingTimerRef.current = null;
+        }
+        if (!hasStartedPlaying) {
+          hasStartedPlaying = true;
+          clearPlaybackTimeout();
+        }
+        setVideoLoading(false);
+      };
+      video.addEventListener('timeupdate', handleTimeUpdate);
+
       // Store handlers for cleanup
       storedHandlers.handlePlaying = handlePlaying;
+      storedHandlers.handleTimeUpdate = handleTimeUpdate;
       
       // Check video dimensions when metadata loads (to detect audio-only streams)
       const handleMetadata = () => {
@@ -1129,6 +1156,9 @@ export default function PlayerPage() {
         if (video) {
           if (storedHandlers.handlePlaying) {
             video.removeEventListener('playing', storedHandlers.handlePlaying);
+          }
+          if (storedHandlers.handleTimeUpdate) {
+            video.removeEventListener('timeupdate', storedHandlers.handleTimeUpdate);
           }
           if (storedHandlers.handleMetadata) {
             video.removeEventListener('loadedmetadata', storedHandlers.handleMetadata);
