@@ -210,13 +210,21 @@ export default function PlayerPage() {
 
   // (channel list, favorites, watch history, and filter logic are now in custom hooks)
 
-  // Safety valve: if videoLoading is stuck but the video is provably playing, clear it.
-  // Catches edge cases where the 'playing' / 'timeupdate' events don't fire reliably.
+  // Safety valve: if videoLoading is stuck but the video is provably ready/playing,
+  // force-clear it. This catches edge cases where 'playing'/'timeupdate' don't fire.
   useEffect(() => {
     if (!videoLoading) return;
     const checkInterval = setInterval(() => {
       const v = videoRef.current;
-      if (v && !v.paused && v.readyState >= 2 && v.currentTime > 0) {
+      if (!v) return;
+      // Clear spinner if:
+      //  a) time is advancing — definitive proof of active playback
+      //  b) browser has enough data to play (readyState >= 3 = HAVE_FUTURE_DATA)
+      //     and the video isn't paused — covers the "first segment loaded but
+      //     currentTime still 0" case on iOS native HLS.
+      const timeAdvancing = !v.paused && v.readyState >= 2 && v.currentTime > 0;
+      const hasEnoughData = !v.paused && v.readyState >= 3;
+      if (timeAdvancing || hasEnoughData) {
         setVideoLoading(false);
       }
     }, 1000);
@@ -731,8 +739,11 @@ export default function PlayerPage() {
       
       const handleWaiting = () => {
         console.log('Video waiting for data');
-        // Only show spinner if currentTime hasn't advanced — this distinguishes a
-        // genuine stall from a normal HLS segment gap where audio continues.
+        // Once playback has started, don't re-show the loading spinner during
+        // normal HLS segment loading. On iOS, audio often continues while the
+        // next video segment is fetched, and 'playing' doesn't always re-fire
+        // after the stall, leaving the spinner stuck permanently.
+        if (hasStartedPlaying) return;
         if (bufferingTimerRef.current) return;
         const timeAtWait = video.currentTime;
         bufferingTimerRef.current = setTimeout(() => {
@@ -757,6 +768,9 @@ export default function PlayerPage() {
       
       const handleStalled = () => {
         console.warn('Video stalled');
+        // Same reasoning as handleWaiting — once playing has started, stalls are
+        // normal HLS behaviour and should not re-trigger the loading overlay.
+        if (hasStartedPlaying) return;
         if (bufferingTimerRef.current) return;
         const timeAtStall = video.currentTime;
         bufferingTimerRef.current = setTimeout(() => {

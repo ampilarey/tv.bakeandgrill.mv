@@ -1,1 +1,0 @@
-import{j as r}from"./index-BRZvRAZE.js";function o({children:o,className:e="",hover:n=!1,onClick:s}){const t=n?"hover:bg-tv-bgHover hover:shadow-xl transition-all cursor-pointer":"",l=s?"cursor-pointer":"";return r.jsx("div",{className:`bg-tv-bgElevated rounded-xl p-6 border-2 border-tv-borderSubtle shadow-lg ${t} ${l} ${e}`,onClick:s,children:o})}export{o as C};
