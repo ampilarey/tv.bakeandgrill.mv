@@ -116,10 +116,8 @@ export default function PlayerPage() {
     };
   }, []);
 
-  const currentChannelIsHLS = currentChannel?.url
-    ? (() => { try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); } catch { return currentChannel.url.toLowerCase().includes('.m3u8'); } })()
-    : false;
-  const videoElementSrc = currentChannel && (!currentChannelIsHLS || isIOS) ? currentChannel.url : undefined;
+  // src is managed entirely by the useEffect via imperative video.src assignments.
+  // Setting src in JSX causes React re-renders to interfere with HLS.js MSE pipeline.
 
   // One-time device detection logging (only on mount)
   useEffect(() => {
@@ -206,6 +204,19 @@ export default function PlayerPage() {
   }, [channelIdFromUrl, channelNameFromUrl, channels, currentChannel]);
 
   // (channel list, favorites, watch history, and filter logic are now in custom hooks)
+
+  // Safety valve: if videoLoading is stuck but the video is provably playing, clear it.
+  // Catches edge cases where the 'playing' / 'timeupdate' events don't fire reliably.
+  useEffect(() => {
+    if (!videoLoading) return;
+    const checkInterval = setInterval(() => {
+      const v = videoRef.current;
+      if (v && !v.paused && v.readyState >= 2 && v.currentTime > 0) {
+        setVideoLoading(false);
+      }
+    }, 1000);
+    return () => clearInterval(checkInterval);
+  }, [videoLoading]);
 
   // Video player setup
   useEffect(() => {
@@ -341,11 +352,13 @@ export default function PlayerPage() {
         userAgent: navigator.userAgent
       });
       
-      // Clear previous source first
-      video.src = '';
-      video.load();
-      
-      // CRITICAL: Set iOS-specific attributes BEFORE setting source
+      // Single clean reset — three rapid load() calls previously caused an iOS
+      // state-machine race where audio recovered but video didn't.
+      video.pause();
+      video.removeAttribute('src');
+      video.load(); // one reset, then we set the new src below
+
+      // Set iOS-specific attributes BEFORE setting source
       video.controls = true;
       video.playsInline = true;
       video.setAttribute('playsinline', 'true');
@@ -353,12 +366,9 @@ export default function PlayerPage() {
       video.setAttribute('x-webkit-airplay', 'allow');
       video.preload = 'auto';
       video.autoplay = true;
-      
-      // Set new source - iOS native HLS handles redirects and CORS automatically
-      video.removeAttribute('src');
-      video.load();
+
+      // Set source — do NOT call load() again; setting src triggers load automatically
       video.src = currentChannel.url;
-      video.load(); // Force reload with new source
       
       console.log('📱 iOS Native HLS Setup:', {
         src: video.src,
@@ -722,14 +732,16 @@ export default function PlayerPage() {
       
       const handleWaiting = () => {
         console.log('Video waiting for data');
-        // Debounce: only show loading spinner after 5s of sustained buffering.
-        // Normal HLS segment fetches can take 2-4s on mobile; only genuinely
-        // stalled streams should trigger the spinner.
-        if (!bufferingTimerRef.current) {
-          bufferingTimerRef.current = setTimeout(() => {
+        // Only show spinner if currentTime hasn't advanced — this distinguishes a
+        // genuine stall from a normal HLS segment gap where audio continues.
+        if (bufferingTimerRef.current) return;
+        const timeAtWait = video.currentTime;
+        bufferingTimerRef.current = setTimeout(() => {
+          bufferingTimerRef.current = null;
+          if (video.currentTime === timeAtWait && !video.paused) {
             setVideoLoading(true);
-          }, 5000);
-        }
+          }
+        }, 5000);
       };
       
       const handlePlaying = () => {
@@ -746,11 +758,14 @@ export default function PlayerPage() {
       
       const handleStalled = () => {
         console.warn('Video stalled');
-        if (!bufferingTimerRef.current) {
-          bufferingTimerRef.current = setTimeout(() => {
+        if (bufferingTimerRef.current) return;
+        const timeAtStall = video.currentTime;
+        bufferingTimerRef.current = setTimeout(() => {
+          bufferingTimerRef.current = null;
+          if (video.currentTime === timeAtStall && !video.paused) {
             setVideoLoading(true);
-          }, 5000);
-        }
+          }
+        }, 5000);
       };
       
       const handleSuspend = () => {
@@ -894,32 +909,32 @@ export default function PlayerPage() {
       };
       
       const hls = new Hls({
-        enableWorker: !isMobile, // Disable worker on mobile to reduce memory usage
+        enableWorker: !isMobile,
         lowLatencyMode: false,
-        // Buffer settings - reduced for mobile
         maxBufferLength: isMobile ? 15 : 30,
         maxMaxBufferLength: isMobile ? 200 : 600,
-        maxBufferSize: isMobile ? 20 * 1000 * 1000 : 60 * 1000 * 1000, // 20MB on mobile
+        maxBufferSize: isMobile ? 20 * 1000 * 1000 : 60 * 1000 * 1000,
         maxBufferHole: 0.5,
         backBufferLength: isMobile ? 30 : 90,
-        // Mobile compatibility
         forceKeyFrameOnDiscontinuity: true,
         startFragPrefetch: true,
-        testBandwidth: false, // Disable bandwidth testing on mobile
-        // Force video to decode properly on mobile
+        // Enable bandwidth measurement so ABR can pick the right quality level
+        testBandwidth: true,
         autoStartLoad: true,
         startPosition: -1,
         debug: false,
-        // Prevent audio-only issues
-        capLevelToPlayerSize: false,
-        // Better video quality selection for mobile
-        abrEwmaDefaultEstimate: isMobile ? 2000000 : 500000, // Higher default for mobile (better connection)
+        // Cap quality to what the player viewport can actually render — prevents
+        // mobile from selecting 1080p/4K levels the GPU can't decode in real-time
+        capLevelToPlayerSize: true,
+        // Start mobile at the LOWEST quality level, then let ABR step up.
+        // The old value (2000000 on mobile) was backwards — it started at a
+        // higher estimate than desktop (500000), causing mobile to pick too-high levels.
+        startLevel: isMobile ? 0 : -1,
+        abrEwmaDefaultEstimate: isMobile ? 500000 : 1000000,
         abrBandWidthFactor: 0.95,
         abrBandWidthUpFactor: 0.7,
-        // Mobile-specific optimizations
         fragLoadingTimeOut: isMobile ? 15000 : 20000,
         manifestLoadingTimeOut: isMobile ? 15000 : 20000,
-        // Reduce loading for mobile
         maxLoadingDelay: isMobile ? 2 : 4,
         maxStarvationDelay: isMobile ? 4 : 8
       });
@@ -947,7 +962,41 @@ export default function PlayerPage() {
           audioTracks: data.audioTracks?.length || 0,
           subtitles: data.subtitles?.length || 0
         });
-        
+
+        // On mobile, filter out H.265/HEVC and AV1 levels — Android Chrome does not
+        // support these via MSE. Audio (AAC) decodes fine but video never renders,
+        // causing the "audio plays, video stuck on spinner" symptom.
+        if (isMobile && data.levels?.length) {
+          const isHevc = (codec) => {
+            const c = (codec || '').toLowerCase();
+            return c.includes('hev') || c.includes('h265') || c.includes('av01');
+          };
+          const h264Indices = data.levels
+            .map((l, i) => ({ l, i }))
+            .filter(({ l }) => !isHevc(l.videoCodec))
+            .map(({ i }) => i);
+
+          if (h264Indices.length === 0) {
+            // Every level is HEVC/AV1 — cannot play on this device
+            setVideoError(
+              'This channel uses H.265 (HEVC) video which is not supported on your mobile browser. ' +
+              'Please try this channel on a desktop browser.'
+            );
+            setVideoLoading(false);
+            clearPlaybackTimeout();
+            return;
+          }
+          if (h264Indices.length < data.levels.length) {
+            console.warn(`📱 Mobile: keeping ${h264Indices.length}/${data.levels.length} H.264 levels (removed HEVC/AV1)`);
+            // Remove unsupported levels from highest index downward to avoid index shifts
+            data.levels
+              .map((_, i) => i)
+              .filter(i => !h264Indices.includes(i))
+              .reverse()
+              .forEach(i => hls.removeLevel(i));
+          }
+        }
+
         // Check for video codec compatibility - but don't block if metadata is missing
         let hasVideoTrack = false;
         let hasVideoMetadata = false;
@@ -961,34 +1010,14 @@ export default function PlayerPage() {
               videoCodec: level.videoCodec,
               audioCodec: level.audioCodec
             });
-            
-            // Track if we have any metadata at all
-            if (level.width || level.height || level.videoCodec) {
-              hasVideoMetadata = true;
-            }
-            
-            // Check if this level has video (require width/height OR videoCodec)
-            if ((level.width > 0 && level.height > 0) || level.videoCodec) {
-              hasVideoTrack = true;
-              
-              // Warn about potentially unsupported codecs (but don't block)
-              if (level.videoCodec && (level.videoCodec.toLowerCase().includes('hev') || 
-                  level.videoCodec.toLowerCase().includes('h265'))) {
-                console.warn('⚠️ H.265/HEVC codec detected - may not work on all devices');
-                // Don't set error immediately - let it try to play first
-              }
-            }
+            if (level.width || level.height || level.videoCodec) hasVideoMetadata = true;
+            if ((level.width > 0 && level.height > 0) || level.videoCodec) hasVideoTrack = true;
           });
-          
-          // Only warn if we have metadata and no video tracks found
-          // If no metadata, assume video exists and let playback attempt
           if (hasVideoMetadata && !hasVideoTrack) {
             console.warn('⚠️ No video tracks found in manifest metadata - may be audio-only');
-            // Don't set error immediately - let playback attempt first
           }
         } else {
           console.warn('⚠️ No levels found in manifest - stream may be incompatible');
-          // Don't block - let it try to play
         }
         
         // Clear previous errors when manifest is parsed successfully
@@ -1706,8 +1735,6 @@ export default function PlayerPage() {
                         x-webkit-airplay="allow"
                         preload="auto"
                         muted={false}
-                        src={videoElementSrc ?? undefined}
-                        key={currentChannel?.id || 'no-channel'}
                         style={{ 
                           width: '100%',
                           height: '100%',
