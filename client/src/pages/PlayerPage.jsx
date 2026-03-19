@@ -72,6 +72,9 @@ export default function PlayerPage() {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const bufferingTimerRef = useRef(null);
+  // Tracks the latest dimension-check setTimeout so it can be cancelled when
+  // the user switches channels (prevents stale callbacks clobbering new state).
+  const dimensionCheckTimerRef = useRef(null);
   const navigate = useNavigate();
   const { logout } = useAuth();
 
@@ -105,6 +108,8 @@ export default function PlayerPage() {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
         }
+        clearTimeout(dimensionCheckTimerRef.current);
+        dimensionCheckTimerRef.current = null;
         if (hlsRef.current) {
           console.log('🧹 Destroying HLS.js on unmount');
           hlsRef.current.destroy();
@@ -232,6 +237,9 @@ export default function PlayerPage() {
       clearTimeout(bufferingTimerRef.current);
       bufferingTimerRef.current = null;
     }
+    // Cancel any pending dimension-check callbacks from the previous channel
+    clearTimeout(dimensionCheckTimerRef.current);
+    dimensionCheckTimerRef.current = null;
 
     const video = videoRef.current;
     const isHLS = (() => { try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); } catch { return currentChannel.url?.toLowerCase().includes('.m3u8') ?? false; } })();
@@ -488,14 +496,14 @@ export default function PlayerPage() {
           if (video.duration === Infinity) {
             console.warn('⚠️ iOS: Stream may be live/HLS - waiting for canplay...');
             // Check again after a short delay
-            setTimeout(() => {
+            dimensionCheckTimerRef.current = setTimeout(() => {
               if (video.videoWidth === 0 && video.videoHeight === 0 && video.readyState >= 2) {
                 console.error('❌ iOS: No video dimensions detected - audio-only or unsupported codec');
                 setVideoError('This stream appears to be audio-only or uses an unsupported video codec. The video track may not be compatible with your device.');
                 setVideoLoading(false);
                 clearPlaybackTimeout();
               }
-            }, 3000); // Wait 3 seconds for metadata
+            }, 3000);
           } else {
             // Not a live stream but no dimensions - likely audio-only
             console.error('❌ iOS: No video dimensions - this appears to be audio-only');
@@ -560,22 +568,13 @@ export default function PlayerPage() {
             }
             
             if (attempt < maxAttempts) {
-              setTimeout(() => {
+              dimensionCheckTimerRef.current = setTimeout(() => {
                 checkVideoDimensions(attempt + 1, maxAttempts);
-              }, 2000); // Check every 2 seconds
+              }, 2000);
             } else {
               // After 10 seconds (5 attempts * 2 seconds), confirm it's audio-only
               if (video.videoWidth === 0 && video.videoHeight === 0 && video.readyState >= 2) {
                 console.error('❌ iOS: Confirmed after', maxAttempts, 'checks - no video dimensions');
-                console.error('Video state:', {
-                  videoWidth: video.videoWidth,
-                  videoHeight: video.videoHeight,
-                  readyState: video.readyState,
-                  duration: video.duration,
-                  src: video.currentSrc,
-                  paused: video.paused,
-                  muted: video.muted
-                });
                 setVideoError('This stream appears to be audio-only or uses an unsupported video codec. No video is available on your device.');
                 setVideoLoading(false);
               }
@@ -1031,17 +1030,16 @@ export default function PlayerPage() {
           const metadataCheck = hasVideoMetadata;
           const trackCheck = hasVideoTrack;
           const checkVideoDimensions = () => {
-            setTimeout(() => {
+            dimensionCheckTimerRef.current = setTimeout(() => {
               if (video.videoWidth === 0 && video.videoHeight === 0) {
-                // Double-check by looking at actual video element state
-                if (video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+                if (video.readyState >= 2) {
                   console.warn('⚠️ Video has no dimensions after metadata loaded - may be audio-only');
                   if (metadataCheck && !trackCheck) {
                     setVideoError('This stream appears to be audio-only or using an incompatible format.');
                   }
                 }
               }
-            }, 3000); // Wait 3 seconds for metadata to load
+            }, 3000);
           };
           // Only check dimensions if it's not an autoplay policy error
           if (!err.message?.includes('play() request') && !err.name?.includes('NotAllowedError')) {
@@ -1120,9 +1118,11 @@ export default function PlayerPage() {
                 retryCountRef.current += 1;
                 setVideoError('Network error. Retrying...');
                 setTimeout(() => {
-                  hls.startLoad();
-                  setVideoError(null);
-                  startPlaybackTimeout();
+                  if (hlsRef.current) {
+                    hlsRef.current.startLoad();
+                    setVideoError(null);
+                    startPlaybackTimeout();
+                  }
                 }, 1000);
               } else {
                 setVideoError('Network error. Unable to load stream after 3 attempts.');
@@ -1134,9 +1134,11 @@ export default function PlayerPage() {
                 retryCountRef.current += 1;
                 setVideoError('Media error. Retrying...');
                 setTimeout(() => {
-                  hls.recoverMediaError();
-                  setVideoError(null);
-                  startPlaybackTimeout();
+                  if (hlsRef.current) {
+                    hlsRef.current.recoverMediaError();
+                    setVideoError(null);
+                    startPlaybackTimeout();
+                  }
                 }, 1000);
               } else {
                 setVideoError('Media error. This stream may not be compatible.');
@@ -1445,7 +1447,8 @@ export default function PlayerPage() {
   useEffect(() => {
     if (!videoRef.current) return;
     
-    const videoContainer = videoRef.current.parentElement;
+    const videoContainer = videoRef.current?.parentElement;
+    if (!videoContainer) return;
     let touchStartX = 0;
     let touchEndX = 0;
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Spinner from './components/common/Spinner';
 import api from './services/api';
@@ -185,7 +185,14 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/display" element={<KioskModePage />} />
+        <Route
+          path="/display"
+          element={
+            <ErrorBoundary fallbackMessage="" onReset={() => window.location.reload()} FallbackComponent={KioskErrorFallback}>
+              <KioskModePage />
+            </ErrorBoundary>
+          }
+        />
         <Route path="/pair" element={<DisplayPairingPage />} />
         
         {/* First-Time Setup (Semi-protected - requires auth but not full access) */}
@@ -417,16 +424,42 @@ function AnimatedRoutes() {
   );
 }
 
+// Wrapper that keys the ErrorBoundary to the current route pathname so
+// navigating away from a crashed page automatically resets the boundary.
+function LocationKeyedBoundary() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <ErrorBoundary key={location.pathname} onReset={() => navigate('/dashboard')}>
+      <React.Suspense fallback={<PageLoader />}>
+        <AnimatedRoutes />
+      </React.Suspense>
+      <BottomNav />
+    </ErrorBoundary>
+  );
+}
+
+// Simple full-screen fallback for kiosk display crashes (customer-facing TV).
+// Auto-reloads after 10 seconds so kiosk screens self-heal without staff input.
+function KioskErrorFallback({ onReset }) {
+  React.useEffect(() => {
+    const t = setTimeout(() => { onReset?.(); window.location.reload(); }, 10_000);
+    return () => clearTimeout(t);
+  }, [onReset]);
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a', color: '#fff', fontFamily: 'sans-serif', gap: 16 }}>
+      <div style={{ fontSize: 48 }}>📺</div>
+      <div style={{ fontSize: 20, fontWeight: 600 }}>Display temporarily unavailable</div>
+      <div style={{ fontSize: 14, color: '#888' }}>Reconnecting automatically…</div>
+    </div>
+  );
+}
+
 // Router Component
 function AppRouter() {
   return (
     <Router>
-      <ErrorBoundary>
-      <React.Suspense fallback={<PageLoader />}>
-      <AnimatedRoutes />
-      </React.Suspense>
-      <BottomNav />
-      </ErrorBoundary>
+      <LocationKeyedBoundary />
     </Router>
   );
 }

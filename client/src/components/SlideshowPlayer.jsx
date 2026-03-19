@@ -116,6 +116,16 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
   // Video end handler
   const handleVideoEnd = useCallback(() => next(), [next]);
 
+  // Fallback timeout for video items: if the video never fires onEnded (e.g.
+  // autoplay is blocked by the browser on mobile), advance after the item's
+  // configured duration + 5 s buffer (or 65 s if no duration is set).
+  useEffect(() => {
+    if (!item || item.type !== 'video') return;
+    const fallbackMs = ((item.duration || 60) + 5) * 1000;
+    const timeout = setTimeout(next, fallbackMs);
+    return () => clearTimeout(timeout);
+  }, [item, next]);
+
   const handleError = useCallback(() => {
     retryRef.current += 1;
     if (retryRef.current <= 3) {
@@ -138,7 +148,7 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-black">
-      <AnimatePresence mode="crossfade">
+      <AnimatePresence mode="sync">
         {item?.type === 'image' && (
           <motion.img
             key={`img-${item.id}`}

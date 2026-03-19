@@ -97,6 +97,10 @@ export function useChannelList({ playlistId, favorites }) {
     localStorage.removeItem('searchHistory');
   }, []);
 
+  // Clear any pending debounce when the hook unmounts to prevent state updates
+  // on an already-unmounted component.
+  useEffect(() => () => clearTimeout(searchDebounceRef.current), []);
+
   const loadMore = useCallback(() => setDisplayedChannels(prev => prev + 50), []);
 
   return {

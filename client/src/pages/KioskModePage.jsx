@@ -127,6 +127,7 @@ export default function KioskModePage() {
   useEffect(() => () => {
     clearInterval(rebootTimerRef.current);
     clearTimeout(failoverTimerRef.current);
+    clearInterval(retryCountdownRef.current);
   }, []);
 
   // Keep verifyDisplay in a ref so the command polling effect can call the
@@ -526,7 +527,8 @@ export default function KioskModePage() {
         video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
       } else if (isHLS && Hls.isSupported()) {
         // HLS.js
-        const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
+        const isMobileKiosk = /Android|iPhone|iPad/i.test(navigator.userAgent);
+        const hls = new Hls({ enableWorker: !isMobileKiosk, lowLatencyMode: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
         hlsRef.current = hls;
         hls.loadSource(currentChannel.url);
         hls.attachMedia(video);
@@ -536,7 +538,11 @@ export default function KioskModePage() {
           video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
         });
         hls.on(Hls.Events.ERROR, (_, d) => {
-          if (d.fatal && retryCount < maxRetries) { retryCount++; setTimeout(() => setupPlayer(), 5_000); }
+          if (d.fatal && retryCount < maxRetries) {
+            retryCount++;
+            clearRDT();
+            retryDelayTimeout = setTimeout(() => setupPlayer(), 5_000);
+          }
         });
       } else {
         // Native MP4 / RTSP fallback

@@ -29,6 +29,12 @@ class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
+      // Allow callers to supply a fully custom fallback component.
+      const { FallbackComponent } = this.props;
+      if (FallbackComponent) {
+        return <FallbackComponent error={this.state.error} onReset={this.handleReset} />;
+      }
+
       return (
         <div className="min-h-screen bg-tv-bg flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-tv-bgElevated rounded-2xl shadow-2xl border-2 border-tv-borderSubtle p-8">
