@@ -39,6 +39,9 @@ function enrichChannel(ch, health, override, playlist, req) {
     failure_message: h.failure_message ?? null,
     failure_stage: h.failure_stage ?? null,
     last_device_type: h.last_device_type ?? null,
+    last_client_failure_reason: h.last_client_failure_reason ?? null,
+    last_client_failure_stage: h.last_client_failure_stage ?? null,
+    client_failure_count: h.client_failure_count ?? 0,
     playable_ios: h.playable_ios ?? null,
     playable_android_chrome: h.playable_android_chrome ?? null,
     playable_desktop_chrome: h.playable_desktop_chrome ?? null,
@@ -90,7 +93,8 @@ async function loadHealthAndOverrides(playlistId) {
   try {
     const [healthRows] = await db.query(
       `SELECT url_hash, is_live, last_checked, failure_reason_code, failure_message, failure_stage,
-              last_device_type, playable_ios, playable_android_chrome, playable_desktop_chrome,
+              last_device_type, last_client_failure_reason, last_client_failure_stage, client_failure_count,
+              playable_ios, playable_android_chrome, playable_desktop_chrome,
               playable_tv_browser, needs_proxy, is_drm, manifest_reachable, first_segment_reachable, is_http
        FROM channel_health WHERE playlist_id = ?`,
       [playlistId]

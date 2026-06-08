@@ -231,13 +231,14 @@ async function head(url, options = {}) {
 }
 
 /**
- * Stream upstream response to an Express res with SSRF checks, redirect following, and byte cap.
+ * Stream upstream response to an Express res with SSRF checks, redirect following, and optional byte cap.
+ * Does not buffer the full body — pipes directly to res.
  */
 function streamRange(originUrl, options = {}) {
   const {
     headers = {},
     rangeHeader = null,
-    maxBytes = DEFAULT_MAX_BYTES,
+    maxBytes = 0,
     timeout = 10000,
     res,
   } = options;
@@ -278,33 +279,41 @@ function streamRange(originUrl, options = {}) {
           return;
         }
 
-        if (upstream.statusCode < 200 || upstream.statusCode >= 400) {
+        const status = upstream.statusCode;
+        const okStatus = status === 206 || (status >= 200 && status < 300);
+        if (!okStatus) {
           upstream.resume();
-          reject(Object.assign(new Error(`Upstream status ${upstream.statusCode}`), {
-            status: upstream.statusCode,
+          reject(Object.assign(new Error(`Upstream status ${status}`), {
+            status,
+            code: 'HTTP_ERROR',
           }));
           return;
         }
 
         const contentLength = parseInt(upstream.headers['content-length'] || '0', 10);
-        if (contentLength > maxBytes) {
+        if (maxBytes > 0 && contentLength > maxBytes) {
           upstream.resume();
           reject(Object.assign(new Error('Response exceeds max size'), { code: 'MAX_BYTES_EXCEEDED' }));
           return;
         }
 
-        res.status(upstream.statusCode);
+        res.status(status);
         if (upstream.headers['content-type']) res.set('Content-Type', upstream.headers['content-type']);
         if (upstream.headers['content-length']) res.set('Content-Length', upstream.headers['content-length']);
         if (upstream.headers['content-range']) res.set('Content-Range', upstream.headers['content-range']);
         if (upstream.headers['accept-ranges']) res.set('Accept-Ranges', upstream.headers['accept-ranges']);
         else res.set('Accept-Ranges', 'bytes');
-        res.set('Cache-Control', 'no-store');
+        if (upstream.headers['cache-control']) res.set('Cache-Control', upstream.headers['cache-control']);
+        else res.set('Cache-Control', 'no-store');
 
         let totalBytes = 0;
+        let aborted = false;
+
         upstream.on('data', (chunk) => {
+          if (aborted || maxBytes <= 0) return;
           totalBytes += chunk.length;
           if (totalBytes > maxBytes) {
+            aborted = true;
             upstream.destroy();
             req.destroy();
             if (!res.headersSent) {
@@ -312,16 +321,27 @@ function streamRange(originUrl, options = {}) {
             } else {
               res.destroy();
             }
-            return;
           }
         });
 
         upstream.pipe(res);
-        upstream.on('end', () => resolve({ status: upstream.statusCode, finalUrl: currentUrl }));
-        upstream.on('error', reject);
+
+        res.on('finish', () => {
+          if (!aborted) resolve({ status, finalUrl: currentUrl });
+        });
+
+        upstream.on('error', (err) => {
+          if (!aborted) reject(err);
+        });
+
+        res.on('error', (err) => {
+          if (!aborted) reject(err);
+        });
       });
 
-      req.on('error', reject);
+      req.on('error', (err) => {
+        reject(Object.assign(err, { code: err.code || 'PROXY_RUNTIME_ERROR' }));
+      });
       req.on('timeout', () => {
         req.destroy();
         reject(Object.assign(new Error('Request timeout'), { code: 'ECONNABORTED' }));

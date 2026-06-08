@@ -2,6 +2,7 @@ const { URL } = require('url');
 
 const URI_ATTR_TAGS = [
   '#EXT-X-KEY:',
+  '#EXT-X-SESSION-KEY:',
   '#EXT-X-MAP:',
   '#EXT-X-MEDIA:',
   '#EXT-X-I-FRAME-STREAM-INF:',
@@ -163,7 +164,7 @@ function rewriteTagUriAttributes(line, baseUrl, rewriteFn) {
     if (!trimmed.startsWith(prefix)) continue;
     const attrStr = trimmed.substring(prefix.length);
 
-    if (prefix === '#EXT-X-KEY:') {
+    if (prefix === '#EXT-X-KEY:' || prefix === '#EXT-X-SESSION-KEY:') {
       const attrs = parseAttributes(attrStr);
       const method = (attrs.METHOD || 'NONE').toUpperCase();
       if (method === 'NONE') return line;
@@ -208,6 +209,12 @@ function rewriteManifest(body, baseUrl, rewriteFn) {
     }
 
     if (trimmed.startsWith('#EXT-X-STREAM-INF:')) {
+      isNextUri = true;
+      out.push(line);
+      continue;
+    }
+
+    if (trimmed.startsWith('#EXT-X-I-FRAME-STREAM-INF:') && !/URI=/i.test(trimmed)) {
       isNextUri = true;
       out.push(line);
       continue;

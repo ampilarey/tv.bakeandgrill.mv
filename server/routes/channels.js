@@ -158,42 +158,36 @@ router.post('/report-failure', asyncHandler(async (req, res) => {
   const hash = urlHash(url);
   const db = getDatabase();
   const safeReason = reasonCode && REASON_CODES.has(reasonCode) ? reasonCode : 'UNKNOWN_ERROR';
-  const baseMessage = REASON_MESSAGES[safeReason] || REASON_MESSAGES.UNKNOWN_ERROR;
-  const failureMessage = failureStage ? `${baseMessage} (${failureStage})` : baseMessage;
   const safeStage = failureStage ? String(failureStage).slice(0, 64) : null;
   const safeDevice = deviceType ? String(deviceType).slice(0, 32) : null;
 
   try {
     await db.query(
       `INSERT INTO channel_health
-         (url_hash, playlist_id, url, channel_name, is_live, last_checked,
-          consecutive_failures, failure_reason_code, failure_message, failure_stage, last_device_type)
-       VALUES (?, ?, ?, ?, 0, NOW(), 1, ?, ?, ?, ?)
+         (url_hash, playlist_id, url, channel_name, last_checked,
+          last_client_failure_reason, last_client_failure_device, last_client_failure_stage,
+          client_failure_count, last_device_type)
+       VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, 1, ?)
        ON DUPLICATE KEY UPDATE
-         consecutive_failures = consecutive_failures + 1,
-         is_live = IF(consecutive_failures + 1 >= 2, 0, is_live),
          last_checked = NOW(),
-         failure_reason_code = ?,
-         failure_message = COALESCE(?, failure_message),
-         failure_stage = COALESCE(?, failure_stage),
-         last_device_type = COALESCE(?, last_device_type)`,
+         last_client_failure_reason = VALUES(last_client_failure_reason),
+         last_client_failure_device = VALUES(last_client_failure_device),
+         last_client_failure_stage = VALUES(last_client_failure_stage),
+         client_failure_count = client_failure_count + 1,
+         last_device_type = COALESCE(VALUES(last_device_type), last_device_type)`,
       [
         hash,
         parseInt(playlistId, 10),
         url,
         channelName || null,
         safeReason,
-        failureMessage,
-        safeStage,
         safeDevice,
-        safeReason,
-        failureMessage,
         safeStage,
         safeDevice,
       ]
     );
   } catch (err) {
-    if (err.code !== 'ER_NO_SUCH_TABLE') {
+    if (err.code !== 'ER_NO_SUCH_TABLE' && err.code !== 'ER_BAD_FIELD_ERROR') {
       console.error('[channels] report-failure DB error:', err.message);
     }
   }
@@ -242,6 +236,8 @@ router.get('/health-report', requireAdmin, asyncHandler(async (req, res) => {
     `SELECT url_hash, channel_name, url, is_live, last_checked,
             consecutive_failures, last_seen_live,
             failure_reason_code, failure_message, failure_stage,
+            last_client_failure_reason, last_client_failure_device, last_client_failure_stage,
+            client_failure_count,
             playable_ios, playable_android_chrome, playable_desktop_chrome, playable_tv_browser,
             manifest_reachable, first_segment_reachable, needs_proxy, is_drm,
             status_code, content_type, codec_video, codec_audio

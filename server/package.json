@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "test:stream": "node scripts/test-stream-proxy.js",
     "test:display": "node scripts/test-display-kiosk.js",
-    "test:media": "node scripts/test-media-admin.js"
+    "test:media": "node scripts/test-media-admin.js",
+    "test:playback": "node scripts/test-playback-stall.js"
   },
   "keywords": [
     "iptv",

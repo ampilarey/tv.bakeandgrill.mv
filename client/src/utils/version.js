@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.2.5'; // Admin media management production fix
+export const APP_VERSION = '1.2.6'; // Playback stall fix — proxy segments, iOS recovery, client failure separation
 
 export function checkVersion() {
   try {

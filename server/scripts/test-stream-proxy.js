@@ -60,6 +60,83 @@ function testManifestRewrite() {
   const mediaOut = rewriteManifest(media, 'https://cdn.example.com/live/variant.m3u8', rewriteFn);
   assert('media segment URL rewritten', mediaOut.includes('/api/stream/ch1/seg?token=TEST'));
   assert('media segment absolute path resolved', mediaOut.includes(encodeURIComponent('https://cdn.example.com/live/seg001.ts')));
+
+  const withMap = [
+    '#EXTM3U',
+    '#EXT-X-VERSION:3',
+    '#EXT-X-MAP:URI="init.mp4"',
+    '#EXTINF:6.0,',
+    'seg001.m4s',
+  ].join('\n');
+  const mapOut = rewriteManifest(withMap, 'https://cdn.example.com/live/stream.m3u8', rewriteFn);
+  assert('EXT-X-MAP URI rewritten', mapOut.includes(encodeURIComponent('https://cdn.example.com/live/init.mp4')));
+
+  const withKey = [
+    '#EXTM3U',
+    '#EXT-X-KEY:METHOD=AES-128,URI="key.bin"',
+    '#EXTINF:6.0,',
+    'seg001.ts',
+  ].join('\n');
+  const keyOut = rewriteManifest(withKey, 'https://cdn.example.com/live/stream.m3u8', rewriteFn);
+  assert('EXT-X-KEY URI rewritten', keyOut.includes(encodeURIComponent('https://cdn.example.com/live/key.bin')));
+
+  const withIframe = [
+    '#EXTM3U',
+    '#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=500000',
+    'iframe.m3u8',
+  ].join('\n');
+  const iframeOut = rewriteManifest(withIframe, 'https://cdn.example.com/live/master.m3u8', rewriteFn);
+  assert('EXT-X-I-FRAME-STREAM-INF next-line URI rewritten', iframeOut.includes(encodeURIComponent('https://cdn.example.com/live/iframe.m3u8')));
+}
+
+async function testStreamRangeSecurity() {
+  console.log('\nstreamRange security');
+  const { PassThrough } = require('stream');
+  const out = new PassThrough();
+  const expressRes = Object.assign(out, {
+    statusCode: null,
+    headers: {},
+    status(code) { this.statusCode = code; return this; },
+    set(name, val) { this.headers[name.toLowerCase()] = val; },
+    get headersSent() { return this.statusCode != null; },
+  });
+
+  try {
+    await streamRange('http://127.0.0.1/seg.ts', { maxBytes: 1024, timeout: 2000, res: expressRes });
+    assert('streamRange blocks localhost (SSRF)', false);
+  } catch (err) {
+    assert('streamRange blocks localhost (SSRF)', /private|reserved/i.test(err.message));
+  }
+
+  const segUrl = process.env.TEST_SEGMENT_URL;
+  if (!segUrl) {
+    console.log('  ⏭  Range 206 test skipped (set TEST_SEGMENT_URL to a public segment URL)');
+    return;
+  }
+
+  const out2 = new PassThrough();
+  const collected = [];
+  out2.on('data', (c) => collected.push(c));
+  const expressRes2 = Object.assign(out2, {
+    statusCode: null,
+    headers: {},
+    status(code) { this.statusCode = code; return this; },
+    set(name, val) { this.headers[name.toLowerCase()] = val; },
+    get headersSent() { return this.statusCode != null; },
+  });
+
+  try {
+    const result = await streamRange(segUrl, {
+      rangeHeader: 'bytes=0-1023',
+      maxBytes: 52428800,
+      timeout: 15000,
+      res: expressRes2,
+    });
+    assert('TEST_SEGMENT_URL returns 200/206', result.status === 200 || result.status === 206);
+    assert('TEST_SEGMENT_URL body non-empty', Buffer.concat(collected).length > 0);
+  } catch (err) {
+    assert(`TEST_SEGMENT_URL streamRange: ${err.message}`, false);
+  }
 }
 
 async function testIntegrationOptional() {
@@ -99,6 +176,7 @@ async function run() {
   testHttpClientExports();
   testManifestRewrite();
   testStreamTokenIssue();
+  await testStreamRangeSecurity();
   await testIntegrationOptional();
 
   console.log(`\n${passed} passed, ${failed} failed\n`);

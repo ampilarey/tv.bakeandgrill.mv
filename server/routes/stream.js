@@ -1,5 +1,5 @@
 const express = require('express');
-const { fetch, streamRange } = require('../utils/httpClient');
+const { fetch, streamRange, redactUrl } = require('../utils/httpClient');
 const { verifyToken: verifyStreamToken, issueStreamToken } = require('../utils/streamToken');
 const { rewriteManifest, isHlsManifestContent } = require('../utils/hlsManifest');
 const { resolveChannel } = require('../utils/channelResolver');
@@ -10,7 +10,7 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const router = express.Router();
 
 const PROXY_TIMEOUT_MS = parseInt(process.env.STREAM_PROXY_TIMEOUT_MS || '15000', 10);
-const SEGMENT_MAX_BYTES = parseInt(process.env.SEGMENT_MAX_BYTES || '10485760', 10);
+const SEGMENT_MAX_BYTES = parseInt(process.env.SEGMENT_MAX_BYTES || '52428800', 10);
 const KEY_MAX_BYTES = parseInt(process.env.KEY_MAX_BYTES || '65536', 10);
 
 function buildHeaders(channel) {
@@ -157,9 +157,24 @@ router.get('/:channelId/seg', asyncHandler(async (req, res) => {
       res,
     });
   } catch (err) {
-    console.warn('[StreamProxy] Segment stream failed');
+    console.warn('[StreamProxy] Segment failed', {
+      channelId,
+      playlistId: payload.playlistId,
+      statusCode: err.status,
+      code: err.code,
+      url: redactUrl(segmentUrl),
+    });
     if (!res.headersSent) {
-      res.status(502).json({ success: false, error: 'Failed to fetch segment', code: 'SEGMENT_FETCH_FAILED' });
+      const code = err.code === 'MAX_BYTES_EXCEEDED'
+        ? 'MAX_BYTES_EXCEEDED'
+        : err.code === 'PROXY_RUNTIME_ERROR' || err.code === 'ECONNABORTED'
+          ? 'PROXY_RUNTIME_ERROR'
+          : 'SEGMENT_FETCH_FAILED';
+      res.status(502).json({
+        success: false,
+        error: 'Failed to fetch segment',
+        code,
+      });
     }
   }
 }));

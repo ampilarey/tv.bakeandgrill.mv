@@ -14,6 +14,7 @@ const REASON_CODES = new Set([
   'INIT_MAP_FAILED', 'ENCRYPTED_KEY_FETCH_FAILED', 'UNSUPPORTED_CODEC',
   'UNSUPPORTED_AUDIO', 'GEO_BLOCKED_OR_FORBIDDEN', 'EXPIRED_URL', 'REQUIRES_REFERRER',
   'REQUIRES_USER_AGENT', 'DRM_OR_PROTECTED_STREAM', 'PROXY_REQUIRED', 'RATE_LIMITED',
+  'PLAYBACK_STALLED', 'SEGMENT_FETCH_FAILED', 'PROXY_RUNTIME_ERROR', 'PLAYBACK_START_TIMEOUT',
   'UNKNOWN_ERROR',
 ]);
 
@@ -38,6 +39,10 @@ const REASON_MESSAGES = {
   DRM_OR_PROTECTED_STREAM: 'Stream blocked',
   PROXY_REQUIRED: 'HTTP stream blocked',
   RATE_LIMITED: 'Stream offline',
+  PLAYBACK_STALLED: 'Playback stalled while loading video segments',
+  SEGMENT_FETCH_FAILED: 'Stream started but next video segment failed',
+  PROXY_RUNTIME_ERROR: 'Stream proxy failed',
+  PLAYBACK_START_TIMEOUT: 'Playback did not start in time — tap play to retry',
   UNKNOWN_ERROR: 'Stream offline',
 };
 

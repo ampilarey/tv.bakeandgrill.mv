@@ -4,6 +4,7 @@
 import api from '../services/api';
 
 export const PLAYBACK_TIMEOUT_MS = 13000;
+export const PLAYBACK_STALL_RETRY_MS = 8000;
 
 export function getStreamUrl(channel) {
   if (!channel) return null;
@@ -17,6 +18,11 @@ export function isHlsStream(url) {
   } catch {
     return url.toLowerCase().includes('.m3u8');
   }
+}
+
+export function isProxyStreamUrl(url) {
+  if (!url) return false;
+  return url.includes('/api/stream/');
 }
 
 export function getPrePlayError(channel, isIOS) {
@@ -44,7 +50,8 @@ export function getPrePlayError(channel, isIOS) {
 
 const REASON_MESSAGES = {
   OFFLINE: 'Stream offline',
-  TIMEOUT: 'Stream offline',
+  TIMEOUT: 'Playback did not start in time — tap play to retry',
+  PLAYBACK_START_TIMEOUT: 'Playback did not start in time — tap play to retry',
   HTTP_ERROR: 'Stream offline',
   REDIRECT_ERROR: 'Stream offline',
   MIXED_CONTENT_HTTP: 'HTTP stream blocked',
@@ -63,42 +70,49 @@ const REASON_MESSAGES = {
   DRM_OR_PROTECTED_STREAM: 'Stream blocked',
   PROXY_REQUIRED: 'HTTP stream blocked',
   RATE_LIMITED: 'Stream offline',
+  PLAYBACK_STALLED: 'Playback stalled while loading video segments',
+  SEGMENT_FETCH_FAILED: 'Stream started but next video segment failed',
+  PROXY_RUNTIME_ERROR: 'Stream proxy failed',
   UNKNOWN_ERROR: 'Stream offline',
 };
 
 export function mapPlaybackError({ reasonCode, mediaError, hlsError, timedOut, channel }) {
+  if (timedOut) return REASON_MESSAGES.PLAYBACK_START_TIMEOUT;
   if (reasonCode && REASON_MESSAGES[reasonCode]) return REASON_MESSAGES[reasonCode];
+
+  if (channel?.play_status === 'offline' && channel?.failure_reason_code === 'OFFLINE') {
+    return channel.failure_message || REASON_MESSAGES.OFFLINE;
+  }
   if (channel?.failure_reason_code && REASON_MESSAGES[channel.failure_reason_code]) {
     return REASON_MESSAGES[channel.failure_reason_code];
   }
-  if (timedOut) return 'Stream offline';
 
   if (hlsError?.fatal) {
     if (hlsError.details === 'manifestLoadError' || hlsError.details === 'manifestParsingError') {
-      return 'Stream offline';
+      return REASON_MESSAGES.MANIFEST_INVALID;
     }
     if (hlsError.details === 'fragLoadError' || hlsError.details === 'fragParsingError') {
-      return 'Manifest loaded but video segments failed';
+      return REASON_MESSAGES.MANIFEST_OK_SEGMENT_FAIL;
     }
-    if (hlsError.type === 'networkError') return 'Stream blocked';
-    if (hlsError.type === 'mediaError') return 'Unsupported codec';
-    return 'Stream offline';
+    if (hlsError.type === 'networkError') return REASON_MESSAGES.SEGMENT_FETCH_FAILED;
+    if (hlsError.type === 'mediaError') return REASON_MESSAGES.UNSUPPORTED_CODEC;
+    return REASON_MESSAGES.UNKNOWN_ERROR;
   }
 
   if (mediaError) {
     switch (mediaError.code) {
       case mediaError.MEDIA_ERR_NETWORK:
-        return 'Stream offline';
+        return REASON_MESSAGES.SEGMENT_FETCH_FAILED;
       case mediaError.MEDIA_ERR_DECODE:
-        return 'Unsupported codec';
+        return REASON_MESSAGES.UNSUPPORTED_CODEC;
       case mediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
         return 'Stream incompatible with this device';
       default:
-        return 'Stream offline';
+        return REASON_MESSAGES.PLAYBACK_STALLED;
     }
   }
 
-  return 'Stream offline';
+  return REASON_MESSAGES.UNKNOWN_ERROR;
 }
 
 export function detectDeviceType() {
@@ -179,7 +193,6 @@ export function createPlaybackGuard({
       confirm();
       return;
     }
-    // Live HLS on iOS may not advance currentTime at the live edge — use dimensions + readyState
     if (!video.paused && video.readyState >= 3 && video.videoWidth > 0 && video.videoHeight > 0) {
       liveConfirmTicks += 1;
       if (liveConfirmTicks >= 2) confirm();

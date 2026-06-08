@@ -276,7 +276,7 @@ Direct HTTPS streams without special requirements use the original URL as `playb
 |----------|---------|-------------|
 | `MAX_REMOTE_BYTES` | 5242880 | Max M3U/manifest download size |
 | `MANIFEST_MAX_BYTES` | 2097152 | Max manifest size for probes |
-| `SEGMENT_MAX_BYTES` | 10485760 | Max proxied segment size |
+| `SEGMENT_MAX_BYTES` | 52428800 | Max proxied segment size (50 MB) |
 | `STREAM_TOKEN_TTL_SEC` | 600 | Signed stream token lifetime |
 | `STREAM_PROXY_TIMEOUT_MS` | 15000 | Proxy fetch timeout |
 | `CHANNEL_PROBE_TIMEOUT_MS` | 12000 | Health probe timeout |

@@ -20,6 +20,7 @@ import {
   reportPlaybackFailure,
   PLAYBACK_TIMEOUT_MS,
 } from '../hooks/usePlaybackGuard';
+import PlayerDebugOverlay from '../components/PlayerDebugOverlay';
 
 /** Small coloured dot showing channel live-status */
 function LiveStatusDot({ isLive, size = 'sm' }) {
@@ -59,7 +60,10 @@ export default function PlayerPage() {
   const [showAllRecent, setShowAllRecent] = useState(false);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [videoError, setVideoError] = useState(null);
+  const [reconnecting, setReconnecting] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
+  const [debugLastEvent, setDebugLastEvent] = useState('');
+  const [debugHlsError, setDebugHlsError] = useState(null);
   // useRef instead of useState so the HLS error handler always reads the
   // current value from its closure rather than a stale snapshot.
   const retryCountRef = useRef(0);
@@ -236,7 +240,7 @@ export default function PlayerPage() {
       }
       if (Date.now() - startedAt > PLAYBACK_TIMEOUT_MS + 1500) {
         setVideoLoading(false);
-        setVideoError((prev) => prev || 'Stream offline');
+        setVideoError((prev) => prev || mapPlaybackError({ reasonCode: 'PLAYBACK_START_TIMEOUT', channel: currentChannel }));
       }
     }, 1000);
     return () => clearInterval(checkInterval);
@@ -350,14 +354,14 @@ export default function PlayerPage() {
       if (hasConfirmedPlayback) return;
       playbackStartTimeout = null;
       setVideoLoading(false);
-      const msg = mapPlaybackError({ timedOut: true, channel: currentChannel });
+      const msg = mapPlaybackError({ reasonCode: 'PLAYBACK_START_TIMEOUT', timedOut: true, channel: currentChannel });
       setVideoError(msg);
       video.controls = true;
       reportPlaybackFailure({
         url: currentChannel.url,
         playlistId,
         channelName: currentChannel.name,
-        reasonCode: 'TIMEOUT',
+        reasonCode: 'PLAYBACK_START_TIMEOUT',
         failureStage: 'playback_start_timeout',
       });
     };
@@ -633,9 +637,15 @@ export default function PlayerPage() {
       // is running even if 'playing' didn't re-fire after a buffer gap.
       // This clears any spinner left behind by the 'waiting' handler.
       storedHandlers.iosTimeUpdateHandler = () => {
+        setDebugLastEvent(`timeupdate @ ${new Date().toISOString().slice(11, 19)}`);
         if (bufferingTimerRef.current) {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
+        }
+        if (hasConfirmedPlayback) {
+          clearStallRecovery();
+          setReconnecting(false);
+          stallRetries = 0;
         }
         trackTimeUpdateForConfirm();
         if (hasConfirmedPlayback) setVideoLoading(false);
@@ -676,11 +686,16 @@ export default function PlayerPage() {
           setVideoLoading(false);
 
           if (currentChannel?.url && playlistId && errorCode !== video.error.MEDIA_ERR_ABORTED) {
+            const reasonCode = errorCode === video.error.MEDIA_ERR_DECODE
+              ? 'UNSUPPORTED_CODEC'
+              : errorCode === video.error.MEDIA_ERR_NETWORK
+                ? 'SEGMENT_FETCH_FAILED'
+                : 'PLAYBACK_STALLED';
             reportPlaybackFailure({
               url: currentChannel.url,
               playlistId: parseInt(playlistId, 10),
               channelName: currentChannel.name,
-              reasonCode: errorCode === video.error.MEDIA_ERR_DECODE ? 'UNSUPPORTED_CODEC' : 'OFFLINE',
+              reasonCode,
               failureStage: `media_error_${errorCode}`,
             });
           }
@@ -740,11 +755,64 @@ export default function PlayerPage() {
         if (hasConfirmedPlayback) setVideoLoading(false);
       };
       
+      let stallRetries = 0;
+      let stallRecoveryTimer = null;
+
+      const clearStallRecovery = () => {
+        if (stallRecoveryTimer) {
+          clearTimeout(stallRecoveryTimer);
+          stallRecoveryTimer = null;
+        }
+      };
+
+      const tryReconnectSource = () => {
+        if (stallRetries >= 2) {
+          setReconnecting(false);
+          const msg = mapPlaybackError({ reasonCode: 'PLAYBACK_STALLED', channel: currentChannel });
+          setVideoError(msg);
+          video.controls = true;
+          reportPlaybackFailure({
+            url: currentChannel.url,
+            playlistId: parseInt(playlistId, 10),
+            channelName: currentChannel.name,
+            reasonCode: 'PLAYBACK_STALLED',
+            failureStage: 'ios_stall_recovery_exhausted',
+          });
+          return;
+        }
+        stallRetries += 1;
+        setReconnecting(true);
+        setVideoError(null);
+        video.controls = true;
+        video.src = streamUrl;
+        video.load();
+        video.play().catch(() => {});
+      };
+
+      const handlePostConfirmStall = (eventName) => {
+        setDebugLastEvent(`${eventName} @ ${new Date().toISOString().slice(11, 19)}`);
+        if (!hasConfirmedPlayback) return;
+        clearStallRecovery();
+        const timeAtStall = video.currentTime;
+        setReconnecting(true);
+        setVideoError(null);
+        stallRecoveryTimer = setTimeout(() => {
+          stallRecoveryTimer = null;
+          if (video.currentTime === timeAtStall && !video.paused) {
+            tryReconnectSource();
+          } else {
+            setReconnecting(false);
+            stallRetries = 0;
+          }
+        }, 3000);
+      };
+
       const handleWaiting = () => {
-        console.log('Video waiting for data');
-        // Once playback is confirmed, don't re-show the loading spinner during
-        // normal HLS segment loading.
-        if (hasConfirmedPlayback) return;
+        setDebugLastEvent(`waiting @ ${new Date().toISOString().slice(11, 19)}`);
+        if (hasConfirmedPlayback) {
+          handlePostConfirmStall('waiting');
+          return;
+        }
         if (bufferingTimerRef.current) return;
         const timeAtWait = video.currentTime;
         bufferingTimerRef.current = setTimeout(() => {
@@ -754,18 +822,24 @@ export default function PlayerPage() {
           }
         }, 5000);
       };
-      
+
       const handlePlaying = () => {
-        console.log('Video playing');
+        setDebugLastEvent(`playing @ ${new Date().toISOString().slice(11, 19)}`);
+        clearStallRecovery();
+        setReconnecting(false);
+        stallRetries = 0;
         if (bufferingTimerRef.current) {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
         }
       };
-      
+
       const handleStalled = () => {
-        console.warn('Video stalled');
-        if (hasConfirmedPlayback) return;
+        setDebugLastEvent(`stalled @ ${new Date().toISOString().slice(11, 19)}`);
+        if (hasConfirmedPlayback) {
+          handlePostConfirmStall('stalled');
+          return;
+        }
         if (bufferingTimerRef.current) return;
         const timeAtStall = video.currentTime;
         bufferingTimerRef.current = setTimeout(() => {
@@ -775,9 +849,10 @@ export default function PlayerPage() {
           }
         }, 5000);
       };
-      
+
       const handleSuspend = () => {
-        console.log('Video suspended');
+        setDebugLastEvent(`suspend @ ${new Date().toISOString().slice(11, 19)}`);
+        if (hasConfirmedPlayback) handlePostConfirmStall('suspend');
       };
       
       // On iOS the ios*Handler set already covers canplay/loadedmetadata/loadeddata/playing.
@@ -822,8 +897,8 @@ export default function PlayerPage() {
       }, 5000);
       
       return () => {
-        // Clear timeout on cleanup
         clearPlaybackTimeout();
+        clearStallRecovery();
         clearTimeout(historyTimerIOS);
         
         video.removeEventListener('loadstart', handleLoadStart);
@@ -1102,9 +1177,14 @@ export default function PlayerPage() {
         if (data.fatal) {
           clearPlaybackTimeout();
 
+          setDebugHlsError({ type: data.type, details: data.details, fatal: data.fatal });
           const reasonCode = data.type === Hls.ErrorTypes.MEDIA_ERROR
             ? 'UNSUPPORTED_CODEC'
-            : data.details?.includes('frag') ? 'MANIFEST_OK_SEGMENT_FAIL' : 'CORS_RISK';
+            : data.details?.includes('frag')
+              ? 'SEGMENT_FETCH_FAILED'
+              : data.details?.includes('manifest')
+                ? 'MANIFEST_INVALID'
+                : 'PROXY_RUNTIME_ERROR';
 
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
@@ -1799,6 +1879,15 @@ export default function PlayerPage() {
                         />
                       )}
                       
+                      {reconnecting && !videoError && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl z-25 pointer-events-none">
+                          <div className="text-center p-6">
+                            <Spinner size="lg" />
+                            <p className="text-tv-text text-lg font-medium mt-4">Reconnecting…</p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Error Overlay */}
                       {videoError && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-xl z-30">
@@ -2197,6 +2286,14 @@ export default function PlayerPage() {
           </div>
         </div>
       )}
+
+      <PlayerDebugOverlay
+        videoRef={videoRef}
+        channel={currentChannel}
+        searchParams={searchParams}
+        lastEvent={debugLastEvent}
+        hlsError={debugHlsError}
+      />
     </div>
   );
 }
