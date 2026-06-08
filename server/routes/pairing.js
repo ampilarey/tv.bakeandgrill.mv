@@ -32,7 +32,7 @@ const pinRequestLimiter = rateLimit({
 // Display polls every 5 s (~12 req/min); allow several TVs behind one NAT.
 const pinCheckLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  max: 120,
   ...rateLimitJson,
 });
 

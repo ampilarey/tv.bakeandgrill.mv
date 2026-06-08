@@ -62,6 +62,20 @@ async function run() {
     (s, j) => s === 200 && typeof j.version === 'string');
 
   try {
+    const displaysRouter = require('../routes/displays');
+    if (typeof displaysRouter.displayTokenKey === 'function') {
+      console.log('  ✅  displays displayTokenKey export');
+      passed++;
+    } else {
+      console.error('  ❌  displays displayTokenKey missing');
+      failed++;
+    }
+  } catch (err) {
+    console.error(`  ❌  displays router — ${err.message}`);
+    failed++;
+  }
+
+  try {
     const httpClient = require('../utils/httpClient');
     const exportsOk =
       typeof httpClient.fetchRange === 'function' &&

@@ -16,6 +16,26 @@ import AnnouncementSender from '../../components/AnnouncementSender';
 import PairDisplayModal from '../../components/PairDisplayModal';
 import Footer from '../../components/Footer';
 
+function formatUptime(seconds) {
+  if (!seconds && seconds !== 0) return '—';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function commandStatusColor(status) {
+  if (status === 'executed') return 'success';
+  if (status === 'failed') return 'danger';
+  if (status === 'ignored') return 'warning';
+  if (status === 'unsupported') return 'secondary';
+  return 'secondary';
+}
+
+function displayHasPlaylists(display) {
+  if (!display) return false;
+  return !!(display.playlist_id || (display.playlistIds && display.playlistIds.length) || (display.playlist_count > 0));
+}
+
 export default function DisplayManagement() {
   const [displays, setDisplays] = useState([]);
   const [playlists, setPlaylists] = useState([]);
@@ -84,13 +104,17 @@ export default function DisplayManagement() {
   const { user, logout} = useAuth();
   const navigate = useNavigate();
   const [autoPairPin, setAutoPairPin] = useState(null);
+  const [expandedHealthId, setExpandedHealthId] = useState(null);
   const refreshIntervalRef = useRef(null);
+  const autoPairPinConsumedRef = useRef(false);
 
   useEffect(() => {
-    // Fetch permissions first
     fetchUserPermissions();
+  }, [user]);
 
-    // QR scan opens /admin/displays?autoPairPin=XXXXXX (BrowserRouter query string)
+  useEffect(() => {
+    if (autoPairPinConsumedRef.current) return;
+
     const fromSearch = new URLSearchParams(window.location.search).get('autoPairPin');
     const hashQuery = window.location.hash.includes('?')
       ? window.location.hash.split('?')[1]
@@ -98,12 +122,18 @@ export default function DisplayManagement() {
     const fromHash = new URLSearchParams(hashQuery).get('autoPairPin');
     const pin = fromSearch || fromHash;
 
-    if (pin) {
-      setAutoPairPin(pin);
-      sessionStorage.setItem('postLoginRedirect', `/admin/displays?autoPairPin=${pin}`);
-      setTimeout(() => setShowPairModal(true), 500);
-    }
-  }, [user]);
+    if (!pin) return;
+
+    autoPairPinConsumedRef.current = true;
+    setAutoPairPin(pin);
+    sessionStorage.setItem('postLoginRedirect', `/admin/displays?autoPairPin=${pin}`);
+    setTimeout(() => setShowPairModal(true), 500);
+
+    const params = new URLSearchParams(window.location.search);
+    params.delete('autoPairPin');
+    const qs = params.toString();
+    navigate(`/admin/displays${qs ? `?${qs}` : ''}`, { replace: true });
+  }, [navigate]);
 
   const fetchUserPermissions = async () => {
     try {
@@ -384,21 +414,20 @@ export default function DisplayManagement() {
     setRemoteOverlayMode(display.overlay_mode || 'none');
     setIsImmersiveOnTv(true);
     
-    if (display.playlist_id) {
-      try {
-        const response = await api.get(`/displays/${display.id}/channels`);
-        const channelsList = response.data.channels || [];
-        const pls = response.data.playlists || [];
-        setChannels(channelsList);
-        setFilteredChannelsForControl(channelsList);
-        setPlaylistsForControl(pls);
-      } catch (err) {
-        console.error('Error fetching channels:', err);
-        setError('Failed to load channels: ' + (err.response?.data?.error || err.message));
+    try {
+      const response = await api.get(`/displays/${display.id}/channels`);
+      const channelsList = response.data.channels || [];
+      const pls = response.data.playlists || [];
+      setChannels(channelsList);
+      setFilteredChannelsForControl(channelsList);
+      setPlaylistsForControl(pls);
+      if (!channelsList.length) {
+        setError('No channels found for this display — check playlist assignments');
         setTimeout(() => setError(''), 3000);
       }
-    } else {
-      setError('This display has no playlist assigned!');
+    } catch (err) {
+      console.error('Error fetching channels:', err);
+      setError('Failed to load channels: ' + (err.response?.data?.error || err.message));
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -448,11 +477,41 @@ export default function DisplayManagement() {
     if (!selectedDisplay) return;
     setRemoteBusy(action);
     try {
-      await api.post(`/displays/${selectedDisplay.id}/control`, { action, ...extra });
+      const res = await api.post(`/displays/${selectedDisplay.id}/control`, { action, ...extra });
+      const cmd = res.data?.command;
+      if (cmd?.id) {
+        setSelectedDisplay((prev) => prev ? {
+          ...prev,
+          last_command_id: cmd.id,
+          last_command_status: cmd.status || 'pending',
+          last_command_at: cmd.created_at,
+        } : prev);
+      }
       setError(`✅ ${action.replace(/_/g, ' ')} sent`);
       setTimeout(() => setError(''), 2000);
+      fetchDisplays();
     } catch (err) {
       setError(err.response?.data?.error || `Failed: ${action}`);
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setRemoteBusy('');
+    }
+  };
+
+  const muteAllOnline = async () => {
+    const onlineIds = displays.filter((d) => d.status === 'online').map((d) => d.id);
+    if (!onlineIds.length) {
+      setError('No online displays to mute');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+    setRemoteBusy('mute_all');
+    try {
+      await api.post('/displays/control-bulk', { action: 'mute', display_ids: onlineIds });
+      setError(`✅ Mute sent to ${onlineIds.length} display(s)`);
+      setTimeout(() => setError(''), 2000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Bulk mute failed');
       setTimeout(() => setError(''), 3000);
     } finally {
       setRemoteBusy('');
@@ -604,14 +663,11 @@ export default function DisplayManagement() {
     setError('');
     fetchSchedules(display.id);
     
-    // Also fetch channels for this display's playlist
-    if (display.playlist_id) {
-      try {
-        const response = await api.get(`/channels?playlistId=${display.playlist_id}`);
-        setChannels(response.data.channels || []);
-      } catch (error) {
-        console.error('Error fetching channels for schedule:', error);
-      }
+    try {
+      const response = await api.get(`/displays/${display.id}/channels`);
+      setChannels(response.data.channels || []);
+    } catch (error) {
+      console.error('Error fetching channels for schedule:', error);
     }
   };
 
@@ -841,6 +897,9 @@ export default function DisplayManagement() {
             ) : (
               <Button variant="ghost" size="sm" onClick={selectAll}>☑ All</Button>
             )}
+            <Button variant="secondary" size="sm" onClick={muteAllOnline} disabled={!!remoteBusy}>
+              {remoteBusy === 'mute_all' ? '…' : '🔇 Mute All Online'}
+            </Button>
             <Button variant="primary" onClick={() => setShowPairModal(true)}>
               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -897,6 +956,40 @@ export default function DisplayManagement() {
                     {display.now_playing || display.current_channel_id ? (
                       <p className="text-xs text-tv-textMuted mt-1 truncate">▶ {display.now_playing || display.current_channel_id}</p>
                     ) : null}
+                    <div className="text-xs text-tv-textMuted mt-2 space-y-0.5">
+                      {display.app_version && <p>App v{display.app_version} · uptime {formatUptime(display.uptime_seconds)}</p>}
+                      {display.last_command_status && (
+                        <p className="flex items-center gap-1 flex-wrap">
+                          Last cmd:
+                          <Badge color={commandStatusColor(display.last_command_status)} size="sm">
+                            {display.last_command_status}
+                          </Badge>
+                          {display.last_command_at && (
+                            <span>{new Date(display.last_command_at).toLocaleString()}</span>
+                          )}
+                        </p>
+                      )}
+                      {display.last_error_message && (
+                        <p className="text-tv-error truncate" title={display.last_error_message}>
+                          ⚠ {display.last_error_message}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className="text-tv-accent hover:underline"
+                        onClick={() => setExpandedHealthId(expandedHealthId === display.id ? null : display.id)}
+                      >
+                        {expandedHealthId === display.id ? 'Hide technical' : 'Technical details'}
+                      </button>
+                      {expandedHealthId === display.id && (
+                        <div className="mt-1 p-2 bg-tv-bgSoft rounded text-[11px] break-all">
+                          {display.last_ip && <p>IP: {display.last_ip}</p>}
+                          {display.last_user_agent && <p>UA: {display.last_user_agent}</p>}
+                          {display.playlist_count != null && <p>Playlists: {display.playlist_count}</p>}
+                          {display.last_status && <p>Status: {display.last_status}</p>}
+                        </div>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-1 mt-2">
                       {display.display_type === 'media' && <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">Media</span>}
                       {display.overlay_mode && display.overlay_mode !== 'none' && <span className="text-xs bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded">{display.overlay_mode}</span>}
@@ -911,7 +1004,7 @@ export default function DisplayManagement() {
                     size="sm" 
                     onClick={() => handleOpenControl(display)}
                     className="w-full"
-                    disabled={!display.playlist_id}
+                    disabled={!displayHasPlaylists(display)}
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
@@ -934,7 +1027,7 @@ export default function DisplayManagement() {
                     size="sm" 
                     onClick={() => handleOpenSchedules(display)}
                     className="w-full hidden md:block"
-                    disabled={!display.playlist_id}
+                    disabled={!displayHasPlaylists(display)}
                   >
                     📅 Manage Schedule
                   </Button>
@@ -1067,9 +1160,24 @@ export default function DisplayManagement() {
               </p>
               {selectedDisplay.current_channel_id && (
                 <p className="text-tv-textMuted text-xs mt-1">
-                  Currently playing: {selectedDisplay.current_channel_id}
+                  Currently playing: {selectedDisplay.now_playing || selectedDisplay.current_channel_id}
                 </p>
               )}
+              <div className="text-tv-textMuted text-xs mt-2 space-y-0.5">
+                <p>Status: {selectedDisplay.status || 'unknown'} · App v{selectedDisplay.app_version || '—'} · Uptime {formatUptime(selectedDisplay.uptime_seconds)}</p>
+                {selectedDisplay.last_command_status && (
+                  <p>
+                    Last command:{' '}
+                    <Badge color={commandStatusColor(selectedDisplay.last_command_status)} size="sm">
+                      {selectedDisplay.last_command_status}
+                    </Badge>
+                    {selectedDisplay.last_command_at && ` · ${new Date(selectedDisplay.last_command_at).toLocaleString()}`}
+                  </p>
+                )}
+                {selectedDisplay.last_error_message && (
+                  <p className="text-tv-error">Error: {selectedDisplay.last_error_message}</p>
+                )}
+              </div>
             </div>
           )}
 
@@ -1167,6 +1275,38 @@ export default function DisplayManagement() {
                 disabled={!!remoteBusy}
               >
                 {remoteBusy === 'refresh_playlist' ? '…' : '🔄 Reload Channels'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => sendRemoteAction('sync_now')}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'sync_now' ? '…' : '↻ Sync Now'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => sendRemoteAction('restart_playback')}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'restart_playback' ? '…' : '▶ Restart Playback'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => sendRemoteAction('reload_display')}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'reload_display' ? '…' : '⟳ Reload Display'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => sendRemoteAction('clear_cache')}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'clear_cache' ? '…' : '🗑 Clear Cache'}
               </Button>
               <Button
                 variant="secondary"
@@ -1472,18 +1612,18 @@ export default function DisplayManagement() {
 
             <div>
               <label className="block text-sm font-medium text-tv-textSecondary mb-2">
-                🌐 Display URL (Computer/Localhost)
+                Display URL
               </label>
               <div className="bg-tv-bgSoft border border-tv-borderSubtle rounded-lg p-3">
                 <code className="text-tv-accent text-sm break-all font-mono">
-                  http://localhost:5173/display?token={createdDisplay.token}
+                  {`${window.location.origin}/display?token=${createdDisplay.token}`}
                 </code>
               </div>
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={() => {
-                  navigator.clipboard.writeText(`http://localhost:5173/display?token=${createdDisplay.token}`);
+                  navigator.clipboard.writeText(`${window.location.origin}/display?token=${createdDisplay.token}`);
                   alert('Copied to clipboard!');
                 }}
                 className="mt-2"
@@ -1492,27 +1632,13 @@ export default function DisplayManagement() {
               </Button>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-tv-textSecondary mb-2">
-                📱 Display URL (Network - Phone/Tablet)
-              </label>
-              <div className="bg-tv-bgSoft border border-tv-borderSubtle rounded-lg p-3">
-                <code className="text-tv-accent text-sm break-all font-mono">
-                  http://192.168.100.236:5173/display?token={createdDisplay.token}
-                </code>
+            {import.meta.env.DEV && (
+              <div className="text-xs text-tv-textMuted space-y-2">
+                <p className="font-medium text-tv-textSecondary">Dev URLs</p>
+                <code className="block break-all">http://localhost:5173/display?token={createdDisplay.token}</code>
+                <code className="block break-all">http://{window.location.hostname}:5173/display?token={createdDisplay.token}</code>
               </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => {
-                  navigator.clipboard.writeText(`http://192.168.100.236:5173/display?token=${createdDisplay.token}`);
-                  alert('Copied to clipboard!');
-                }}
-                className="mt-2"
-              >
-                📋 Copy Network URL
-              </Button>
-            </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-tv-textSecondary mb-2">

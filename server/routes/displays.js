@@ -12,10 +12,48 @@ const { checkPermission, checkAnyPermission, checkResourceLimit } = require('../
 const { fetch } = require('../utils/httpClient');
 const {
   normalizePlaylistIds,
+  getDisplayPlaylistIds,
   syncDisplayPlaylists,
   loadDisplayChannels,
   findChannelForDisplay,
 } = require('../utils/displayChannelLoader');
+
+const VALID_COMMAND_STATUSES = new Set(['pending', 'executed', 'failed', 'ignored', 'unsupported']);
+const TERMINAL_COMMAND_STATUSES = new Set(['executed', 'failed', 'ignored', 'unsupported']);
+
+function displayTokenKey(req) {
+  return req.params?.token
+    || req.body?.token
+    || req.query?.token
+    || req.displayToken
+    || req.ip;
+}
+
+function displayRateLimitHandler(req, res) {
+  res.status(429).json({
+    success: false,
+    error: 'Too many requests from this display, please try again later',
+    code: 'DISPLAY_RATE_LIMIT',
+  });
+}
+
+function createDisplayLimiter(max) {
+  return rateLimit({
+    windowMs: 60 * 1000,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: displayTokenKey,
+    handler: displayRateLimitHandler,
+  });
+}
+
+const verifyLimiter = createDisplayLimiter(20);
+const heartbeatLimiter = createDisplayLimiter(12);
+const commandsPollLimiter = createDisplayLimiter(90);
+const commandResultLimiter = createDisplayLimiter(60);
+const screenshotLimiter = createDisplayLimiter(10);
+const sseLimiter = createDisplayLimiter(30);
 
 const router = express.Router();
 
@@ -37,20 +75,64 @@ function sanitizeDisplay(display) {
   return safe;
 }
 
-// Rate limiter for display endpoints (60 requests per minute per display)
-const displayLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 60, // 60 requests per minute
-  message: 'Too many requests from this display, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+async function updateCommandResult(db, displayId, commandId, body) {
+  const status = VALID_COMMAND_STATUSES.has(body.status) ? body.status : 'executed';
+  const isTerminal = TERMINAL_COMMAND_STATUSES.has(status);
+  const errorCode = body.error_code ? String(body.error_code).slice(0, 64) : null;
+  const errorMessage = body.error_message ? String(body.error_message).slice(0, 512) : null;
+  const appVersion = body.app_version ? String(body.app_version).slice(0, 32) : null;
+  const resultPayload = body.result_payload != null ? JSON.stringify(body.result_payload) : null;
+
+  const [result] = await db.query(
+    `UPDATE display_commands
+     SET is_executed = ?,
+         executed_at = IF(? = 1, CURRENT_TIMESTAMP, executed_at),
+         status = ?,
+         error_code = ?,
+         error_message = ?,
+         kiosk_app_version = COALESCE(?, kiosk_app_version),
+         result_payload = COALESCE(?, result_payload)
+     WHERE id = ? AND display_id = ? AND is_executed = FALSE`,
+    [
+      isTerminal ? 1 : 0,
+      isTerminal ? 1 : 0,
+      status,
+      errorCode,
+      errorMessage,
+      appVersion,
+      resultPayload,
+      commandId,
+      displayId,
+    ]
+  );
+
+  if (result.affectedRows === 0) return false;
+
+  await db.query(
+    `UPDATE displays
+     SET last_command_id = ?,
+         last_command_status = ?,
+         last_command_at = CURRENT_TIMESTAMP,
+         last_error_code = ?,
+         last_error_message = ?
+     WHERE id = ?`,
+    [
+      commandId,
+      status,
+      status === 'failed' ? errorCode : null,
+      status === 'failed' ? errorMessage : null,
+      displayId,
+    ]
+  ).catch(() => {});
+
+  return true;
+}
 
 /**
  * POST /api/displays/verify
  * Verify display token (public endpoint for displays)
  */
-router.post('/verify', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
+router.post('/verify', verifyLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
   const { token, location_pin: locationPin } = req.body;
   const db = getDatabase();
 
@@ -173,7 +255,7 @@ router.post('/verify', displayLimiter, verifyDisplayToken, asyncHandler(async (r
  * Update display heartbeat (public endpoint for displays)
  * Body: { token, current_channel_id?, status?, nowPlaying?, uptime?, appVersion? }
  */
-router.post('/heartbeat', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
+router.post('/heartbeat', heartbeatLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
   const { token, current_channel_id, status, nowPlaying, uptime, appVersion } = req.body;
   const db = getDatabase();
 
@@ -187,24 +269,58 @@ router.post('/heartbeat', displayLimiter, verifyDisplayToken, asyncHandler(async
     });
   }
 
-  await db.query(
-    `UPDATE displays
-     SET last_heartbeat   = CURRENT_TIMESTAMP,
-         current_channel_id = COALESCE(?, current_channel_id),
-         last_status        = COALESCE(?, last_status),
-         now_playing        = COALESCE(?, now_playing),
-         uptime_seconds     = COALESCE(?, uptime_seconds),
-         app_version        = COALESCE(?, app_version)
-     WHERE id = ?`,
-    [
-      current_channel_id || null,
-      status     || null,
-      nowPlaying || null,
-      uptime     || null,
-      appVersion || null,
-      display.id
-    ]
-  );
+  const userAgent = (req.get('user-agent') || '').slice(0, 255);
+  const clientIp = req.ip || null;
+
+  try {
+    await db.query(
+      `UPDATE displays
+       SET last_heartbeat   = CURRENT_TIMESTAMP,
+           current_channel_id = COALESCE(?, current_channel_id),
+           last_status        = COALESCE(?, last_status),
+           now_playing        = COALESCE(?, now_playing),
+           uptime_seconds     = COALESCE(?, uptime_seconds),
+           app_version        = COALESCE(?, app_version),
+           last_ip            = COALESCE(?, last_ip),
+           last_user_agent    = COALESCE(?, last_user_agent)
+       WHERE id = ?`,
+      [
+        current_channel_id || null,
+        status || null,
+        nowPlaying || null,
+        uptime || null,
+        appVersion || null,
+        clientIp,
+        userAgent || null,
+        display.id,
+      ]
+    );
+  } catch (err) {
+    if (err.code === 'ER_BAD_FIELD_ERROR') {
+      await db.query(
+        `UPDATE displays
+         SET last_heartbeat   = CURRENT_TIMESTAMP,
+             current_channel_id = COALESCE(?, current_channel_id),
+             last_status        = COALESCE(?, last_status),
+             now_playing        = COALESCE(?, now_playing),
+             uptime_seconds     = COALESCE(?, uptime_seconds),
+             app_version        = COALESCE(?, app_version),
+             last_ip            = COALESCE(?, last_ip)
+         WHERE id = ?`,
+        [
+          current_channel_id || null,
+          status || null,
+          nowPlaying || null,
+          uptime || null,
+          appVersion || null,
+          clientIp,
+          display.id,
+        ]
+      );
+    } else {
+      throw err;
+    }
+  }
 
   res.json({ success: true, message: 'Heartbeat updated' });
 }));
@@ -213,7 +329,7 @@ router.post('/heartbeat', displayLimiter, verifyDisplayToken, asyncHandler(async
  * POST /api/displays/screenshot
  * Body: { token, imageData }  imageData = base64 JPEG from kiosk canvas capture
  */
-router.post('/screenshot', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
+router.post('/screenshot', screenshotLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
   const { token, imageData } = req.body;
   if (!imageData) return res.status(400).json({ success: false, error: 'No imageData' });
   // Limit screenshot to ~2MB base64 (~1.5MB decoded)
@@ -285,7 +401,7 @@ router.get('/:id/screenshot/file', verifyToken, requireAdmin, asyncHandler(async
  * GET /api/displays/commands/:token
  * Poll for pending commands + active override (public endpoint for displays)
  */
-router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => {
+router.get('/commands/:token', commandsPollLimiter, asyncHandler(async (req, res) => {
   const { token } = req.params;
   const db = getDatabase();
 
@@ -300,10 +416,24 @@ router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => 
   }
 
   // Pending commands
-  const [commands] = await db.query(
-    'SELECT * FROM display_commands WHERE display_id = ? AND is_executed = FALSE ORDER BY created_at ASC',
-    [display.id]
-  );
+  let commands;
+  try {
+    [commands] = await db.query(
+      `SELECT * FROM display_commands
+       WHERE display_id = ? AND is_executed = FALSE AND status = 'pending'
+       ORDER BY created_at ASC`,
+      [display.id]
+    );
+  } catch (err) {
+    if (err.code === 'ER_BAD_FIELD_ERROR') {
+      [commands] = await db.query(
+        'SELECT * FROM display_commands WHERE display_id = ? AND is_executed = FALSE ORDER BY created_at ASC',
+        [display.id]
+      );
+    } else {
+      throw err;
+    }
+  }
 
   // Active emergency override for this display or its zone
   let override = null;
@@ -342,7 +472,7 @@ router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => 
  */
 const sseClients = new Map(); // token → Set<res>
 
-router.get('/events/:token', displayLimiter, asyncHandler(async (req, res) => {
+router.get('/events/:token', sseLimiter, asyncHandler(async (req, res) => {
   const { token } = req.params;
   const db = getDatabase();
 
@@ -404,29 +534,41 @@ function pushCommandToSSE(token, commands) {
  * PATCH /api/displays/commands/:id/execute
  * Mark command as executed (public endpoint for displays)
  */
-router.patch('/commands/:id/execute', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
+router.patch('/commands/:id/execute', commandResultLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
 
-  // Verify the command belongs to the display making the request
   const token = req.body.token || req.displayToken;
   const [displayRows] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);
   if (!displayRows.length) {
     return res.status(404).json({ success: false, error: 'Display not found' });
   }
 
-  const [result] = await db.query(
-    'UPDATE display_commands SET is_executed = TRUE, executed_at = CURRENT_TIMESTAMP WHERE id = ? AND display_id = ? AND is_executed = FALSE',
-    [id, displayRows[0].id]
-  );
+  const displayId = displayRows[0].id;
+  let updated = false;
 
-  if (result.affectedRows === 0) {
+  try {
+    updated = await updateCommandResult(db, displayId, id, req.body);
+  } catch (err) {
+    if (err.code === 'ER_BAD_FIELD_ERROR') {
+      const [result] = await db.query(
+        'UPDATE display_commands SET is_executed = TRUE, executed_at = CURRENT_TIMESTAMP WHERE id = ? AND display_id = ? AND is_executed = FALSE',
+        [id, displayId]
+      );
+      updated = result.affectedRows > 0;
+    } else {
+      throw err;
+    }
+  }
+
+  if (!updated) {
     return res.status(404).json({ success: false, error: 'Command not found or already executed' });
   }
 
   res.json({
     success: true,
-    message: 'Command marked as executed'
+    message: 'Command result recorded',
+    status: req.body.status || 'executed',
   });
 }));
 
@@ -445,9 +587,8 @@ router.get('/',
   
   const [displays] = await db.query('SELECT * FROM displays ORDER BY created_at DESC');
   
-  // Calculate status for each display (online if heartbeat < 90 seconds ago)
   const now = new Date();
-  const enrichedDisplays = displays.map(display => {
+  const enrichedDisplays = await Promise.all(displays.map(async (display) => {
     let status = 'offline';
 
     if (display.last_heartbeat && display.last_heartbeat !== null) {
@@ -457,15 +598,22 @@ router.get('/',
         status = 'online';
       }
     }
+
+    let playlistIds = [];
+    try {
+      playlistIds = await getDisplayPlaylistIds(db, display);
+    } catch { /* non-fatal */ }
     
     return sanitizeDisplay({
       ...display,
       status,
+      playlistIds,
+      playlist_count: playlistIds.length,
       auto_play: display.auto_play === 1,
       schedule_enabled: display.schedule_enabled === 1,
-      is_active: display.is_active === 1
+      is_active: display.is_active === 1,
     });
-  });
+  }));
   
   res.json({
     success: true,
@@ -682,17 +830,27 @@ router.put('/:id', checkPermission('can_manage_displays'), asyncHandler(async (r
     params.push(schedule_enabled ? 1 : 0);
   }
   
-  if (updates.length === 0) {
+  const extraPlaylistIds = normalizePlaylistIds(req.body);
+  if (extraPlaylistIds.length > 0) {
+    await syncDisplayPlaylists(db, parseInt(id, 10), extraPlaylistIds);
+    if (playlist_id === undefined && extraPlaylistIds[0]) {
+      updates.push('playlist_id = ?');
+      params.push(extraPlaylistIds[0]);
+    }
+  }
+
+  if (updates.length === 0 && extraPlaylistIds.length === 0) {
     return res.status(400).json({
       success: false,
       error: 'No fields to update',
       code: 'VALIDATION_ERROR'
     });
   }
-  
-  params.push(id);
-  
-  await db.query(`UPDATE displays SET ${updates.join(', ')} WHERE id = ?`, params);
+
+  if (updates.length > 0) {
+    params.push(id);
+    await db.query(`UPDATE displays SET ${updates.join(', ')} WHERE id = ?`, params);
+  }
   
   const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [id]);
   
@@ -842,6 +1000,10 @@ router.post('/:id/control',
     case 'clear_announcement':
     case 'refresh_playlist':
     case 'refresh_overlays':
+    case 'reload_display':
+    case 'restart_playback':
+    case 'clear_cache':
+    case 'sync_now':
       commandData = {};
       break;
     case 'set_overlay_mode': {
@@ -883,6 +1045,54 @@ router.post('/:id/control',
 }));
 
 /**
+ * POST /api/displays/control-bulk
+ * Queue the same control action on multiple displays (e.g. mute all online).
+ */
+router.post('/control-bulk',
+  checkPermission('can_control_displays'),
+  asyncHandler(async (req, res) => {
+    const db = getDatabase();
+    const { action, display_ids: displayIds, volume, immersive } = req.body;
+
+    if (!action) {
+      return res.status(400).json({ success: false, error: 'Action is required', code: 'VALIDATION_ERROR' });
+    }
+    if (!Array.isArray(displayIds) || displayIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'display_ids array is required', code: 'VALIDATION_ERROR' });
+    }
+
+    const allowedBulk = new Set(['mute', 'unmute', 'reload_display', 'sync_now', 'clear_cache', 'refresh_playlist']);
+    if (!allowedBulk.has(action)) {
+      return res.status(400).json({ success: false, error: 'Action not allowed for bulk control', code: 'VALIDATION_ERROR' });
+    }
+
+    const queued = [];
+    for (const rawId of displayIds.slice(0, 50)) {
+      const displayId = parseInt(rawId, 10);
+      if (!displayId) continue;
+
+      const [rows] = await db.query('SELECT id, token FROM displays WHERE id = ?', [displayId]);
+      if (!rows.length) continue;
+
+      let commandData = {};
+      if (action === 'set_volume') commandData = { volume };
+      else if (action === 'set_immersive') commandData = { immersive: !!immersive };
+
+      const [result] = await db.query(
+        'INSERT INTO display_commands (display_id, command_type, command_data) VALUES (?, ?, ?)',
+        [displayId, action, JSON.stringify(commandData)]
+      );
+      const [commands] = await db.query('SELECT * FROM display_commands WHERE id = ?', [result.insertId]);
+      if (commands[0]) {
+        pushCommandToSSE(rows[0].token, [commands[0]]);
+        queued.push({ display_id: displayId, command_id: commands[0].id });
+      }
+    }
+
+    res.status(201).json({ success: true, queued, message: `Queued ${queued.length} command(s)` });
+  }));
+
+/**
  * POST /api/displays/:id/enable-pairing
  * Open a 10-minute pairing window for this display (admin only)
  */
@@ -900,4 +1110,5 @@ router.post('/:id/enable-pairing', requireAdmin, asyncHandler(async (req, res) =
   res.json({ success: true, pairing_enabled_until: until, message: `Pairing window open for ${minutes} min` });
 }));
 
+router.displayTokenKey = displayTokenKey;
 module.exports = router;

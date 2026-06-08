@@ -9,10 +9,14 @@ import BottomBarOverlay  from '../components/overlays/BottomBarOverlay';
 import PopupCardOverlay  from '../components/overlays/PopupCardOverlay';
 import SplitRightPanel   from '../components/overlays/SplitRightPanel';
 import { getStreamUrl, isHlsStream, PLAYBACK_TIMEOUT_MS } from '../hooks/usePlaybackGuard';
+import { APP_VERSION } from '../utils/version';
 
-const APP_VERSION = '1.1.0';
-const HEARTBEAT_INTERVAL_MS   = 25_000; // every 25 s
-const COMMAND_POLL_INTERVAL_MS = 2_000; // every 2 s
+const HEARTBEAT_INTERVAL_MS    = 25_000;
+const COMMAND_POLL_FAST_MS     = 2_000;
+const COMMAND_POLL_SLOW_MS     = 25_000;
+const SSE_RECONNECT_BASE_MS    = 1_000;
+const SSE_RECONNECT_MAX_MS     = 30_000;
+const PROCESSED_COMMANDS_MAX   = 200;
 const CURSOR_HIDE_DELAY_MS     = 3_000; // hide cursor after 3 s idle
 const RETRY_INTERVAL_MS        = 10_000;
 const CACHE_KEY                = 'kiosk_cache_v1';
@@ -144,6 +148,7 @@ export default function KioskModePage() {
   const [activeOverride, setActiveOverride] = useState(null);
   const [nowPlaying, setNowPlaying]         = useState(null); // for slideshow heartbeat
   const [overlayData, setOverlayData]       = useState(null); // { messages, cards }
+  const [playbackGeneration, setPlaybackGeneration] = useState(0);
   const overlayFetchRef                     = useRef(null);
 
   const videoRef            = useRef(null);
@@ -183,6 +188,14 @@ export default function KioskModePage() {
   // latest version without listing it as a dependency (which would restart
   // the poll interval every time verifyDisplay re-creates due to its own deps).
   const verifyDisplayRef = useRef(null);
+  const verifyInProgressRef = useRef(false);
+  const activeOverrideRef = useRef(null);
+  const processedCommandIdsRef = useRef(new Set());
+  const sseConnectedRef = useRef(false);
+  const sseReconnectAttemptRef = useRef(0);
+  const pollIntervalMsRef = useRef(COMMAND_POLL_FAST_MS);
+
+  useEffect(() => { activeOverrideRef.current = activeOverride; }, [activeOverride]);
 
   // ── Kiosk lockdown ──────────────────────────────────────────────────────
 
@@ -357,8 +370,8 @@ export default function KioskModePage() {
       setLoading(false);
       return;
     }
-    // Guard against concurrent calls (e.g. polling + scheduleRetry firing together)
-    if (verifyDisplayRef.current?._inProgress) return;
+    if (verifyInProgressRef.current) return;
+    verifyInProgressRef.current = true;
     try {
       const { data } = await displayApi.post('/displays/verify', { token: displayToken });
       const { display: d, channels: ch, playableCount } = data;
@@ -404,9 +417,10 @@ export default function KioskModePage() {
       const fromCache = loadFromCache();
       if (!fromCache) scheduleRetry('Could not connect — check network');
     } finally {
+      verifyInProgressRef.current = false;
       setLoading(false);
     }
-  }, [displayToken, loadFromCache, saveToCache, scheduleRetry, applyImmersiveMode, tryBrowserFullscreenSilently]);
+  }, [displayToken, loadFromCache, saveToCache, scheduleRetry, tryBrowserFullscreenSilently]);
 
   // Keep ref current so polling closure always calls the latest version
   useEffect(() => { verifyDisplayRef.current = verifyDisplay; }, [verifyDisplay]);
@@ -449,31 +463,105 @@ export default function KioskModePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayToken]);
 
-  // ── Command delivery: SSE-first with polling fallback ───────────────────
-  // A ref to the shared command handler keeps it available to both the SSE
-  // and polling code paths without duplicating logic.
+  // ── Command delivery: SSE with adaptive polling fallback ────────────────
   const handleCommandsRef = useRef(null);
+  const refreshOverlayDataRef = useRef(null);
+  const applyPlaylistFilterRef = useRef(null);
+  const tryBrowserFullscreenSilentlyRef = useRef(null);
+  const isInBrowserFullscreenRef = useRef(null);
+
+  useEffect(() => { refreshOverlayDataRef.current = refreshOverlayData; }, [refreshOverlayData]);
+  useEffect(() => { applyPlaylistFilterRef.current = applyPlaylistFilter; }, [applyPlaylistFilter]);
+  useEffect(() => { tryBrowserFullscreenSilentlyRef.current = tryBrowserFullscreenSilently; }, [tryBrowserFullscreenSilently]);
+  useEffect(() => { isInBrowserFullscreenRef.current = isInBrowserFullscreen; }, [isInBrowserFullscreen]);
 
   useEffect(() => {
     if (!displayToken) return;
+
+    let es = null;
+    let sseReconnectTimer = null;
+    let pollTimer = null;
+    let stopped = false;
+
+    const markProcessed = (id) => {
+      const set = processedCommandIdsRef.current;
+      set.add(id);
+      if (set.size > PROCESSED_COMMANDS_MAX) {
+        const first = set.values().next().value;
+        set.delete(first);
+      }
+    };
+
+    const reportCommandResult = async (cmd, outcome) => {
+      await displayApi.patch(`/displays/commands/${cmd.id}/execute`, {
+        token: displayToken,
+        status: outcome.status || 'executed',
+        error_code: outcome.error_code || null,
+        error_message: outcome.error_message || null,
+        app_version: APP_VERSION,
+        result_payload: outcome.result_payload || null,
+      }).catch(() => {});
+    };
+
+    const setPollInterval = (ms) => {
+      pollIntervalMsRef.current = ms;
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(() => { handleCommandsRef.current?.(); }, ms);
+    };
+
+    const connectSSE = () => {
+      if (stopped) return;
+      const sseBase = displayApi.defaults.baseURL || '/api';
+      try {
+        es?.close();
+        es = new EventSource(`${sseBase}/displays/events/${displayToken}`);
+
+        es.addEventListener('connected', () => {
+          sseConnectedRef.current = true;
+          sseReconnectAttemptRef.current = 0;
+          if (import.meta.env.DEV) console.log('[Kiosk] SSE connected');
+          setPollInterval(COMMAND_POLL_SLOW_MS);
+        });
+
+        es.addEventListener('command', () => {
+          handleCommandsRef.current?.();
+        });
+
+        es.onerror = () => {
+          sseConnectedRef.current = false;
+          es?.close();
+          es = null;
+          if (import.meta.env.DEV) {
+            const attempt = sseReconnectAttemptRef.current + 1;
+            console.warn(`[Kiosk] SSE error — reconnect attempt ${attempt}`);
+          }
+          setPollInterval(COMMAND_POLL_FAST_MS);
+          const delay = Math.min(
+            SSE_RECONNECT_BASE_MS * (2 ** sseReconnectAttemptRef.current),
+            SSE_RECONNECT_MAX_MS
+          );
+          sseReconnectAttemptRef.current += 1;
+          clearTimeout(sseReconnectTimer);
+          sseReconnectTimer = setTimeout(connectSSE, delay);
+        };
+      } catch {
+        setPollInterval(COMMAND_POLL_FAST_MS);
+      }
+    };
 
     const poll = async () => {
       try {
         const { data } = await displayApi.get(`/displays/commands/${displayToken}`);
         const commands = data.commands || [];
         const override = data.override || null;
+        const prevOverride = activeOverrideRef.current;
 
-        // Handle emergency override
         if (override && new Date(override.expires_at) > new Date()) {
-          if (!activeOverride || activeOverride.id !== override.id) {
+          if (!prevOverride || prevOverride.id !== override.id) {
             setActiveOverride(override);
-            // Refresh display config to pick up override playlist
-            if (override.m3u_url) {
-              verifyDisplayRef.current?.();
-            }
+            if (override.m3u_url) verifyDisplayRef.current?.();
           }
-        } else if (activeOverride) {
-          // Override expired — revert
+        } else if (prevOverride) {
           setActiveOverride(null);
           if (normalPlaylistRef.current?.length) {
             setChannels(normalPlaylistRef.current);
@@ -482,141 +570,171 @@ export default function KioskModePage() {
         }
 
         for (const cmd of commands) {
+          if (processedCommandIdsRef.current.has(cmd.id)) continue;
+
           let d = {};
-          try { d = cmd.command_data ? JSON.parse(cmd.command_data) : {}; } catch { /* malformed JSON — skip */ }
+          try { d = cmd.command_data ? JSON.parse(cmd.command_data) : {}; } catch { /* skip */ }
+
           setLastCommand({ type: cmd.command_type, data: d, time: new Date().toLocaleTimeString() });
           clearTimeout(commandTimeoutRef.current);
           commandTimeoutRef.current = setTimeout(() => setLastCommand(null), 3000);
 
-          if (cmd.command_type === 'change_channel') {
-            let ch = channelsRef.current.find((c) => c.id === d.channel_id);
-            if (!ch && d.channel && (d.channel.playback_url || d.channel.url)) {
-              ch = d.channel;
-              setChannels((prev) => (prev.some((c) => c.id === ch.id) ? prev : [...prev, ch]));
-            }
-            if (ch) {
-              setCurrentChannel(ch);
-              setShowFallback(false);
-              if (videoRef.current) {
-                videoRef.current.play().catch(() => {});
+          let outcome = { status: 'executed' };
+          const displayType = displayRef.current?.displayType || 'stream';
+
+          try {
+            if (cmd.command_type === 'change_channel') {
+              let ch = channelsRef.current.find((c) => String(c.id) === String(d.channel_id));
+              if (!ch && d.channel && (d.channel.playback_url || d.channel.url)) {
+                ch = d.channel;
+                setChannels((prev) => (prev.some((c) => String(c.id) === String(ch.id)) ? prev : [...prev, ch]));
               }
-            }
-          } else if (cmd.command_type === 'set_volume' && videoRef.current) {
-            videoRef.current.volume = (parseInt(d.volume) || 50) / 100;
-            videoRef.current.muted = false;
-            setIsMuted(false);
-            if (videoRef.current.paused) videoRef.current.play().catch(() => {});
-          } else if (cmd.command_type === 'mute' && videoRef.current) {
-            videoRef.current.muted = true; setIsMuted(true);
-          } else if (cmd.command_type === 'unmute' && videoRef.current) {
-            videoRef.current.muted = false; setIsMuted(false);
-            videoRef.current.play().catch(() => {
-              // Autoplay policy requires muted — fall back gracefully
-              if (videoRef.current) { videoRef.current.muted = true; setIsMuted(true); videoRef.current.play().catch(() => {}); }
-            });
-          } else if (
-            cmd.command_type === 'set_immersive'
-            || cmd.command_type === 'toggle_fullscreen'
-            || cmd.command_type === 'enter_fullscreen'
-            || cmd.command_type === 'exit_immersive'
-          ) {
-            let enable = true;
-            if (cmd.command_type === 'exit_immersive') enable = false;
-            else if (cmd.command_type === 'set_immersive') enable = !!d.immersive;
-            else if (cmd.command_type === 'toggle_fullscreen') enable = !pseudoFullscreenRef.current;
-            applyImmersiveRef.current?.(enable);
-            if (enable) tryBrowserFullscreenSilently();
-            else if (isInBrowserFullscreen()) {
-              if (document.exitFullscreen) await document.exitFullscreen();
-              else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-            }
-          } else if (cmd.command_type === 'set_overlay_mode' && d.overlay_mode) {
-            setDisplay((prev) => prev
-              ? { ...prev, overlayMode: d.overlay_mode, overlay_mode: d.overlay_mode }
-              : prev);
-            await refreshOverlayData();
-          } else if (cmd.command_type === 'clear_announcement') {
-            setAnnouncementClearSignal((n) => n + 1);
-          } else if (cmd.command_type === 'switch_playlist' && d.playlist_id) {
-            applyPlaylistFilter(d.playlist_id);
-          } else if (cmd.command_type === 'check_override' || cmd.command_type === 'revert_override') {
-            // Already handled above via override field
-          } else if (cmd.command_type === 'refresh_playlist') {
-            verifyDisplayRef.current?.();
-          } else if (cmd.command_type === 'refresh_overlays') {
-            await refreshOverlayData();
-          } else if (cmd.command_type === 'screenshot') {
-            // Capture current screen frame and upload
-            try {
-              let imageData = null;
-              if (videoRef.current && videoRef.current.readyState >= 2) {
-                const canvas = document.createElement('canvas');
-                canvas.width  = videoRef.current.videoWidth  || 1280;
-                canvas.height = videoRef.current.videoHeight || 720;
-                const ctx = canvas.getContext('2d');
-                if (ctx) { ctx.drawImage(videoRef.current, 0, 0); imageData = canvas.toDataURL('image/jpeg', 0.6); }
+              if (ch) {
+                setCurrentChannel(ch);
+                setShowFallback(false);
+                videoRef.current?.play().catch(() => {});
               } else {
-                // Slideshow — grab first visible img
-                const img = document.querySelector('img[data-slide]');
-                if (img && img.complete) {
+                outcome = { status: 'failed', error_code: 'CHANNEL_NOT_FOUND', error_message: 'Channel not found on display' };
+              }
+            } else if (cmd.command_type === 'set_volume') {
+              if (!videoRef.current) {
+                outcome = displayType === 'media'
+                  ? { status: 'ignored', error_code: 'VIDEO_NOT_READY', error_message: 'No video element on media display' }
+                  : { status: 'failed', error_code: 'VIDEO_NOT_READY', error_message: 'Video element not ready' };
+              } else {
+                videoRef.current.volume = (parseInt(d.volume, 10) || 50) / 100;
+                videoRef.current.muted = false;
+                setIsMuted(false);
+                if (videoRef.current.paused) videoRef.current.play().catch(() => {});
+              }
+            } else if (cmd.command_type === 'mute') {
+              if (videoRef.current) { videoRef.current.muted = true; setIsMuted(true); }
+              else outcome = { status: 'ignored', error_code: 'VIDEO_NOT_READY', error_message: 'No video to mute' };
+            } else if (cmd.command_type === 'unmute') {
+              if (videoRef.current) {
+                videoRef.current.muted = false;
+                setIsMuted(false);
+                videoRef.current.play().catch(() => {
+                  if (videoRef.current) { videoRef.current.muted = true; setIsMuted(true); videoRef.current.play().catch(() => {}); }
+                });
+              } else {
+                outcome = { status: 'ignored', error_code: 'VIDEO_NOT_READY', error_message: 'No video to unmute' };
+              }
+            } else if (
+              cmd.command_type === 'set_immersive'
+              || cmd.command_type === 'toggle_fullscreen'
+              || cmd.command_type === 'enter_fullscreen'
+              || cmd.command_type === 'exit_immersive'
+            ) {
+              let enable = true;
+              if (cmd.command_type === 'exit_immersive') enable = false;
+              else if (cmd.command_type === 'set_immersive') enable = !!d.immersive;
+              else if (cmd.command_type === 'toggle_fullscreen') enable = !pseudoFullscreenRef.current;
+              applyImmersiveRef.current?.(enable);
+              if (enable) tryBrowserFullscreenSilentlyRef.current?.();
+              else if (isInBrowserFullscreenRef.current?.()) {
+                if (document.exitFullscreen) await document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+              }
+            } else if (cmd.command_type === 'set_overlay_mode' && d.overlay_mode) {
+              setDisplay((prev) => (prev ? { ...prev, overlayMode: d.overlay_mode, overlay_mode: d.overlay_mode } : prev));
+              await refreshOverlayDataRef.current?.();
+            } else if (cmd.command_type === 'clear_announcement') {
+              setAnnouncementClearSignal((n) => n + 1);
+            } else if (cmd.command_type === 'switch_playlist' && d.playlist_id) {
+              applyPlaylistFilterRef.current?.(d.playlist_id);
+            } else if (cmd.command_type === 'check_override' || cmd.command_type === 'revert_override') {
+              // handled via override field above
+            } else if (cmd.command_type === 'refresh_playlist' || cmd.command_type === 'sync_now') {
+              verifyDisplayRef.current?.();
+            } else if (cmd.command_type === 'refresh_overlays') {
+              await refreshOverlayDataRef.current?.();
+            } else if (cmd.command_type === 'reload_display') {
+              markProcessed(cmd.id);
+              await reportCommandResult(cmd, { status: 'executed' });
+              window.location.reload();
+              return;
+            } else if (cmd.command_type === 'restart_playback') {
+              setPlaybackGeneration((n) => n + 1);
+            } else if (cmd.command_type === 'clear_cache') {
+              markProcessed(cmd.id);
+              await reportCommandResult(cmd, { status: 'executed' });
+              try {
+                localStorage.removeItem(CACHE_KEY);
+                localStorage.removeItem(immersiveStorageKey(displayToken));
+              } catch { /* ignore */ }
+              window.location.reload();
+              return;
+            } else if (cmd.command_type === 'screenshot') {
+              let imageData = null;
+              let captureError = null;
+              try {
+                if (videoRef.current && videoRef.current.readyState >= 2) {
                   const canvas = document.createElement('canvas');
-                  canvas.width = img.naturalWidth || 1280; canvas.height = img.naturalHeight || 720;
+                  canvas.width = videoRef.current.videoWidth || 1280;
+                  canvas.height = videoRef.current.videoHeight || 720;
                   const ctx = canvas.getContext('2d');
-                  if (ctx) { ctx.drawImage(img, 0, 0); imageData = canvas.toDataURL('image/jpeg', 0.6); }
+                  if (ctx) {
+                    ctx.drawImage(videoRef.current, 0, 0);
+                    imageData = canvas.toDataURL('image/jpeg', 0.6);
+                  }
+                } else {
+                  const img = document.querySelector('img[data-slide]');
+                  if (img && img.complete) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.naturalWidth || 1280;
+                    canvas.height = img.naturalHeight || 720;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                      ctx.drawImage(img, 0, 0);
+                      imageData = canvas.toDataURL('image/jpeg', 0.6);
+                    }
+                  } else if (displayType === 'media') {
+                    captureError = 'No slideshow frame available';
+                  } else {
+                    captureError = 'Video frame not ready';
+                  }
                 }
+              } catch (err) {
+                captureError = err.message || 'Canvas capture failed (possible CORS)';
               }
               if (imageData) {
-                await displayApi.post('/displays/screenshot', { token: displayToken, imageData });
+                await displayApi.post('/displays/screenshot', { token: displayToken, imageData, command_id: cmd.id });
+              } else {
+                outcome = {
+                  status: displayType === 'stream' ? 'failed' : 'unsupported',
+                  error_code: 'SCREENSHOT_CAPTURE_FAILED',
+                  error_message: captureError || 'Could not capture screenshot',
+                };
               }
-            } catch { /* ignore screenshot errors */ }
+            } else if (cmd.command_type === 'apply_scene' || cmd.command_type === 'set_mode') {
+              outcome = { status: 'unsupported', error_code: 'UNSUPPORTED_COMMAND', error_message: `Command ${cmd.command_type} not supported on stream kiosk` };
+            } else {
+              outcome = { status: 'unsupported', error_code: 'UNKNOWN_COMMAND', error_message: `Unknown command: ${cmd.command_type}` };
+            }
+          } catch (err) {
+            outcome = { status: 'failed', error_code: 'COMMAND_HANDLER_ERROR', error_message: err.message || 'Command failed' };
           }
 
-          await displayApi.patch(`/displays/commands/${cmd.id}/execute`, { token: displayToken }).catch(() => {});
+          markProcessed(cmd.id);
+          await reportCommandResult(cmd, outcome);
         }
-      } catch { /* network down — silent */ }
+      } catch { /* network down */ }
     };
 
-    // Store the poll handler in a ref so the SSE path can reuse it
     handleCommandsRef.current = poll;
-
-    // ── Try SSE first ────────────────────────────────────────────────────
-    const sseBase = displayApi.defaults.baseURL || '/api';
-    let es = null;
-    let sseConnected = false;
-
-    // Always poll — SSE alone is unreliable on some TVs / proxies
     poll();
-    commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
-
-    try {
-      es = new EventSource(`${sseBase}/displays/events/${displayToken}`);
-
-      es.addEventListener('connected', () => {
-        sseConnected = true;
-      });
-
-      es.addEventListener('command', () => {
-        handleCommandsRef.current?.();
-      });
-
-      es.onerror = () => {
-        if (sseConnected) {
-          es?.close();
-          sseConnected = false;
-        }
-      };
-    } catch {
-      // EventSource not available — polling already running
-    }
+    setPollInterval(COMMAND_POLL_FAST_MS);
+    connectSSE();
 
     return () => {
+      stopped = true;
       es?.close();
-      clearInterval(commandPollRef.current);
+      clearTimeout(sseReconnectTimer);
+      clearInterval(pollTimer);
       clearTimeout(commandTimeoutRef.current);
     };
-  // verifyDisplay intentionally excluded — accessed via verifyDisplayRef to
-  // prevent the interval from being torn down and recreated on every verify call.
-  }, [displayToken, activeOverride, tryBrowserFullscreenSilently, refreshOverlayData, isInBrowserFullscreen, applyPlaylistFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [displayToken]);
 
   // ── Video player ─────────────────────────────────────────────────────────
 
@@ -723,7 +841,7 @@ export default function KioskModePage() {
       video.removeEventListener('timeupdate', onTimeUpdate);
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     };
-  }, [currentChannel]);
+  }, [currentChannel, playbackGeneration]);
 
   // ── Auto-failover: switch to media playlist when stream fails too long ───
 

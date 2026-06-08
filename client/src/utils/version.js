@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.2.3'; // Fix favorites filter crash
+export const APP_VERSION = '1.2.4'; // Kiosk remote control reliability
 
 export function checkVersion() {
   try {
