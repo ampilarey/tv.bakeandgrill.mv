@@ -59,8 +59,9 @@ export function useChannelList({ playlistId, favorites, playStatusFilter = 'play
       );
     }
 
-    if (showFavoritesOnly && favorites) {
-      result = result.filter((c) => favorites.has(c.id));
+    if (showFavoritesOnly && favorites?.length) {
+      const favoriteIds = new Set(favorites.map((f) => String(f.channel_id)));
+      result = result.filter((c) => favoriteIds.has(String(c.id)));
     }
 
     if (selectedGroup) {

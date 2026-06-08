@@ -35,12 +35,12 @@ export function useFavorites(playlistId) {
   });
 
   const isFavorite = useCallback(
-    (channelId) => favorites.some(f => f.channel_id === channelId),
+    (channelId) => favorites.some((f) => String(f.channel_id) === String(channelId)),
     [favorites]
   );
 
   const toggleFavorite = useCallback((channel) => {
-    const fav = favorites.find(f => f.channel_id === channel.id);
+    const fav = favorites.find((f) => String(f.channel_id) === String(channel.id));
     if (fav) {
       removeFav.mutate(fav.id);
     } else {
