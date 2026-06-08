@@ -6,6 +6,9 @@ import App from './App.jsx';
 import './index.css';
 import { APP_VERSION } from './utils/version.js';
 import { clearChunkReloadFlag } from './utils/lazyWithRetry.js';
+import { redirectLegacyHashRoutes } from './utils/legacyHashRedirect.js';
+
+redirectLegacyHashRoutes();
 import { initSentry, setupGlobalErrorHandlers } from './utils/errorTracking.js';
 
 // Init Sentry before anything else (no-op when VITE_SENTRY_DSN is not set)

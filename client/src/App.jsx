@@ -1,20 +1,19 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Spinner from './components/common/Spinner';
 import api from './services/api';
 import { lazyWithRetry } from './utils/lazyWithRetry';
+import LoginPage from './pages/LoginPage';
+import DisplayPairingPage from './pages/DisplayPairingPage';
 
-// Lazy-loaded pages — split into separate chunks so the initial JS bundle
-// only includes the code needed for the first rendered route.
-const LoginPage          = lazyWithRetry(() => import('./pages/LoginPage'));
+// Public TV/setup routes are bundled eagerly — lazy chunks breaking after deploy blocked /pair.
 const FirstTimeSetupPage = lazyWithRetry(() => import('./pages/FirstTimeSetupPage'));
 const DashboardPage      = lazyWithRetry(() => import('./pages/DashboardPage'));
 const PlayerPage         = lazyWithRetry(() => import('./pages/PlayerPage'));
 const ProfilePage        = lazyWithRetry(() => import('./pages/ProfilePage'));
 const HistoryPage        = lazyWithRetry(() => import('./pages/HistoryPage'));
 const KioskModePage      = lazyWithRetry(() => import('./pages/KioskModePage'));
-const DisplayPairingPage = lazyWithRetry(() => import('./pages/DisplayPairingPage'));
 
 // Admin Pages
 const AdminDashboard         = lazyWithRetry(() => import('./pages/admin/AdminDashboard'));
@@ -412,11 +411,20 @@ function AnimatedRoutes() {
 
 // Wrapper that keys the ErrorBoundary to the current route pathname so
 // navigating away from a crashed page automatically resets the boundary.
+const PUBLIC_PATHS = new Set(['/login', '/pair', '/display']);
+
+function publicRouteOnReset(pathname) {
+  if (PUBLIC_PATHS.has(pathname)) {
+    window.location.reload();
+    return;
+  }
+  window.location.href = '/dashboard';
+}
+
 function LocationKeyedBoundary() {
   const location = useLocation();
-  const navigate = useNavigate();
   return (
-    <ErrorBoundary key={location.pathname} onReset={() => navigate('/dashboard')}>
+    <ErrorBoundary key={location.pathname} onReset={() => publicRouteOnReset(location.pathname)}>
       <React.Suspense fallback={<PageLoader />}>
         <AnimatedRoutes />
       </React.Suspense>
