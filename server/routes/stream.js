@@ -141,11 +141,12 @@ router.get('/:channelId/seg', asyncHandler(async (req, res) => {
         timeout: PROXY_TIMEOUT_MS,
         headers,
         start: 0,
-        end: Math.min(8191, SEGMENT_MAX_BYTES - 1),
+        end: SEGMENT_MAX_BYTES - 1,
         maxBytes: SEGMENT_MAX_BYTES,
       });
       if (segRes.headers['content-type']) res.set('Content-Type', segRes.headers['content-type']);
       else res.set('Content-Type', 'video/mp2t');
+      res.set('Accept-Ranges', 'bytes');
       res.send(segRes.data);
     }
   } catch (err) {

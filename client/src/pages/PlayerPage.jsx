@@ -219,22 +219,24 @@ export default function PlayerPage() {
 
   // (channel list, favorites, watch history, and filter logic are now in custom hooks)
 
-  // Safety valve: if videoLoading is stuck but the video is provably ready/playing,
-  // force-clear it. This catches edge cases where 'playing'/'timeupdate' don't fire.
+  // Safety valve: clear spinner when playback is provably active, or surface an error
+  // if loading never resolves (covers timeout cleared prematurely by play()/playing).
   useEffect(() => {
     if (!videoLoading) return;
+    const startedAt = Date.now();
     const checkInterval = setInterval(() => {
       const v = videoRef.current;
       if (!v) return;
-      // Clear spinner if:
-      //  a) time is advancing — definitive proof of active playback
-      //  b) browser has enough data to play (readyState >= 3 = HAVE_FUTURE_DATA)
-      //     and the video isn't paused — covers the "first segment loaded but
-      //     currentTime still 0" case on iOS native HLS.
       const timeAdvancing = !v.paused && v.readyState >= 2 && v.currentTime > 0;
-      const hasEnoughData = !v.paused && v.readyState >= 3;
-      if (timeAdvancing || hasEnoughData) {
+      const liveWithVideo =
+        !v.paused && v.readyState >= 3 && v.videoWidth > 0 && v.videoHeight > 0;
+      if (timeAdvancing || liveWithVideo) {
         setVideoLoading(false);
+        return;
+      }
+      if (Date.now() - startedAt > PLAYBACK_TIMEOUT_MS + 1500) {
+        setVideoLoading(false);
+        setVideoError((prev) => prev || 'Stream offline');
       }
     }, 1000);
     return () => clearInterval(checkInterval);
@@ -325,22 +327,20 @@ export default function PlayerPage() {
     
     // Timeout guard — confirm playback via advancing timeupdate, not readyState alone
     let playbackStartTimeout = null;
-    let hasStartedPlaying = false;
     let hasConfirmedPlayback = false;
     let lastPlaybackTime = 0;
-    let timeoutCleared = false;
+    let liveConfirmTicks = 0;
 
     const clearPlaybackTimeout = () => {
-      if (playbackStartTimeout && !timeoutCleared) {
+      if (playbackStartTimeout) {
         clearTimeout(playbackStartTimeout);
-        timeoutCleared = true;
+        playbackStartTimeout = null;
       }
     };
 
     const confirmPlayback = () => {
       if (hasConfirmedPlayback) return;
       hasConfirmedPlayback = true;
-      hasStartedPlaying = true;
       clearPlaybackTimeout();
       setVideoLoading(false);
       setVideoError(null);
@@ -348,6 +348,7 @@ export default function PlayerPage() {
 
     const handlePlaybackTimeout = () => {
       if (hasConfirmedPlayback) return;
+      playbackStartTimeout = null;
       setVideoLoading(false);
       const msg = mapPlaybackError({ timedOut: true, channel: currentChannel });
       setVideoError(msg);
@@ -362,15 +363,23 @@ export default function PlayerPage() {
     };
 
     const startPlaybackTimeout = () => {
-      timeoutCleared = false;
       clearPlaybackTimeout();
       playbackStartTimeout = setTimeout(handlePlaybackTimeout, PLAYBACK_TIMEOUT_MS);
     };
 
     const trackTimeUpdateForConfirm = () => {
+      if (hasConfirmedPlayback) return;
       if (video.currentTime > 0 && video.currentTime !== lastPlaybackTime) {
         lastPlaybackTime = video.currentTime;
+        liveConfirmTicks = 0;
         confirmPlayback();
+        return;
+      }
+      if (!video.paused && video.readyState >= 3 && video.videoWidth > 0 && video.videoHeight > 0) {
+        liveConfirmTicks += 1;
+        if (liveConfirmTicks >= 2) confirmPlayback();
+      } else {
+        liveConfirmTicks = 0;
       }
     };
 
@@ -435,11 +444,7 @@ export default function PlayerPage() {
           const playPromise = video.play();
           if (playPromise && typeof playPromise.then === 'function') {
             await playPromise;
-            console.log('✅ Video playing successfully');
-            hasStartedPlaying = true;
-            clearPlaybackTimeout();
-            setVideoLoading(false);
-            setVideoError(null);
+            console.log('✅ Video play() resolved — waiting for timeupdate to confirm');
           }
         } catch (err) {
           console.warn('⏳ Autoplay blocked, trying muted fallback:', err.message);
@@ -450,23 +455,16 @@ export default function PlayerPage() {
             const mutedPromise = video.play();
             if (mutedPromise && typeof mutedPromise.then === 'function') {
               await mutedPromise;
-              console.log('✅ Video playing muted');
-              hasStartedPlaying = true;
-              clearPlaybackTimeout();
-              setVideoLoading(false);
-              setVideoError(null);
-              
-              // Show message that user can unmute
+              console.log('✅ Video play() resolved (muted) — waiting for timeupdate to confirm');
               setTimeout(() => {
-                video.controls = true; // Ensure controls visible
+                video.controls = true;
               }, 500);
             }
           } catch (mutedErr) {
             console.warn('⚠️ Autoplay blocked even when muted - user interaction required');
-            clearPlaybackTimeout(); // Clear timeout since we know it needs user interaction
             setVideoLoading(false);
-            video.controls = true; // Ensure controls visible for manual play
-            // Don't set error - this is normal behavior, user can tap to play
+            video.controls = true;
+            startPlaybackTimeout();
           }
         }
       };
@@ -508,8 +506,6 @@ export default function PlayerPage() {
             height: video.videoHeight
           });
         }
-        
-        setVideoLoading(false);
         
         // Try to play - iOS requires user interaction, but we'll try anyway
         tryPlayWithFallback();
@@ -626,10 +622,6 @@ export default function PlayerPage() {
           // Clear any previous audio-only errors
           setVideoError(null);
         }
-        
-        hasStartedPlaying = true;
-        clearPlaybackTimeout();
-        setVideoLoading(false);
       };
       
       video.addEventListener('canplay', storedHandlers.iosCanPlayHandler);
@@ -646,7 +638,7 @@ export default function PlayerPage() {
           bufferingTimerRef.current = null;
         }
         trackTimeUpdateForConfirm();
-        setVideoLoading(false);
+        if (hasConfirmedPlayback) setVideoLoading(false);
       };
       video.addEventListener('timeupdate', storedHandlers.iosTimeUpdateHandler);
       
@@ -731,15 +723,10 @@ export default function PlayerPage() {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
         }
-        setVideoLoading(false);
         // Try to play again if not already playing
         if (video.paused && !video.ended) {
-          video.play().then(() => {
-            hasStartedPlaying = true;
-            clearPlaybackTimeout();
-          }).catch(err => {
+          video.play().catch(err => {
             console.log('Auto-play still blocked, waiting for user interaction:', err.message);
-            // Don't clear timeout - user may need to interact
           });
         }
       };
@@ -750,16 +737,14 @@ export default function PlayerPage() {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
         }
-        setVideoLoading(false);
+        if (hasConfirmedPlayback) setVideoLoading(false);
       };
       
       const handleWaiting = () => {
         console.log('Video waiting for data');
-        // Once playback has started, don't re-show the loading spinner during
-        // normal HLS segment loading. On iOS, audio often continues while the
-        // next video segment is fetched, and 'playing' doesn't always re-fire
-        // after the stall, leaving the spinner stuck permanently.
-        if (hasStartedPlaying) return;
+        // Once playback is confirmed, don't re-show the loading spinner during
+        // normal HLS segment loading.
+        if (hasConfirmedPlayback) return;
         if (bufferingTimerRef.current) return;
         const timeAtWait = video.currentTime;
         bufferingTimerRef.current = setTimeout(() => {
@@ -772,21 +757,15 @@ export default function PlayerPage() {
       
       const handlePlaying = () => {
         console.log('Video playing');
-        hasStartedPlaying = true;
-        clearPlaybackTimeout();
-        // Clear any pending buffering timer and hide spinner immediately
         if (bufferingTimerRef.current) {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
         }
-        setVideoLoading(false);
       };
       
       const handleStalled = () => {
         console.warn('Video stalled');
-        // Same reasoning as handleWaiting — once playing has started, stalls are
-        // normal HLS behaviour and should not re-trigger the loading overlay.
-        if (hasStartedPlaying) return;
+        if (hasConfirmedPlayback) return;
         if (bufferingTimerRef.current) return;
         const timeAtStall = video.currentTime;
         bufferingTimerRef.current = setTimeout(() => {
@@ -826,8 +805,8 @@ export default function PlayerPage() {
       // Set up history logging timer (for iOS HLS path)
       console.log('⏰ Setting up history timer (5 seconds) - iOS HLS path');
       const historyTimerIOS = setTimeout(async () => {
-        console.log('📊 History timer fired:', { hasStartedPlaying, playlistId });
-        if (!hasStartedPlaying || !playlistId) return;
+        console.log('📊 History timer fired:', { hasConfirmedPlayback, playlistId });
+        if (!hasConfirmedPlayback || !playlistId) return;
         try {
           console.log('📤 POST /api/history...');
           await api.post('/history', {
@@ -901,38 +880,26 @@ export default function PlayerPage() {
           const playPromise = video.play();
           if (playPromise && typeof playPromise.then === 'function') {
             await playPromise;
-            console.log('✅ Video playing successfully');
-            hasStartedPlaying = true;
-            clearPlaybackTimeout();
-            setVideoLoading(false);
-            setVideoError(null);
+            console.log('✅ Video play() resolved — waiting for timeupdate to confirm');
           }
         } catch (err) {
           console.warn('⏳ Autoplay blocked, trying muted fallback:', err.message);
           
-          // Try muted playback as fallback
           try {
             video.muted = true;
             const mutedPromise = video.play();
             if (mutedPromise && typeof mutedPromise.then === 'function') {
               await mutedPromise;
-              console.log('✅ Video playing muted');
-              hasStartedPlaying = true;
-              clearPlaybackTimeout();
-              setVideoLoading(false);
-              setVideoError(null);
-              
-              // Show message that user can unmute
+              console.log('✅ Video play() resolved (muted) — waiting for timeupdate to confirm');
               setTimeout(() => {
-                video.controls = true; // Ensure controls visible
+                video.controls = true;
               }, 500);
             }
           } catch (mutedErr) {
             console.warn('⚠️ Autoplay blocked even when muted - user interaction required');
-            clearPlaybackTimeout(); // Clear timeout since we know it needs user interaction
             setVideoLoading(false);
-            video.controls = true; // Ensure controls visible for manual play
-            // Don't set error - this is normal behavior, user can tap to play
+            video.controls = true;
+            startPlaybackTimeout();
           }
         }
       };
@@ -1078,23 +1045,21 @@ export default function PlayerPage() {
         });
       });
       
-      // Track when HLS.js actually starts playing
       const handlePlaying = () => {
-        hasStartedPlaying = true;
-        clearPlaybackTimeout();
-        setVideoLoading(false);
-        setVideoError(null);
+        if (bufferingTimerRef.current) {
+          clearTimeout(bufferingTimerRef.current);
+          bufferingTimerRef.current = null;
+        }
       };
       video.addEventListener('playing', handlePlaying);
 
-      // timeupdate = playback is actually progressing — clear any stale spinner
       const handleTimeUpdate = () => {
         if (bufferingTimerRef.current) {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
         }
         trackTimeUpdateForConfirm();
-        setVideoLoading(false);
+        if (hasConfirmedPlayback) setVideoLoading(false);
       };
       video.addEventListener('timeupdate', handleTimeUpdate);
 
@@ -1114,7 +1079,6 @@ export default function PlayerPage() {
 
       hls.on(Hls.Events.FRAG_LOADED, () => {
         console.log('HLS fragment loaded');
-        setVideoLoading(false);
       });
       
       hls.on(Hls.Events.FRAG_PARSED, () => {
@@ -1205,9 +1169,9 @@ export default function PlayerPage() {
       // Set up history logging timer (for HLS.js path)
       console.log('⏰ Setting up history timer (5 seconds) - HLS.js path');
       const historyTimer = setTimeout(async () => {
-        console.log('📊 History timer fired:', { hasStartedPlaying, playlistId });
-        if (!hasStartedPlaying) {
-          console.log('⏭️ Skipping - video never started');
+        console.log('📊 History timer fired:', { hasConfirmedPlayback, playlistId });
+        if (!hasConfirmedPlayback) {
+          console.log('⏭️ Skipping - playback not confirmed');
           return;
         }
         if (!playlistId) {
@@ -1263,33 +1227,24 @@ export default function PlayerPage() {
       video.playsInline = true;
       video.src = streamUrl;
       
-      const handleNativePlaying = () => {
-        hasStartedPlaying = true;
-        clearPlaybackTimeout();
-        setVideoLoading(false);
-      };
-      
-      video.addEventListener('playing', handleNativePlaying);
+      const handleNativeTimeUpdate = () => trackTimeUpdateForConfirm();
+      video.addEventListener('timeupdate', handleNativeTimeUpdate);
       video.addEventListener('error', () => {
         clearPlaybackTimeout();
         setVideoLoading(false);
       });
       
-      video.play().then(() => {
-        hasStartedPlaying = true;
-        clearPlaybackTimeout();
-        setVideoLoading(false);
-      }).catch(err => {
+      video.play().catch(err => {
         console.warn('Autoplay failed:', err);
         setVideoLoading(false);
-        // Don't clear timeout - user may need to interact
+        startPlaybackTimeout();
       });
       
       // Set up history logging timer (for native HLS path)
       console.log('⏰ Setting up history timer (5 seconds) - native HLS path');
       const historyTimerNativeHLS = setTimeout(async () => {
-        console.log('📊 History timer fired:', { hasStartedPlaying, playlistId });
-        if (!hasStartedPlaying || !playlistId) return;
+        console.log('📊 History timer fired:', { hasConfirmedPlayback, playlistId });
+        if (!hasConfirmedPlayback || !playlistId) return;
         try {
           console.log('📤 POST /api/history...');
           await api.post('/history', {
@@ -1307,7 +1262,7 @@ export default function PlayerPage() {
       return () => {
         clearPlaybackTimeout();
         clearTimeout(historyTimerNativeHLS);
-        video.removeEventListener('playing', handleNativePlaying);
+        video.removeEventListener('timeupdate', handleNativeTimeUpdate);
       };
       
     } else {
@@ -1321,33 +1276,24 @@ export default function PlayerPage() {
       video.controls = true;
       video.playsInline = true;
       
-      const handleNativePlaying = () => {
-        hasStartedPlaying = true;
-        clearPlaybackTimeout();
-        setVideoLoading(false);
-      };
-      
-      video.addEventListener('playing', handleNativePlaying);
+      const handleNativeTimeUpdate = () => trackTimeUpdateForConfirm();
+      video.addEventListener('timeupdate', handleNativeTimeUpdate);
       video.addEventListener('error', () => {
         clearPlaybackTimeout();
         setVideoLoading(false);
       });
       
-      video.play().then(() => {
-        hasStartedPlaying = true;
-        clearPlaybackTimeout();
-        setVideoLoading(false);
-      }).catch(err => {
+      video.play().catch(err => {
         console.warn('Play error:', err);
         setVideoLoading(false);
-        // Don't clear timeout - user may need to interact
+        startPlaybackTimeout();
       });
       
       // Set up history logging timer (for non-HLS path)
       console.log('⏰ Setting up history timer (5 seconds) - non-HLS path');
       const historyTimerNonHLS = setTimeout(async () => {
-        console.log('📊 History timer fired:', { hasStartedPlaying, playlistId });
-        if (!hasStartedPlaying) return;
+        console.log('📊 History timer fired:', { hasConfirmedPlayback, playlistId });
+        if (!hasConfirmedPlayback) return;
         if (!playlistId) return;
         try {
           console.log('📤 POST /api/history...');
@@ -1366,11 +1312,11 @@ export default function PlayerPage() {
       return () => {
         clearPlaybackTimeout();
         clearTimeout(historyTimerNonHLS);
-        video.removeEventListener('playing', handleNativePlaying);
+        video.removeEventListener('timeupdate', handleNativeTimeUpdate);
       };
     }
 
-  }, [currentChannel, playlistId]);
+  }, [currentChannel?.id, currentChannel?.playback_url, currentChannel?.url, playlistId, isIOS]);
 
   // Show Now Playing overlay when channel changes
   useEffect(() => {
@@ -1741,7 +1687,7 @@ export default function PlayerPage() {
                     )}
                     
                     {/* Tap to Play Button (Mobile) - Show when video is paused and needs user interaction */}
-                    {!videoLoading && videoRef.current && videoRef.current.paused && (isIOS || (typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || /Android/.test(navigator.userAgent)))) && !videoError && (
+                    {videoRef.current && videoRef.current.paused && (isIOS || (typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || /Android/.test(navigator.userAgent)))) && !videoError && (
                       <div 
                         className="absolute inset-0 flex items-center justify-center bg-black/70 z-20 cursor-pointer rounded-xl"
                   onClick={async (e) => {

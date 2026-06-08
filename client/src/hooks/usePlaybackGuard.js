@@ -164,11 +164,22 @@ export function createPlaybackGuard({
     // playing alone is not enough — wait for timeupdate
   };
 
+  let liveConfirmTicks = 0;
+
   const onTimeUpdate = () => {
-    if (!video) return;
+    if (!video || confirmed) return;
     if (video.currentTime > 0 && video.currentTime !== lastTime) {
       lastTime = video.currentTime;
+      liveConfirmTicks = 0;
       confirm();
+      return;
+    }
+    // Live HLS on iOS may not advance currentTime at the live edge — use dimensions + readyState
+    if (!video.paused && video.readyState >= 3 && video.videoWidth > 0 && video.videoHeight > 0) {
+      liveConfirmTicks += 1;
+      if (liveConfirmTicks >= 2) confirm();
+    } else {
+      liveConfirmTicks = 0;
     }
   };
 
