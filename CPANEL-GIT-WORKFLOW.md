@@ -13,6 +13,34 @@
 
 ---
 
+## ⚡ cPanel terminal — copy/paste deploy
+
+After code is pushed to GitHub from your Mac (including `client/dist` if the UI changed):
+
+```bash
+cd ~/tv.bakeandgrill.mv
+git pull origin main
+cd server
+mkdir -p tmp
+touch tmp/restart.txt
+```
+
+Verify:
+
+```bash
+git log -1 --oneline
+curl -s https://tv.bakeandgrill.mv/api/health
+```
+
+Hard-refresh https://tv.bakeandgrill.mv in the browser.
+
+**Notes:**
+- Do **not** use `/path/to/tv.bakeandgrill.mv` — that was a placeholder. Use `~/tv.bakeandgrill.mv`.
+- Restart file path is `server/tmp/restart.txt`, not `client/tmp/restart.txt`.
+- If pull fails with SSH, prefix: `GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main`
+
+---
+
 ## 🔧 Making Changes & Deploying
 
 ### **LOCAL → GITHUB → CPANEL Workflow**
@@ -172,9 +200,9 @@ git commit -m "fix: Resolve channel filtering issue"
 git push origin main
 
 # CPANEL
-cd ~/tv.bakeandgrill.mv/
-GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519" git pull origin main
-touch server/tmp/restart.txt
+cd ~/tv.bakeandgrill.mv
+git pull origin main
+cd server && mkdir -p tmp && touch tmp/restart.txt
 
 # DONE! Bug fixed in production
 ```
@@ -195,9 +223,9 @@ git commit -m "feat: Add analytics dashboard"
 git push origin main
 
 # CPANEL
-cd ~/tv.bakeandgrill.mv/
-GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519" git pull origin main
-touch server/tmp/restart.txt
+cd ~/tv.bakeandgrill.mv
+git pull origin main
+cd server && mkdir -p tmp && touch tmp/restart.txt
 
 # DONE! Feature live in production
 ```

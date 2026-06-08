@@ -298,13 +298,48 @@ Manual test checklist: [`docs/CHANNEL_PLAYBACK_TEST_CHECKLIST.md`](docs/CHANNEL_
 - [ ] `uploads/` directory writable by Node.js process
 - [ ] cPanel: Node.js app set to start with `server.js`, restart after pull
 
-### cPanel Pull Command
+### cPanel terminal — pull & deploy
+
+**Project path on server:** `~/tv.bakeandgrill.mv`  
+(`/home/bakeandgrill/tv.bakeandgrill.mv`)
+
+**Standard deploy** (frontend `client/dist` is built locally and committed to git — no `npm run build` on server):
 
 ```bash
-cd ~/tv.bakeandgrill.mv && \
-  GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main && \
-  cd client && npm run build && cd .. && \
-  touch tmp/restart.txt
+cd ~/tv.bakeandgrill.mv
+git pull origin main
+cd server
+mkdir -p tmp
+touch tmp/restart.txt
+```
+
+**If git asks for SSH key** (some servers need this):
+
+```bash
+cd ~/tv.bakeandgrill.mv
+GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main
+cd server && mkdir -p tmp && touch tmp/restart.txt
+```
+
+**Verify after deploy:**
+
+```bash
+cd ~/tv.bakeandgrill.mv && git log -1 --oneline
+curl -s https://tv.bakeandgrill.mv/api/health
+```
+
+Then hard-refresh the site in your browser (`Ctrl+Shift+R` / `Cmd+Shift+R`).
+
+**If `touch tmp/restart.txt` does not restart the app:** cPanel → **Setup Node.js App** → `tv.bakeandgrill.mv` → **Restart**, or run `~/restart-tv-server.sh`.
+
+**Only if `client/dist` was not pushed** (fallback — needs Node on server):
+
+```bash
+cd ~/tv.bakeandgrill.mv/client
+source ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate
+npm install && npm run build
+deactivate
+cd ~/tv.bakeandgrill.mv/server && touch tmp/restart.txt
 ```
 
 ---
