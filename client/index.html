@@ -24,55 +24,35 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- 🚨 CRITICAL: Check for old cached script BEFORE loading main script -->
+    <!-- Recover when cached HTML references JS chunks removed by a new deploy -->
     <script>
-      // Run IMMEDIATELY before any other scripts
-      (function() {
-        console.log('🔍 Checking for cached scripts...');
-        
-        // Check if we're loading from a cached HTML that references old JS
-        const scripts = document.getElementsByTagName('script');
-        for (let script of scripts) {
-          if (script.src) {
-            console.log('📜 Found script:', script.src);
-            // If this is the old cached script, force reload IMMEDIATELY
-            if (script.src.includes('CM0JPdys') || script.src.includes('BrB98PUB')) {
-              console.error('❌ OLD CACHED SCRIPT DETECTED:', script.src);
-              console.error('🔄 FORCING HARD RELOAD TO BYPASS CACHE...');
-              
-              // Clear all storage
-              try {
-                localStorage.clear();
-                sessionStorage.clear();
-              } catch (e) {}
-              
-              // Clear all service workers
-              if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                  for(let registration of registrations) {
-                    registration.unregister();
-                  }
-                });
-              }
-              
-              // Clear all caches
-              if ('caches' in window) {
-                caches.keys().then(function(names) {
-                  for (let name of names) {
-                    caches.delete(name);
-                  }
-                });
-              }
-              
-              // Force reload with cache bypass
-              window.location.replace(window.location.href + '?nocache=' + Date.now());
-              return; // Stop execution
-            }
+      (function () {
+        var RECOVERY_KEY = 'asset_recovery_once';
+
+        function recoverFromStaleAssets() {
+          if (sessionStorage.getItem(RECOVERY_KEY)) return;
+          sessionStorage.setItem(RECOVERY_KEY, '1');
+
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (r) { r.unregister(); });
+            });
           }
+          if ('caches' in window) {
+            caches.keys().then(function (names) {
+              names.forEach(function (name) { caches.delete(name); });
+            });
+          }
+
+          var url = new URL(window.location.href);
+          url.searchParams.set('fresh', String(Date.now()));
+          window.location.replace(url.toString());
         }
-        
-        // If we got here, we're loading fresh code
-        console.log('✅ Fresh code detected - proceeding...');
+
+        window.addEventListener('error', function (event) {
+          var tag = event.target && event.target.tagName;
+          if (tag === 'SCRIPT' || tag === 'LINK') recoverFromStaleAssets();
+        }, true);
       })();
     </script>
     <script type="module" src="/src/main.jsx"></script>

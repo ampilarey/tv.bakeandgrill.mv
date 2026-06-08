@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext.jsx';
 import App from './App.jsx';
 import './index.css';
 import { APP_VERSION } from './utils/version.js';
+import { clearChunkReloadFlag } from './utils/lazyWithRetry.js';
 import { initSentry, setupGlobalErrorHandlers } from './utils/errorTracking.js';
 
 // Init Sentry before anything else (no-op when VITE_SENTRY_DSN is not set)
@@ -107,6 +108,9 @@ if (typeof window !== 'undefined') {
         } catch { /* SW not supported or blocked — continue without */ }
       }
     } catch { /* version/cache management failed — continue */ }
+
+    clearChunkReloadFlag();
+    sessionStorage.removeItem('asset_recovery_once');
 
     // Mount the React tree only after all async setup above completes so the
     // app never races with in-flight cache deletion.

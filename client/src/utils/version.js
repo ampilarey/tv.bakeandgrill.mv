@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.1.6'; // Fix login 429 when TVs share same network IP
+export const APP_VERSION = '1.1.7'; // Fix /pair link breaking after deploy (stale chunk cache)
 
 export function checkVersion() {
   try {

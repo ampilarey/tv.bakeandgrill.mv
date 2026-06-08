@@ -91,10 +91,9 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        navigationPreload: true,
-        // SPA fallback when offline — index.html so client routes like /pair still work
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        navigationPreload: false,
+        // Let the server serve fresh index.html for /pair etc. — SW shell caching caused stale chunks after deploy.
+        navigateFallback: null,
         // Only precache critical assets, NOT JS/HTML to avoid stale cache issues
         globPatterns: ['**/*.{ico,png,svg,woff,woff2}', 'offline.html'],
         // Exclude JS and HTML from precaching - they're handled by .htaccess

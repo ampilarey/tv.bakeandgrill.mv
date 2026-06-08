@@ -3,41 +3,42 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'r
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Spinner from './components/common/Spinner';
 import api from './services/api';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // Lazy-loaded pages — split into separate chunks so the initial JS bundle
 // only includes the code needed for the first rendered route.
-const LoginPage          = React.lazy(() => import('./pages/LoginPage'));
-const FirstTimeSetupPage = React.lazy(() => import('./pages/FirstTimeSetupPage'));
-const DashboardPage      = React.lazy(() => import('./pages/DashboardPage'));
-const PlayerPage         = React.lazy(() => import('./pages/PlayerPage'));
-const ProfilePage        = React.lazy(() => import('./pages/ProfilePage'));
-const HistoryPage        = React.lazy(() => import('./pages/HistoryPage'));
-const KioskModePage      = React.lazy(() => import('./pages/KioskModePage'));
-const DisplayPairingPage = React.lazy(() => import('./pages/DisplayPairingPage'));
+const LoginPage          = lazyWithRetry(() => import('./pages/LoginPage'));
+const FirstTimeSetupPage = lazyWithRetry(() => import('./pages/FirstTimeSetupPage'));
+const DashboardPage      = lazyWithRetry(() => import('./pages/DashboardPage'));
+const PlayerPage         = lazyWithRetry(() => import('./pages/PlayerPage'));
+const ProfilePage        = lazyWithRetry(() => import('./pages/ProfilePage'));
+const HistoryPage        = lazyWithRetry(() => import('./pages/HistoryPage'));
+const KioskModePage      = lazyWithRetry(() => import('./pages/KioskModePage'));
+const DisplayPairingPage = lazyWithRetry(() => import('./pages/DisplayPairingPage'));
 
 // Admin Pages
-const AdminDashboard         = React.lazy(() => import('./pages/admin/AdminDashboard'));
-const UserManagement         = React.lazy(() => import('./pages/admin/UserManagement'));
-const DisplayManagement      = React.lazy(() => import('./pages/admin/DisplayManagement'));
-const Analytics              = React.lazy(() => import('./pages/admin/Analytics'));
-const Settings               = React.lazy(() => import('./pages/admin/Settings'));
-const TickerManagement       = React.lazy(() => import('./pages/admin/TickerManagement'));
-const ScheduleManagement     = React.lazy(() => import('./pages/admin/ScheduleManagement'));
-const SceneManagement        = React.lazy(() => import('./pages/admin/SceneManagement'));
-const TestChecklist          = React.lazy(() => import('./pages/admin/TestChecklist'));
-const DisplayAnalytics       = React.lazy(() => import('./pages/admin/DisplayAnalytics'));
-const OverlaySchedule        = React.lazy(() => import('./pages/admin/OverlaySchedule'));
-const ZoneManagement         = React.lazy(() => import('./pages/admin/ZoneManagement'));
-const MediaLibrary           = React.lazy(() => import('./pages/admin/MediaLibrary'));
-const MediaPlaylistManagement= React.lazy(() => import('./pages/admin/MediaPlaylistManagement'));
-const OverlayManagement      = React.lazy(() => import('./pages/admin/OverlayManagement'));
-const MonitoringDashboard    = React.lazy(() => import('./pages/admin/MonitoringDashboard'));
-const ContentSchedules       = React.lazy(() => import('./pages/admin/ContentSchedules'));
-const EmergencyOverride      = React.lazy(() => import('./pages/admin/EmergencyOverride'));
-const ChannelHealth          = React.lazy(() => import('./pages/admin/ChannelHealth'));
-const SystemHealth           = React.lazy(() => import('./pages/admin/SystemHealth'));
-const FeatureFlags           = React.lazy(() => import('./pages/admin/FeatureFlags'));
-const SlideTemplates         = React.lazy(() => import('./pages/admin/SlideTemplates'));
+const AdminDashboard         = lazyWithRetry(() => import('./pages/admin/AdminDashboard'));
+const UserManagement         = lazyWithRetry(() => import('./pages/admin/UserManagement'));
+const DisplayManagement      = lazyWithRetry(() => import('./pages/admin/DisplayManagement'));
+const Analytics              = lazyWithRetry(() => import('./pages/admin/Analytics'));
+const Settings               = lazyWithRetry(() => import('./pages/admin/Settings'));
+const TickerManagement       = lazyWithRetry(() => import('./pages/admin/TickerManagement'));
+const ScheduleManagement     = lazyWithRetry(() => import('./pages/admin/ScheduleManagement'));
+const SceneManagement        = lazyWithRetry(() => import('./pages/admin/SceneManagement'));
+const TestChecklist          = lazyWithRetry(() => import('./pages/admin/TestChecklist'));
+const DisplayAnalytics       = lazyWithRetry(() => import('./pages/admin/DisplayAnalytics'));
+const OverlaySchedule        = lazyWithRetry(() => import('./pages/admin/OverlaySchedule'));
+const ZoneManagement         = lazyWithRetry(() => import('./pages/admin/ZoneManagement'));
+const MediaLibrary           = lazyWithRetry(() => import('./pages/admin/MediaLibrary'));
+const MediaPlaylistManagement= lazyWithRetry(() => import('./pages/admin/MediaPlaylistManagement'));
+const OverlayManagement      = lazyWithRetry(() => import('./pages/admin/OverlayManagement'));
+const MonitoringDashboard    = lazyWithRetry(() => import('./pages/admin/MonitoringDashboard'));
+const ContentSchedules       = lazyWithRetry(() => import('./pages/admin/ContentSchedules'));
+const EmergencyOverride      = lazyWithRetry(() => import('./pages/admin/EmergencyOverride'));
+const ChannelHealth          = lazyWithRetry(() => import('./pages/admin/ChannelHealth'));
+const SystemHealth           = lazyWithRetry(() => import('./pages/admin/SystemHealth'));
+const FeatureFlags           = lazyWithRetry(() => import('./pages/admin/FeatureFlags'));
+const SlideTemplates         = lazyWithRetry(() => import('./pages/admin/SlideTemplates'));
 
 // Mobile Components (small — kept eager)
 import BottomNav from './components/BottomNav';
