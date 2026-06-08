@@ -6,6 +6,7 @@ const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
 const { asyncHandler } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
+const { createDisplaySystemUser } = require('../utils/displayUser');
 
 const router = express.Router();
 
@@ -137,6 +138,13 @@ router.post('/admin-pair-pin', verifyToken, checkPermission('can_manage_displays
   const db = getDatabase();
   const { pin, name, location, playlist_id } = req.body;
 
+  if (!pin || !name || !playlist_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'PIN, display name, and playlist are required',
+    });
+  }
+
   const session = await getSession(db, pin);
 
   if (!session) {
@@ -146,44 +154,57 @@ router.post('/admin-pair-pin', verifyToken, checkPermission('can_manage_displays
     });
   }
 
-  const bcrypt = require('bcrypt');
-  const displayEmail = `display_${Date.now()}@internal.system`;
-  const displayPassword = crypto.randomBytes(32).toString('hex');
-  const passwordHash = await bcrypt.hash(displayPassword, 10);
+  const connection = await db.getConnection();
+  let displayId;
 
-  logger.debug('🔧 Creating display user with role "display"...');
-  let userResult;
   try {
-    [userResult] = await db.query(
-      `INSERT INTO users (email, password_hash, role, first_name, last_name, is_active)
-       VALUES (?, ?, 'display', ?, ?, 1)`,
-      [displayEmail, passwordHash, `Display: ${name}`, location || 'Kiosk']
+    await connection.beginTransaction();
+
+    logger.debug('🔧 Creating display user with role "display"...');
+    const displayUserId = await createDisplaySystemUser(connection, { name, location });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const locationPin = Math.floor(1000 + Math.random() * 9000).toString();
+
+    let insertResult;
+    try {
+      [insertResult] = await connection.query(
+        `INSERT INTO displays (name, location, token, playlist_id, location_pin, created_by, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [name, location || null, token, playlist_id, locationPin, req.user.id, displayUserId]
+      );
+    } catch (error) {
+      if (error.code === 'ER_BAD_FIELD_ERROR') {
+        [insertResult] = await connection.query(
+          `INSERT INTO displays (name, location, token, playlist_id, location_pin, created_by)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [name, location || null, token, playlist_id, locationPin, req.user.id]
+        );
+      } else {
+        throw error;
+      }
+    }
+
+    displayId = insertResult.insertId;
+
+    await connection.query(
+      'UPDATE pairing_sessions SET display_id = ? WHERE token = ?',
+      [displayId, pin]
     );
-    logger.debug('✅ Display user created successfully');
+
+    await connection.commit();
+    logger.debug('✅ Display paired successfully, id=%s', displayId);
   } catch (error) {
-    logger.error('❌ Error creating display user:', error.message);
+    await connection.rollback();
+    logger.error('❌ admin-pair-pin failed:', error.message);
     throw error;
+  } finally {
+    connection.release();
   }
-
-  const displayUserId = userResult.insertId;
-  const token = crypto.randomBytes(32).toString('hex');
-  const locationPin = Math.floor(1000 + Math.random() * 9000).toString();
-
-  const [result] = await db.query(
-    `INSERT INTO displays (name, location, token, playlist_id, location_pin, created_by, user_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [name, location || null, token, playlist_id, locationPin, req.user.id, displayUserId]
-  );
-
-  // Mark session as paired
-  await db.query(
-    'UPDATE pairing_sessions SET display_id = ? WHERE token = ?',
-    [result.insertId, pin]
-  );
 
   const [displays] = await db.query(
     `SELECT ${DISPLAY_SAFE_COLUMNS}, token FROM displays WHERE id = ?`,
-    [result.insertId]
+    [displayId]
   );
 
   res.json({
