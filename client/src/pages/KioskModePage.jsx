@@ -24,11 +24,11 @@ function immersiveStorageKey(token) {
 
 function readStoredImmersive(token) {
   try {
-    const v = sessionStorage.getItem(immersiveStorageKey(token));
+    const v = localStorage.getItem(immersiveStorageKey(token));
     if (v === '0') return false;
     if (v === '1') return true;
   } catch { /* ignore */ }
-  return true;
+  return false;
 }
 
 /** Prefer health-tested channels; fall back to any stream with a URL. */
@@ -247,7 +247,7 @@ export default function KioskModePage() {
     const on = !!enabled;
     setPseudoFullscreen(on);
     if (displayToken) {
-      try { sessionStorage.setItem(immersiveStorageKey(displayToken), on ? '1' : '0'); } catch { /* ignore */ }
+      try { localStorage.setItem(immersiveStorageKey(displayToken), on ? '1' : '0'); } catch { /* ignore */ }
     }
     document.documentElement.classList.toggle('kiosk-immersive', on);
     document.body.classList.toggle('kiosk-immersive', on);
@@ -386,7 +386,6 @@ export default function KioskModePage() {
       saveToCache(d, ch || []);
       clearInterval(retryCountdownRef.current);
       setShowStartOverlay(false);
-      applyImmersiveMode(readStoredImmersive(displayToken));
       tryBrowserFullscreenSilently();
 
       // ── Auto-reboot scheduling ──────────────────────────────────────
@@ -760,7 +759,7 @@ export default function KioskModePage() {
 
   const handleStart = async () => {
     setShowStartOverlay(false);
-    applyImmersiveMode(true);
+    applyImmersiveMode(readStoredImmersive(displayToken));
     tryBrowserFullscreenSilently();
   };
 

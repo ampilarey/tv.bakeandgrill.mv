@@ -1940,7 +1940,7 @@ export default function DisplayManagement() {
                   <input type="time" className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.night_start_time || '18:00'} onChange={e => setSettingsForm(f => ({...f, night_start_time: e.target.value}))} />
                 </div>
               </div>
-              <p className="text-xs text-tv-textMuted mt-2">Pairing is disabled by default for outdoor displays. Use "Enable Pairing" on the display card when needed.</p>
+              <p className="text-xs text-tv-textMuted mt-2">Day/night playlists are for reference only — the display does not switch automatically. Change the Media Playlist in settings when you want different content. Pairing is disabled by default for outdoor displays.</p>
             </section>
           )}
 

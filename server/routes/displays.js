@@ -92,14 +92,8 @@ router.post('/verify', displayLimiter, verifyDisplayToken, asyncHandler(async (r
     `, [display.id, zoneId, dayIdx, nowTime, nowTime]);
     if (scheds.length) resolvedMediaPlaylistId = scheds[0].playlist_id;
 
-    // Outdoor day/night override
-    if (display.is_outdoor) {
-      const dayStart   = (display.day_start_time   || '07:00:00');
-      const nightStart = (display.night_start_time || '18:00:00');
-      const isNight = nowTime >= nightStart || nowTime < dayStart;
-      if (isNight  && display.night_playlist_id) resolvedMediaPlaylistId = display.night_playlist_id;
-      else if (display.day_playlist_id)           resolvedMediaPlaylistId = display.day_playlist_id;
-    }
+    // Day/night playlists are manual-only — assign via Media Playlist in settings.
+    // (Automatic outdoor day/night switching was removed — it changed content without staff action.)
   } catch (err) { if (err.code !== 'ER_NO_SUCH_TABLE') console.error('Schedule resolution error:', err.message); }
 
   // Active emergency override

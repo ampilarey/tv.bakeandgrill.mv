@@ -83,16 +83,6 @@ router.get('/resolve', asyncHandler(async (req, res) => {
   if (!displays.length) return res.status(404).json({ success: false, error: 'Display not found' });
   const display = displays[0];
 
-  // Outdoor day/night selection
-  if (display.is_outdoor && display.day_playlist_id && display.night_playlist_id) {
-    const dayStart   = display.day_start_time   || '07:00:00';
-    const nightStart = display.night_start_time || '18:00:00';
-    const isDay   = nowTime >= dayStart   && nowTime < nightStart;
-    const isNight = nowTime >= nightStart || nowTime < dayStart;
-    if (isNight && display.night_playlist_id) return res.json({ success: true, playlist_id: display.night_playlist_id, source: 'outdoor_night' });
-    if (isDay   && display.day_playlist_id)   return res.json({ success: true, playlist_id: display.day_playlist_id,   source: 'outdoor_day' });
-  }
-
   // Content schedules: check display-level then zone-level
   const zoneId = display.zone_id || null;
 
