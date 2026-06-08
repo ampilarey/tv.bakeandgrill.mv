@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -44,7 +44,6 @@ export default function DisplayManagement() {
   const [channels, setChannels] = useState([]);
   const [filteredChannelsForControl, setFilteredChannelsForControl] = useState([]);
   const [selectedGroupForControl, setSelectedGroupForControl] = useState('');
-  const [groupsForControl, setGroupsForControl] = useState([]);
   const [playlistsForControl, setPlaylistsForControl] = useState([]);
   const [selectedPlaylistForControl, setSelectedPlaylistForControl] = useState('');
   const [channelSearchQuery, setChannelSearchQuery] = useState('');
@@ -362,11 +361,9 @@ export default function DisplayManagement() {
       try {
         const response = await api.get(`/displays/${display.id}/channels`);
         const channelsList = response.data.channels || [];
-        const groups = response.data.groups || [];
         const pls = response.data.playlists || [];
         setChannels(channelsList);
         setFilteredChannelsForControl(channelsList);
-        setGroupsForControl(groups);
         setPlaylistsForControl(pls);
       } catch (err) {
         console.error('Error fetching channels:', err);
@@ -379,31 +376,46 @@ export default function DisplayManagement() {
     }
   };
 
-  // Filter channels in remote control by playlist, group, and search query
-  useEffect(() => {
-    let filtered = [...channels];
+  const channelMatchesPlaylist = (ch, pid) =>
+    Number(ch.source_playlist_id) === pid || String(ch.id).startsWith(`${pid}-`);
 
-    if (selectedPlaylistForControl) {
-      const pid = parseInt(selectedPlaylistForControl, 10);
+  // Channels scoped to the selected playlist (or all when none selected)
+  const channelsForPlaylistScope = useMemo(() => {
+    if (!selectedPlaylistForControl) return channels;
+    const pid = parseInt(selectedPlaylistForControl, 10);
+    return channels.filter((ch) => channelMatchesPlaylist(ch, pid));
+  }, [channels, selectedPlaylistForControl]);
+
+  // Groups are always derived from the current playlist scope
+  const groupsForControl = useMemo(() => (
+    [...new Set(channelsForPlaylistScope.map((ch) => ch.group).filter(Boolean))].sort()
+  ), [channelsForPlaylistScope]);
+
+  useEffect(() => {
+    setSelectedGroupForControl('');
+  }, [selectedPlaylistForControl]);
+
+  // Filter by group and search within the playlist scope
+  useEffect(() => {
+    let filtered = [...channelsForPlaylistScope];
+
+    if (selectedGroupForControl) {
       filtered = filtered.filter(
-        (ch) => ch.source_playlist_id === pid || String(ch.id).startsWith(`${pid}-`)
+        (ch) => ch.group && ch.group.trim() === selectedGroupForControl.trim()
       );
     }
-    
-    if (selectedGroupForControl && selectedGroupForControl !== '') {
-      filtered = filtered.filter(ch => ch.group && ch.group.trim() === selectedGroupForControl.trim());
-    }
-    
-    if (channelSearchQuery && channelSearchQuery.trim() !== '') {
+
+    if (channelSearchQuery?.trim()) {
       const query = channelSearchQuery.toLowerCase().trim();
-      filtered = filtered.filter(ch => 
-        ch.name.toLowerCase().includes(query) ||
-        (ch.group && ch.group.toLowerCase().includes(query))
+      filtered = filtered.filter(
+        (ch) =>
+          ch.name.toLowerCase().includes(query) ||
+          (ch.group && ch.group.toLowerCase().includes(query))
       );
     }
-    
+
     setFilteredChannelsForControl(filtered);
-  }, [selectedPlaylistForControl, selectedGroupForControl, channelSearchQuery, channels]);
+  }, [channelsForPlaylistScope, selectedGroupForControl, channelSearchQuery]);
 
   const sendRemoteAction = async (action, extra = {}) => {
     if (!selectedDisplay) return;
@@ -521,8 +533,11 @@ export default function DisplayManagement() {
     }
   };
 
-  const handleFullscreenControl = async () => {
-    await sendRemoteAction('enter_fullscreen');
+  const handleFullscreenControl = () => {
+    sendRemoteAction('enter_fullscreen').then(() => {
+      setError('✅ Fullscreen sent — tap the TV once if a prompt appears');
+      setTimeout(() => setError(''), 4000);
+    });
   };
 
   const handleOpenSchedules = async (display) => {
@@ -1049,7 +1064,11 @@ export default function DisplayManagement() {
               <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   value={selectedPlaylistForControl}
-                  onChange={(e) => setSelectedPlaylistForControl(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedPlaylistForControl(e.target.value);
+                    setSelectedGroupForControl('');
+                    setChannelSearchQuery('');
+                  }}
                   className="flex-1 px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
                 >
                   <option value="">All playlists ({channels.length} channels)</option>
@@ -1121,12 +1140,23 @@ export default function DisplayManagement() {
                   onChange={(e) => setSelectedGroupForControl(e.target.value)}
                   className="w-full px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
                 >
-                  <option value="">All Groups ({channels.length} channels)</option>
-                  {groupsForControl.map(group => (
-                    <option key={group} value={group}>
-                      {group}
-                    </option>
-                  ))}
+                  <option value="">
+                    All Groups ({channelsForPlaylistScope.length} channel{channelsForPlaylistScope.length === 1 ? '' : 's'})
+                  </option>
+                  {groupsForControl.length === 0 ? (
+                    <option value="" disabled>No groups in this playlist</option>
+                  ) : (
+                    groupsForControl.map((group) => {
+                      const count = channelsForPlaylistScope.filter(
+                        (ch) => ch.group && ch.group.trim() === group.trim()
+                      ).length;
+                      return (
+                        <option key={group} value={group}>
+                          {group} ({count})
+                        </option>
+                      );
+                    })
+                  )}
                 </select>
               </div>
 

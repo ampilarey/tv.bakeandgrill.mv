@@ -110,6 +110,8 @@ export default function KioskModePage() {
   const [lastCommand, setLastCommand]       = useState(null);
   const [isFullscreen, setIsFullscreen]     = useState(false);
   const [needsFullscreenTap, setNeedsFullscreenTap] = useState(false);
+  const [remoteFullscreenPrompt, setRemoteFullscreenPrompt] = useState(false);
+  const [pseudoFullscreen, setPseudoFullscreen] = useState(false);
   const [announcementClearSignal, setAnnouncementClearSignal] = useState(0);
   const [showStartOverlay, setShowStartOverlay] = useState(false);
   const [cursorVisible, setCursorVisible]   = useState(true);
@@ -209,20 +211,58 @@ export default function KioskModePage() {
 
   // ── Fullscreen helper ────────────────────────────────────────────────────
 
+  const isInBrowserFullscreen = useCallback(() => (
+    !!(document.fullscreenElement || document.webkitFullscreenElement)
+  ), []);
+
   const enterFullscreen = useCallback(async () => {
     try {
-      const el = containerRef.current || document.documentElement;
-      if (el.requestFullscreen) await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-      else if (el.webkitEnterFullscreen) el.webkitEnterFullscreen();
-      setIsFullscreen(true);
-      setNeedsFullscreenTap(false);
-      return true;
+      const targets = [
+        containerRef.current,
+        document.documentElement,
+        document.body,
+        videoRef.current,
+      ].filter(Boolean);
+
+      for (const target of targets) {
+        if (target.requestFullscreen) {
+          await target.requestFullscreen();
+          break;
+        }
+        if (target.webkitRequestFullscreen) {
+          await target.webkitRequestFullscreen();
+          break;
+        }
+        if (target.webkitEnterFullscreen) {
+          target.webkitEnterFullscreen();
+          break;
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      if (isInBrowserFullscreen()) {
+        setIsFullscreen(true);
+        setNeedsFullscreenTap(false);
+        setRemoteFullscreenPrompt(false);
+        setPseudoFullscreen(false);
+        return true;
+      }
+
+      setPseudoFullscreen(true);
+      setNeedsFullscreenTap(true);
+      return false;
     } catch {
+      setPseudoFullscreen(true);
       setNeedsFullscreenTap(true);
       return false;
     }
-  }, []);
+  }, [isInBrowserFullscreen]);
+
+  const requestFullscreenFromRemote = useCallback(async () => {
+    const ok = await enterFullscreen();
+    if (!ok) setRemoteFullscreenPrompt(true);
+  }, [enterFullscreen]);
 
   const applyPlaylistFilter = useCallback((playlistId) => {
     const pid = parseInt(playlistId, 10);
@@ -452,11 +492,16 @@ export default function KioskModePage() {
               if (videoRef.current) { videoRef.current.muted = true; setIsMuted(true); videoRef.current.play().catch(() => {}); }
             });
           } else if (cmd.command_type === 'toggle_fullscreen') {
-            const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-            if (!inFS) await enterFullscreen();
-            else if (document.exitFullscreen) document.exitFullscreen();
+            if (isInBrowserFullscreen()) {
+              if (document.exitFullscreen) await document.exitFullscreen();
+              else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+              setPseudoFullscreen(false);
+              setRemoteFullscreenPrompt(false);
+            } else {
+              await requestFullscreenFromRemote();
+            }
           } else if (cmd.command_type === 'enter_fullscreen') {
-            await enterFullscreen();
+            await requestFullscreenFromRemote();
           } else if (cmd.command_type === 'clear_announcement') {
             setAnnouncementClearSignal((n) => n + 1);
           } else if (cmd.command_type === 'switch_playlist' && d.playlist_id) {
@@ -702,8 +747,23 @@ export default function KioskModePage() {
 
   const handleFullscreenTap = async (e) => {
     e?.stopPropagation?.();
-    await enterFullscreen();
+    setRemoteFullscreenPrompt(false);
+    const ok = await enterFullscreen();
+    if (!ok) setRemoteFullscreenPrompt(true);
   };
+
+  // Pseudo-fullscreen: fill viewport when browser API is blocked (no user gesture)
+  useEffect(() => {
+    if (!pseudoFullscreen || isInBrowserFullscreen()) return undefined;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+    };
+  }, [pseudoFullscreen, isInBrowserFullscreen]);
 
   // ── Renders ──────────────────────────────────────────────────────────────
 
@@ -733,7 +793,12 @@ export default function KioskModePage() {
     <div
       ref={containerRef}
       className="h-screen w-screen bg-black overflow-hidden relative"
-      style={{ cursor: cursorVisible ? 'default' : 'none' }}
+      style={{
+        cursor: cursorVisible ? 'default' : 'none',
+        ...(pseudoFullscreen && !isFullscreen
+          ? { position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 2147483640 }
+          : {}),
+      }}
     >
       {/* ── Tap-to-start overlay (first load) ──────────────────── */}
       {showStartOverlay && (
@@ -864,8 +929,34 @@ export default function KioskModePage() {
         </div>
       )}
 
+      {/* ── Remote-requested fullscreen (browser needs one tap on TV) ── */}
+      {!isFullscreen && !showStartOverlay && remoteFullscreenPrompt && (
+        <button
+          type="button"
+          onClick={handleFullscreenTap}
+          className="absolute inset-0 z-[2147483646] flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm"
+        >
+          <div
+            className="w-24 h-24 rounded-2xl flex items-center justify-center mb-6 shadow-2xl animate-pulse"
+            style={{ backgroundColor: brandColor }}
+          >
+            <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+          </div>
+          <p className="text-white text-2xl font-bold mb-2">Fullscreen requested</p>
+          <p className="text-white/70 text-lg mb-8">Tap anywhere on the TV to enter fullscreen</p>
+          <span
+            className="px-8 py-3 rounded-full text-white font-semibold text-lg border-2 border-white/30"
+            style={{ backgroundColor: brandColor }}
+          >
+            Tap to continue
+          </span>
+        </button>
+      )}
+
       {/* ── Fullscreen prompt (browser requires a tap on many TVs) ── */}
-      {!isFullscreen && !showStartOverlay && needsFullscreenTap && (
+      {!isFullscreen && !showStartOverlay && needsFullscreenTap && !remoteFullscreenPrompt && (
         <button
           type="button"
           onClick={handleFullscreenTap}

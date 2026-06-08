@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.1.0'; // Kiosk fullscreen + remote control enhancements
+export const APP_VERSION = '1.1.1'; // Remote fullscreen prompt + playlist-scoped groups
 
 export function checkVersion() {
   try {
