@@ -784,7 +784,7 @@ router.post('/:id/control',
   asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
-  const { action, channel_id, channel_name, volume, playlist_id } = req.body;
+  const { action, channel_id, channel_name, volume, playlist_id, overlay_mode } = req.body;
   
   if (!action) {
     return res.status(400).json({
@@ -837,11 +837,21 @@ router.post('/:id/control',
     case 'unmute':
     case 'toggle_fullscreen':
     case 'enter_fullscreen':
+    case 'exit_immersive':
     case 'clear_announcement':
     case 'refresh_playlist':
     case 'refresh_overlays':
       commandData = {};
       break;
+    case 'set_overlay_mode': {
+      const mode = overlay_mode || req.body.mode;
+      const allowed = ['none', 'bottom_bar', 'bottom_bar_popup', 'split_right'];
+      if (mode && allowed.includes(mode)) {
+        await db.query('UPDATE displays SET overlay_mode = ? WHERE id = ?', [mode, id]);
+        commandData = { overlay_mode: mode };
+      }
+      break;
+    }
     case 'switch_playlist':
       commandData = { playlist_id: parseInt(playlist_id, 10) || null };
       break;

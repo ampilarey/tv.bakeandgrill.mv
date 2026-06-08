@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.1.1'; // Remote fullscreen prompt + playlist-scoped groups
+export const APP_VERSION = '1.1.2'; // Instant immersive remote + overlay controls
 
 export function checkVersion() {
   try {

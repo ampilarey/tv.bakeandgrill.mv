@@ -48,6 +48,8 @@ export default function DisplayManagement() {
   const [selectedPlaylistForControl, setSelectedPlaylistForControl] = useState('');
   const [channelSearchQuery, setChannelSearchQuery] = useState('');
   const [remoteBusy, setRemoteBusy] = useState('');
+  const [remoteOverlayMode, setRemoteOverlayMode] = useState('none');
+  const [isImmersiveOnTv, setIsImmersiveOnTv] = useState(true);
   const [newDisplay, setNewDisplay] = useState({ name: '', location: '', playlist_id: '' });
   const [selectedChannel, setSelectedChannel] = useState('');
   const [volumeLevel, setVolumeLevel] = useState(50);
@@ -347,6 +349,13 @@ export default function DisplayManagement() {
     }
   };
 
+  const OVERLAY_MODE_LABELS = {
+    none: 'Off — video only',
+    bottom_bar: 'Bottom ticker bar',
+    bottom_bar_popup: 'Ticker + promo popup',
+    split_right: 'Split screen (info panel)',
+  };
+
   const handleOpenControl = async (display) => {
     setSelectedDisplay(display);
     setShowControlModal(true);
@@ -354,8 +363,10 @@ export default function DisplayManagement() {
     setSelectedGroupForControl('');
     setSelectedPlaylistForControl('');
     setChannelSearchQuery('');
-    setChannels([]); // Clear previous channels
+    setChannels([]);
     setPlaylistsForControl([]);
+    setRemoteOverlayMode(display.overlay_mode || 'none');
+    setIsImmersiveOnTv(true);
     
     if (display.playlist_id) {
       try {
@@ -533,11 +544,28 @@ export default function DisplayManagement() {
     }
   };
 
-  const handleFullscreenControl = () => {
-    sendRemoteAction('enter_fullscreen').then(() => {
-      setError('✅ Fullscreen sent — tap the TV once if a prompt appears');
-      setTimeout(() => setError(''), 4000);
-    });
+  const handleImmersiveControl = async (enable) => {
+    setIsImmersiveOnTv(enable);
+    await sendRemoteAction(enable ? 'enter_fullscreen' : 'exit_immersive');
+  };
+
+  const handleApplyOverlayMode = async () => {
+    if (!selectedDisplay) return;
+    setRemoteBusy('set_overlay_mode');
+    try {
+      await api.post(`/displays/${selectedDisplay.id}/control`, {
+        action: 'set_overlay_mode',
+        overlay_mode: remoteOverlayMode,
+      });
+      setSelectedDisplay((prev) => prev ? { ...prev, overlay_mode: remoteOverlayMode } : prev);
+      setError(`✅ Overlay mode set to ${OVERLAY_MODE_LABELS[remoteOverlayMode] || remoteOverlayMode}`);
+      setTimeout(() => setError(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update overlay mode');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setRemoteBusy('');
+    }
   };
 
   const handleOpenSchedules = async (display) => {
@@ -1014,27 +1042,100 @@ export default function DisplayManagement() {
             </div>
           )}
 
-          {/* Quick actions */}
-          <div>
-            <label className="block text-sm font-medium text-tv-textSecondary mb-2">
-              ⚡ Quick Actions
+          {/* Screen mode — instant, no tap on TV */}
+          <div className="bg-tv-bgSoft border border-tv-borderSubtle rounded-xl p-4">
+            <label className="block text-sm font-semibold text-tv-text mb-1">
+              ⛶ Screen Mode
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <p className="text-xs text-tv-textMuted mb-3">
+              Expands the player to fill the TV instantly. No tap required on the display.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant={isImmersiveOnTv ? 'primary' : 'secondary'}
+                size="sm"
+                className="flex-1"
+                onClick={() => handleImmersiveControl(true)}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'enter_fullscreen' ? '…' : 'Expand Screen'}
+              </Button>
+              <Button
+                variant={!isImmersiveOnTv ? 'primary' : 'secondary'}
+                size="sm"
+                className="flex-1"
+                onClick={() => handleImmersiveControl(false)}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'exit_immersive' ? '…' : 'Normal Screen'}
+              </Button>
+            </div>
+          </div>
+
+          {/* TV overlays (ticker / promos) — different from full-screen announcements */}
+          <div className="bg-tv-bgSoft border border-tv-borderSubtle rounded-xl p-4">
+            <label className="block text-sm font-semibold text-tv-text mb-1">
+              📋 TV Overlays
+            </label>
+            <p className="text-xs text-tv-textMuted mb-3">
+              Bottom tickers and promo cards on the video. Managed in Admin → Overlays.
+              Full-screen pop-up messages use <strong>Announcements</strong> (Clear Msg below).
+            </p>
+            <p className="text-xs text-tv-textSecondary mb-2">
+              Current on TV:{' '}
+              <span className="font-semibold text-tv-accent">
+                {OVERLAY_MODE_LABELS[selectedDisplay?.overlay_mode] || selectedDisplay?.overlay_mode || 'none'}
+              </span>
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <select
+                value={remoteOverlayMode}
+                onChange={(e) => setRemoteOverlayMode(e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text text-sm focus:outline-none focus:ring-2 focus:ring-tv-accent"
+              >
+                {Object.entries(OVERLAY_MODE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleApplyOverlayMode}
+                disabled={!!remoteBusy}
+                className="whitespace-nowrap"
+              >
+                {remoteBusy === 'set_overlay_mode' ? 'Applying…' : 'Apply Mode'}
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={handleFullscreenControl}
+                onClick={() => sendRemoteAction('refresh_overlays')}
                 disabled={!!remoteBusy}
+                className="whitespace-nowrap"
               >
-                {remoteBusy === 'enter_fullscreen' ? '…' : '⛶ Fullscreen'}
+                {remoteBusy === 'refresh_overlays' ? '…' : 'Refresh'}
               </Button>
+            </div>
+            {remoteOverlayMode === 'none' && (
+              <p className="text-xs text-tv-gold mt-2 bg-tv-gold/10 border border-tv-gold/30 rounded px-2 py-1">
+                Overlay off — ticker messages from Broadcast won&apos;t show until you enable a bar mode.
+              </p>
+            )}
+          </div>
+
+          {/* Quick actions */}
+          <div>
+            <label className="block text-sm font-medium text-tv-textSecondary mb-2">
+              ⚡ More Actions
+            </label>
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => sendRemoteAction('refresh_playlist')}
                 disabled={!!remoteBusy}
               >
-                {remoteBusy === 'refresh_playlist' ? '…' : '🔄 Refresh'}
+                {remoteBusy === 'refresh_playlist' ? '…' : '🔄 Reload Channels'}
               </Button>
               <Button
                 variant="secondary"
@@ -1042,15 +1143,7 @@ export default function DisplayManagement() {
                 onClick={handleClearAnnouncement}
                 disabled={!!remoteBusy}
               >
-                {remoteBusy === 'clear_announcement' ? '…' : '✕ Clear Msg'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => sendRemoteAction('refresh_overlays')}
-                disabled={!!remoteBusy}
-              >
-                {remoteBusy === 'refresh_overlays' ? '…' : '📋 Overlays'}
+                {remoteBusy === 'clear_announcement' ? '…' : '✕ Clear Announcement'}
               </Button>
             </div>
           </div>
