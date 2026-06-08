@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const { getDatabase } = require('../database/init');
 const { validateLogin } = require('../middleware/validation');
 const { verifyToken } = require('../middleware/auth');
@@ -8,11 +9,26 @@ const { asyncHandler } = require('../middleware/errorHandler');
 
 const router = express.Router();
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: parseInt(process.env.LOGIN_RATE_LIMIT || '30', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Too many login attempts. Please wait a few minutes and try again.',
+      code: 'AUTH_RATE_LIMIT',
+    });
+  },
+});
+
 /**
  * POST /api/auth/login
  * User login
  */
-router.post('/login', validateLogin, asyncHandler(async (req, res) => {
+router.post('/login', loginLimiter, validateLogin, asyncHandler(async (req, res) => {
   const { email, password } = req.body; // email can be email OR phone number
   const db = getDatabase();
   

@@ -56,6 +56,12 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Login failed - invalid response');
       }
     } catch (error) {
+      if (error.response?.status === 429) {
+        return {
+          success: false,
+          error: error.response?.data?.error || 'Too many requests. Please wait a minute and try again.',
+        };
+      }
       const errorMessage = error.response?.data?.error || error.message || 'Login failed';
       return { success: false, error: errorMessage };
     }

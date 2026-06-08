@@ -120,28 +120,40 @@ const streamLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/** Kiosk/pairing/auth paths use dedicated limiters — keep them out of the global API cap (same NAT as TVs). */
+function shouldSkipGlobalApiRateLimit(req) {
+  const path = (req.originalUrl || req.url || req.path || '').split('?')[0];
+  if (path.startsWith('/api/stream')) return true;
+  if (path.startsWith('/api/auth')) return true;
+  if (path.startsWith('/api/pairing')) return true;
+  if (path.startsWith('/api/reconnect')) return true;
+  if (path === '/api/displays/verify') return true;
+  if (path === '/api/displays/heartbeat') return true;
+  if (path === '/api/displays/screenshot') return true;
+  if (path.startsWith('/api/displays/commands')) return true;
+  if (path.startsWith('/api/displays/events')) return true;
+  if (path.startsWith('/api/overlays/for-display')) return true;
+  return false;
+}
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: parseInt(process.env.API_RATE_LIMIT || '600', 10),
+  limit: parseInt(process.env.API_RATE_LIMIT || '1200', 10),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
-    const p = req.path || '';
-    return p.startsWith('/stream') || p.startsWith('/api/stream');
+  skip: shouldSkipGlobalApiRateLimit,
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Too many requests. Please wait a minute and try again.',
+      code: 'API_RATE_LIMIT',
+    });
   },
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: parseInt(process.env.AUTH_RATE_LIMIT || '100', 10),
-  standardHeaders: true,
-  legacyHeaders: false
 });
 
 const streamRoutes = require('./routes/stream');
 const { verifyToken, requireAdmin } = require('./middleware/auth');
 
-app.use('/api/auth', authLimiter);
 app.use('/api/stream', streamLimiter, streamRoutes);
 app.use('/api/', apiLimiter);
 
