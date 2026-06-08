@@ -76,6 +76,23 @@ async function run() {
   }
 
   try {
+    const mediaAccess = require('../utils/mediaPlaylistAccess');
+    if (
+      typeof mediaAccess.getAllowedMediaPlaylistIds === 'function' &&
+      typeof mediaAccess.assertDisplayCanAccessPlaylist === 'function'
+    ) {
+      console.log('  ✅  mediaPlaylistAccess exports');
+      passed++;
+    } else {
+      console.error('  ❌  mediaPlaylistAccess exports missing');
+      failed++;
+    }
+  } catch (err) {
+    console.error(`  ❌  mediaPlaylistAccess — ${err.message}`);
+    failed++;
+  }
+
+  try {
     const httpClient = require('../utils/httpClient');
     const exportsOk =
       typeof httpClient.fetchRange === 'function' &&

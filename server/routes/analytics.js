@@ -61,24 +61,81 @@ function computeDayUptime(eventsForDay, dayStr, prevStatusOnline) {
 router.get('/overview', asyncHandler(async (req, res) => {
   const db = getDatabase();
   const now = Date.now();
+  const MAX_STORAGE_MB = parseInt(process.env.MAX_STORAGE_MB || '2048', 10);
 
-  const [[{ totalUsers }]]    = await db.query('SELECT COUNT(*) AS totalUsers FROM users WHERE is_active = 1').catch(() => [[{ totalUsers: 0 }]]);
-  const [[{ totalPlaylists }]]= await db.query('SELECT COUNT(*) AS totalPlaylists FROM playlists WHERE is_active = 1').catch(() => [[{ totalPlaylists: 0 }]]);
-  const [displays]            = await db.query('SELECT last_heartbeat FROM displays WHERE is_active = 1').catch(() => [[]]);
+  const [[{ totalUsers }]] = await db.query('SELECT COUNT(*) AS totalUsers FROM users WHERE is_active = 1').catch(() => [[{ totalUsers: 0 }]]);
+  const [[{ totalPlaylists }]] = await db.query('SELECT COUNT(*) AS totalPlaylists FROM playlists WHERE is_active = 1').catch(() => [[{ totalPlaylists: 0 }]]);
+  const [displays] = await db.query(
+    'SELECT id, last_heartbeat, media_playlist_id FROM displays WHERE is_active = 1'
+  ).catch(() => [[]]);
 
-  const totalDisplays  = displays.length;
-  const activeDisplays = displays.filter(d =>
+  const totalDisplays = displays.length;
+  const activeDisplays = displays.filter((d) =>
     d.last_heartbeat && (now - new Date(d.last_heartbeat).getTime()) < 90_000
   ).length;
+
+  let totalMediaFiles = 0;
+  let storageUsedMb = 0;
+  let unusedMedia = 0;
+  let brokenPlaylistItems = 0;
+  let mediaPlaylists = 0;
+  let unassignedMediaPlaylists = 0;
+  let displaysWithoutAssignment = 0;
+
+  try {
+    const [[mediaTotals]] = await db.query(`
+      SELECT COUNT(*) AS cnt, COALESCE(SUM(size_bytes), 0) AS bytes FROM media_assets
+    `);
+    totalMediaFiles = Number(mediaTotals.cnt || 0);
+    storageUsedMb = Math.round(Number(mediaTotals.bytes || 0) / 1024 / 1024 * 10) / 10;
+
+    const [[unused]] = await db.query(`
+      SELECT COUNT(*) AS cnt FROM media_assets ma
+      WHERE NOT EXISTS (SELECT 1 FROM media_playlist_items mpi WHERE mpi.media_id = ma.id)
+    `);
+    unusedMedia = Number(unused.cnt || 0);
+
+    const [[broken]] = await db.query(`
+      SELECT COUNT(*) AS cnt FROM media_playlist_items mpi
+      LEFT JOIN media_assets ma ON ma.id = mpi.media_id
+      WHERE ma.id IS NULL
+    `);
+    brokenPlaylistItems = Number(broken.cnt || 0);
+
+    const [[mpCount]] = await db.query('SELECT COUNT(*) AS cnt FROM media_playlists');
+    mediaPlaylists = Number(mpCount.cnt || 0);
+
+    const [assignedPl] = await db.query(`
+      SELECT DISTINCT media_playlist_id AS pid FROM displays WHERE media_playlist_id IS NOT NULL
+      UNION
+      SELECT DISTINCT day_playlist_id FROM displays WHERE day_playlist_id IS NOT NULL
+      UNION
+      SELECT DISTINCT night_playlist_id FROM displays WHERE night_playlist_id IS NOT NULL
+    `);
+    const assignedSet = new Set(assignedPl.map((r) => r.pid).filter(Boolean));
+    unassignedMediaPlaylists = Math.max(0, mediaPlaylists - assignedSet.size);
+
+    displaysWithoutAssignment = displays.filter((d) => !d.media_playlist_id).length;
+  } catch (err) {
+    if (err.code !== 'ER_NO_SUCH_TABLE') console.error('Media overview stats:', err.message);
+  }
 
   res.json({
     success: true,
     overview: {
-      totalUsers:      Number(totalUsers),
-      totalPlaylists:  Number(totalPlaylists),
+      totalUsers: Number(totalUsers),
+      totalPlaylists: Number(totalPlaylists),
       totalDisplays,
       activeDisplays,
-    }
+      totalMediaFiles,
+      storageUsedMb,
+      storageMaxMb: MAX_STORAGE_MB,
+      unusedMedia,
+      brokenPlaylistItems,
+      mediaPlaylists,
+      unassignedMediaPlaylists,
+      displaysWithoutAssignment,
+    },
   });
 }));
 

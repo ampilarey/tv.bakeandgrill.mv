@@ -78,8 +78,10 @@ async function checkMagic(filePath, type) {
 
 // ── Storage configs ────────────────────────────────────────────────────────
 
-const MAX_IMAGE_MB = parseInt(process.env.MAX_UPLOAD_MB || '20', 10);
-const MAX_VIDEO_MB = parseInt(process.env.MAX_VIDEO_MB  || '200', 10);
+const MAX_IMAGE_MB = parseInt(process.env.MAX_IMAGE_MB || process.env.MAX_UPLOAD_MB || '20', 10);
+const MAX_VIDEO_MB = parseInt(process.env.MAX_VIDEO_MB || '200', 10);
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const ALLOWED_VIDEO_TYPES = ['video/mp4'];
 
 function diskStorage(subdir) {
   return multer.diskStorage({
@@ -116,6 +118,10 @@ const videoUpload = multer({
   }
 });
 
+function perTypeLimitMb(mimetype) {
+  return mimetype === 'video/mp4' ? MAX_VIDEO_MB : MAX_IMAGE_MB;
+}
+
 // Unified upload — accepts image or video in field "file"
 const unifiedUpload = multer({
   storage: {
@@ -125,12 +131,32 @@ const unifiedUpload = multer({
       const dir = path.join(__dirname, `../uploads/${subdir}`);
       const fname = generateUniqueFilename(file.originalname);
       const fpath = path.join(dir, fname);
+      const limitBytes = perTypeLimitMb(file.mimetype) * 1024 * 1024;
+      let bytes = 0;
 
       fs.mkdir(dir, { recursive: true })
         .then(() => {
           const stream = require('fs').createWriteStream(fpath);
+          file.stream.on('data', (chunk) => {
+            bytes += chunk.length;
+            if (bytes > limitBytes) {
+              file.stream.unpipe(stream);
+              stream.destroy();
+              fs.unlink(fpath).catch(() => {});
+              const err = new Error(
+                isVid
+                  ? `Video exceeds ${MAX_VIDEO_MB} MB limit`
+                  : `Image exceeds ${MAX_IMAGE_MB} MB limit`
+              );
+              err.status = 413;
+              cb(err);
+            }
+          });
           file.stream.pipe(stream);
-          stream.on('finish', () => cb(null, { path: fpath, filename: fname, destination: dir }));
+          stream.on('finish', () => {
+            if (bytes > limitBytes) return;
+            cb(null, { path: fpath, filename: fname, destination: dir, size: bytes });
+          });
           stream.on('error', cb);
         })
         .catch(cb);
@@ -139,9 +165,9 @@ const unifiedUpload = multer({
       fs.unlink(file.path).then(() => cb()).catch(cb);
     }
   },
-  limits: { fileSize: MAX_VIDEO_MB * 1024 * 1024 },
+  limits: { fileSize: Math.max(MAX_IMAGE_MB, MAX_VIDEO_MB) * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'video/mp4'];
+    const allowed = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES];
     if (!allowed.includes(file.mimetype)) return cb(new Error('Unsupported file type'), false);
     cb(null, true);
   }
@@ -235,16 +261,109 @@ async function processVideoFile(file, req, db) {
   return asset;
 }
 
+async function getAssetUsage(db, assetId) {
+  const [playlists] = await db.query(`
+    SELECT mp.id, mp.name FROM media_playlist_items mpi
+    JOIN media_playlists mp ON mp.id = mpi.playlist_id
+    WHERE mpi.media_id = ?
+  `, [assetId]);
+  let promoCards = [];
+  try {
+    const [rows] = await db.query(
+      'SELECT id, title FROM promo_cards WHERE image_media_id = ?',
+      [assetId]
+    );
+    promoCards = rows;
+  } catch (err) {
+    if (err.code !== 'ER_NO_SUCH_TABLE' && err.code !== 'ER_BAD_FIELD_ERROR') throw err;
+  }
+  return { playlists, promoCards };
+}
+
+async function deleteAssetFiles(asset) {
+  const uploadsBase = path.join(__dirname, '../uploads');
+  const subdir = asset.type === 'video' ? 'videos' : 'images';
+  await deleteImage(path.join(uploadsBase, subdir, asset.stored_name));
+  if (asset.thumbnail_url) {
+    const thumbName = asset.thumbnail_url.split('/').pop();
+    await deleteImage(path.join(uploadsBase, 'images', thumbName));
+  }
+}
+
+function uploadConfigPayload() {
+  return {
+    maxImageMb: MAX_IMAGE_MB,
+    maxVideoMb: MAX_VIDEO_MB,
+    maxStorageMb: MAX_STORAGE_MB,
+    allowedImageTypes: ALLOWED_IMAGE_TYPES,
+    allowedVideoTypes: ALLOWED_VIDEO_TYPES,
+  };
+}
+
 // ── New unified endpoints ──────────────────────────────────────────────────
+
+/** GET /api/uploads/config */
+router.get('/config', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  res.json({ success: true, ...uploadConfigPayload() });
+}));
+
+/** GET /api/uploads/stats */
+router.get('/stats', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const [[totals]] = await db.query(`
+    SELECT COUNT(*) AS totalFiles, COALESCE(SUM(size_bytes), 0) AS storageBytes
+    FROM media_assets
+  `);
+  const [[unused]] = await db.query(`
+    SELECT COUNT(*) AS unusedCount FROM media_assets ma
+    WHERE NOT EXISTS (SELECT 1 FROM media_playlist_items mpi WHERE mpi.media_id = ma.id)
+  `);
+  let brokenPlaylistItems = 0;
+  try {
+    const [[broken]] = await db.query(`
+      SELECT COUNT(*) AS cnt FROM media_playlist_items mpi
+      LEFT JOIN media_assets ma ON ma.id = mpi.media_id
+      WHERE ma.id IS NULL
+    `);
+    brokenPlaylistItems = Number(broken?.cnt || 0);
+  } catch { /* table may not exist */ }
+
+  res.json({
+    success: true,
+    totalFiles: Number(totals.totalFiles || 0),
+    storageBytes: Number(totals.storageBytes || 0),
+    storageUsedMb: Math.round(Number(totals.storageBytes || 0) / 1024 / 1024 * 10) / 10,
+    storageMaxMb: MAX_STORAGE_MB,
+    unusedCount: Number(unused.unusedCount || 0),
+    brokenPlaylistItems,
+  });
+}));
 
 /**
  * POST /api/uploads  — unified upload (field: "file")
  */
-router.post('/', verifyToken, requireAdmin, unifiedUpload.single('file'), asyncHandler(async (req, res) => {
+router.post('/', verifyToken, requireAdmin, (req, res, next) => {
+  unifiedUpload.single('file')(req, res, (err) => {
+    if (err) {
+      const status = err.status || (err.code === 'LIMIT_FILE_SIZE' ? 413 : 400);
+      return res.status(status).json({ success: false, error: err.message });
+    }
+    next();
+  });
+}, asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'No file provided (field: file)' });
-  const db   = getDatabase();
-  await assertStorageQuota(db, req.file.size || 0);
+  const db = getDatabase();
+  const size = req.file.size || 0;
   const isVid = req.file.mimetype === 'video/mp4';
+  const limitMb = perTypeLimitMb(req.file.mimetype);
+  if (size > limitMb * 1024 * 1024) {
+    await deleteImage(req.file.path);
+    return res.status(413).json({
+      success: false,
+      error: isVid ? `Video exceeds ${MAX_VIDEO_MB} MB limit` : `Image exceeds ${MAX_IMAGE_MB} MB limit`,
+    });
+  }
+  await assertStorageQuota(db, size);
   const asset = isVid
     ? await processVideoFile(req.file, req, db)
     : await processImageFile(req.file, req, db);
@@ -255,44 +374,131 @@ router.post('/', verifyToken, requireAdmin, unifiedUpload.single('file'), asyncH
  * GET /api/uploads  — list media assets
  */
 router.get('/', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
-  const db   = getDatabase();
+  const db = getDatabase();
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const limit = Math.min(100, parseInt(req.query.limit || '50', 10));
   const offset = (page - 1) * limit;
-  const type  = req.query.type; // 'image' | 'video' | undefined
+  const type = req.query.type;
+  const search = (req.query.search || '').trim();
+  const unused = req.query.unused === '1';
+  const sort = ['created_at', 'original_name', 'size_bytes'].includes(req.query.sort)
+    ? req.query.sort
+    : 'created_at';
+  const sortDir = req.query.sortDir === 'asc' ? 'ASC' : 'DESC';
 
-  const where  = type ? 'WHERE type = ?' : '';
-  const params = type ? [type, limit, offset] : [limit, offset];
+  const where = [];
+  const params = [];
+  if (type) { where.push('ma.type = ?'); params.push(type); }
+  if (search) { where.push('ma.original_name LIKE ?'); params.push(`%${search}%`); }
+  if (unused) {
+    where.push('NOT EXISTS (SELECT 1 FROM media_playlist_items mpi WHERE mpi.media_id = ma.id)');
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-  const [assets] = await db.query(`SELECT * FROM media_assets ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`, params);
-  const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM media_assets ${where}`, type ? [type] : []);
+  const [assets] = await db.query(`
+    SELECT ma.*,
+      (SELECT COUNT(*) FROM media_playlist_items mpi WHERE mpi.media_id = ma.id) AS usage_count
+    FROM media_assets ma
+    ${whereSql}
+    ORDER BY ma.${sort} ${sortDir}
+    LIMIT ? OFFSET ?
+  `, [...params, limit, offset]);
+  const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM media_assets ma ${whereSql}`, params);
 
   res.json({ success: true, assets, total, page, limit });
+}));
+
+/** POST /api/uploads/bulk-delete-unused */
+router.post('/bulk-delete-unused', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const [rows] = await db.query(`
+    SELECT ma.* FROM media_assets ma
+    WHERE NOT EXISTS (SELECT 1 FROM media_playlist_items mpi WHERE mpi.media_id = ma.id)
+  `);
+  let deleted = 0;
+  for (const asset of rows) {
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.query('DELETE FROM media_assets WHERE id = ?', [asset.id]);
+      await conn.commit();
+      await deleteAssetFiles(asset).catch((e) => console.warn('File delete:', e.message));
+      deleted += 1;
+    } catch (err) {
+      await conn.rollback();
+    } finally {
+      conn.release();
+    }
+  }
+  res.json({ success: true, deleted });
+}));
+
+/** GET /api/uploads/:id/usage */
+router.get('/:id(\\d+)/usage', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const [rows] = await db.query('SELECT id FROM media_assets WHERE id = ?', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ success: false, error: 'Asset not found' });
+  const usage = await getAssetUsage(db, req.params.id);
+  res.json({ success: true, ...usage });
+}));
+
+/** PUT /api/uploads/:id — metadata */
+router.put('/:id(\\d+)', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  const { category, tags } = req.body;
+  const db = getDatabase();
+  const [rows] = await db.query('SELECT * FROM media_assets WHERE id = ?', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ success: false, error: 'Asset not found' });
+
+  const updates = [];
+  const params = [];
+  if (category !== undefined) { updates.push('category = ?'); params.push(category || null); }
+  if (tags !== undefined) { updates.push('tags = ?'); params.push(tags || null); }
+  if (!updates.length) return res.status(400).json({ success: false, error: 'Nothing to update' });
+  params.push(req.params.id);
+  await db.query(`UPDATE media_assets SET ${updates.join(', ')} WHERE id = ?`, params);
+  const [updated] = await db.query('SELECT * FROM media_assets WHERE id = ?', [req.params.id]);
+  res.json({ success: true, asset: updated[0] });
 }));
 
 /**
  * DELETE /api/uploads/:id  — delete by DB id
  */
 router.delete('/:id(\\d+)', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
-  const db  = getDatabase();
+  const db = getDatabase();
   const [rows] = await db.query('SELECT * FROM media_assets WHERE id = ?', [req.params.id]);
   if (!rows.length) return res.status(404).json({ success: false, error: 'Asset not found' });
 
   const asset = rows[0];
-  const uploadsBase = path.join(__dirname, '../uploads');
-
-  // Delete main file
-  const subdir = asset.type === 'video' ? 'videos' : 'images';
-  await deleteImage(path.join(uploadsBase, subdir, asset.stored_name));
-
-  // Delete thumbnail if exists
-  if (asset.thumbnail_url) {
-    const thumbName = asset.thumbnail_url.split('/').pop();
-    await deleteImage(path.join(uploadsBase, 'images', thumbName));
+  const usage = await getAssetUsage(db, asset.id);
+  const inUse = usage.playlists.length > 0 || usage.promoCards.length > 0;
+  if (inUse && req.query.confirm !== 'true') {
+    return res.status(409).json({
+      success: false,
+      error: 'Asset is in use; pass ?confirm=true to delete',
+      usage,
+    });
   }
 
-  await db.query('DELETE FROM media_assets WHERE id = ?', [asset.id]);
-  res.json({ success: true, message: 'Asset deleted' });
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('DELETE FROM media_playlist_items WHERE media_id = ?', [asset.id]);
+    await conn.query('DELETE FROM media_assets WHERE id = ?', [asset.id]);
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+
+  await deleteAssetFiles(asset).catch((e) => console.warn('File delete after commit:', e.message));
+
+  res.json({
+    success: true,
+    message: 'Asset deleted',
+    removedFromPlaylists: usage.playlists,
+  });
 }));
 
 // ── Backward-compatible legacy endpoints ───────────────────────────────────

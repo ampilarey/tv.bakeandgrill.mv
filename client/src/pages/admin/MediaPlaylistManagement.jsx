@@ -17,6 +17,27 @@ function DurationBadge({ seconds }) {
   return <span className="text-xs text-tv-textMuted">{m > 0 ? `${m}m ${s}s` : `${s}s`}</span>;
 }
 
+function formatTotalSeconds(total) {
+  if (!total) return '0s';
+  const m = Math.floor(total / 60);
+  const s = Math.round(total % 60);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function estimateItemSeconds(item) {
+  if (!item.url && !item.media_id) return 0;
+  if (item.type === 'image') return item.image_duration_seconds || 8;
+  if (item.type === 'video') {
+    if (item.play_video_full) return item.duration_seconds || 30;
+    return item.duration_seconds || 30;
+  }
+  return 0;
+}
+
+function estimatePlaylistDuration(items) {
+  return items.reduce((sum, it) => sum + estimateItemSeconds(it), 0);
+}
+
 function ItemRow({ item, idx, dragFrom, onDragStart, onDragOver, onDrop, onRemove, onEdit }) {
   const isDragging = dragFrom === idx;
   return (
@@ -40,13 +61,22 @@ function ItemRow({ item, idx, dragFrom, onDragStart, onDragOver, onDrop, onRemov
       </div>
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-tv-text text-sm font-medium truncate">{item.original_name}</p>
-        <div className="flex items-center gap-2 mt-0.5">
+        <p className="text-tv-text text-sm font-medium truncate">{item.original_name || '(missing asset)'}</p>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          {!item.url && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400">broken</span>
+          )}
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${item.type === 'video' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
-            {item.type}
+            {item.type || '?'}
           </span>
           {item.type === 'image' && <span className="text-xs text-tv-textMuted">{item.image_duration_seconds}s</span>}
           {item.type === 'video' && <DurationBadge seconds={item.duration_seconds} />}
+          {!item.thumbnail_url && item.type === 'image' && (
+            <span className="text-xs text-amber-400">no thumb</span>
+          )}
+          {item.type === 'video' && !item.duration_seconds && (
+            <span className="text-xs text-amber-400">no duration</span>
+          )}
         </div>
       </div>
       {/* Controls */}
@@ -88,7 +118,11 @@ export default function MediaPlaylistManagement() {
 
   // Add media modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState('');
+  const [selectedAssets, setSelectedAssets] = useState(new Set());
+  const [assetSearch, setAssetSearch] = useState('');
+  const [assetFilter, setAssetFilter] = useState('');
+  const [assetPage, setAssetPage] = useState(1);
+  const [assetTotal, setAssetTotal] = useState(0);
   const [imgDur, setImgDur]           = useState(8);
   const [playFull, setPlayFull]       = useState(true);
   const [addingItem, setAddingItem]   = useState(false);
@@ -100,6 +134,7 @@ export default function MediaPlaylistManagement() {
 
   // Preview modal
   const [showPreview, setShowPreview] = useState(false);
+  const [fullscreenPreview, setFullscreenPreview] = useState(false);
   const [previewIdx, setPreviewIdx]   = useState(0);
 
   // Drag-and-drop state
@@ -122,12 +157,17 @@ export default function MediaPlaylistManagement() {
     setLoading(false);
   };
 
-  const fetchAssets = async () => {
+  const fetchAssets = useCallback(async (page = 1, search = assetSearch, type = assetFilter) => {
     try {
-      const { data } = await api.get('/uploads?limit=200');
+      const params = new URLSearchParams({ page, limit: 50 });
+      if (search) params.set('search', search);
+      if (type) params.set('type', type);
+      const { data } = await api.get(`/uploads?${params}`);
       setAssets(data.assets || []);
+      setAssetTotal(data.total || 0);
+      setAssetPage(page);
     } catch { /* ignore */ }
-  };
+  }, [assetSearch, assetFilter]);
 
   const openPlaylist = async (pl) => {
     setActivePlaylist(pl);
@@ -167,20 +207,51 @@ export default function MediaPlaylistManagement() {
     fetchPlaylists();
   };
 
+  const duplicatePl = async (pl) => {
+    try {
+      const { data } = await api.post(`/media-playlists/${pl.id}/duplicate`);
+      await fetchPlaylists();
+      if (data.playlist) openPlaylist(data.playlist);
+    } catch (e) { setErr(e.response?.data?.error || 'Duplicate failed'); }
+  };
+
   // ── Items ──────────────────────────────────────────────────────────────────
 
-  const addItem = async () => {
-    if (!selectedAsset || !activePlaylist) return;
+  const toggleAssetSelect = (id) => {
+    setSelectedAssets((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const openAddModal = () => {
+    setSelectedAssets(new Set());
+    setAssetSearch('');
+    setAssetFilter('');
+    setImgDur(8);
+    setPlayFull(true);
+    fetchAssets(1, '', '');
+    setShowAddModal(true);
+  };
+
+  const addItems = async () => {
+    if (!selectedAssets.size || !activePlaylist) return;
     setAddingItem(true);
     try {
-      await api.post(`/media-playlists/${activePlaylist.id}/items`, {
-        media_id: parseInt(selectedAsset),
-        image_duration_seconds: imgDur,
-        play_video_full: playFull
-      });
+      for (const mediaId of selectedAssets) {
+        const asset = assets.find((a) => a.id === mediaId);
+        await api.post(`/media-playlists/${activePlaylist.id}/items`, {
+          media_id: mediaId,
+          image_duration_seconds: imgDur,
+          play_video_full: asset?.type === 'video' ? playFull : true,
+        });
+      }
       setShowAddModal(false);
+      setSelectedAssets(new Set());
       openPlaylist(activePlaylist);
-      fetchPlaylists(); // refresh item_count
+      fetchPlaylists();
     } catch (e) { setErr(e.response?.data?.error || 'Add failed'); }
     setAddingItem(false);
   };
@@ -192,12 +263,18 @@ export default function MediaPlaylistManagement() {
 
   const moveItem = async (fromIdx, toIdx) => {
     if (toIdx < 0 || toIdx >= items.length || fromIdx === toIdx) return;
+    const prev = items;
     const next = [...items];
     const [moved] = next.splice(fromIdx, 1);
     next.splice(toIdx, 0, moved);
     const order = next.map((it, i) => ({ id: it.id, sort_order: i }));
     setItems(next.map((it, i) => ({ ...it, sort_order: i })));
-    await api.post(`/media-playlists/${activePlaylist.id}/items/reorder`, { order }).catch(() => {});
+    try {
+      await api.post(`/media-playlists/${activePlaylist.id}/items/reorder`, { order });
+    } catch (e) {
+      setErr(e.response?.data?.error || 'Reorder failed — restored order');
+      setItems(prev);
+    }
   };
 
   const handleDragStart = (idx) => setDragFrom(idx);
@@ -252,8 +329,9 @@ export default function MediaPlaylistManagement() {
                     <p className="text-tv-textMuted text-xs mt-0.5">{pl.item_count} item{pl.item_count !== 1 ? 's' : ''}{pl.shuffle ? ' · shuffle' : ''}</p>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
-                    <button onClick={e => { e.stopPropagation(); openEdit(pl); }} className="text-tv-textMuted hover:text-tv-accent p-1">✏️</button>
-                    <button onClick={e => { e.stopPropagation(); deletePl(pl.id); }} className="text-tv-textMuted hover:text-red-400 p-1">🗑️</button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); duplicatePl(pl); }} className="text-tv-textMuted hover:text-tv-accent p-1" title="Duplicate">⧉</button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(pl); }} className="text-tv-textMuted hover:text-tv-accent p-1">✏️</button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); deletePl(pl.id); }} className="text-tv-textMuted hover:text-red-400 p-1">🗑️</button>
                   </div>
                 </div>
               </div>
@@ -271,22 +349,42 @@ export default function MediaPlaylistManagement() {
               </Card>
             ) : (
               <Card>
-                <div className="p-4 border-b border-tv-borderSubtle flex items-center justify-between gap-2">
-                  <h2 className="font-bold text-tv-text">{activePlaylist.name}</h2>
-                  <div className="flex gap-2">
+                <div className="p-4 border-b border-tv-borderSubtle flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <h2 className="font-bold text-tv-text">{activePlaylist.name}</h2>
                     {items.length > 0 && (
-                      <Button size="sm" variant="ghost" onClick={() => { setPreviewIdx(0); setShowPreview(true); }}>👁 Preview</Button>
+                      <p className="text-xs text-tv-textMuted mt-0.5">
+                        ~{formatTotalSeconds(estimatePlaylistDuration(items))} total · {items.length} item{items.length !== 1 ? 's' : ''}
+                      </p>
                     )}
-                    <Button size="sm" variant="secondary" onClick={() => setShowAddModal(true)}>+ Add Media</Button>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    {items.length > 0 && (
+                      <>
+                        <Button size="sm" variant="ghost" onClick={() => { setPreviewIdx(0); setShowPreview(true); setFullscreenPreview(false); }}>👁 Preview</Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setPreviewIdx(0); setShowPreview(true); setFullscreenPreview(true); }}>⛶ Fullscreen</Button>
+                      </>
+                    )}
+                    <Button size="sm" variant="secondary" onClick={openAddModal}>+ Add Media</Button>
                   </div>
                 </div>
                 <div className="p-4">
+                  {items.length === 0 && !loadingItems && (
+                    <div className="mb-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-2 rounded-lg text-sm">
+                      Empty playlist — assign media before deploying to displays.
+                    </div>
+                  )}
+                  {items.some((it) => !it.url) && (
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-300 px-3 py-2 rounded-lg text-sm">
+                      Some items reference missing media — remove or re-upload assets.
+                    </div>
+                  )}
                   {loadingItems ? (
                     <div className="flex justify-center py-8"><Spinner /></div>
                   ) : items.length === 0 ? (
                     <div className="text-center py-8 text-tv-textMuted">
                       <p className="text-2xl mb-2">📭</p>
-                      <p>No items yet. Click "Add Media" to get started.</p>
+                      <p>No items yet. Click &quot;Add Media&quot; to get started.</p>
                     </div>
                   ) : (
                     <div className="space-y-2" onDragEnd={() => setDragFrom(null)}>
@@ -336,35 +434,74 @@ export default function MediaPlaylistManagement() {
         </div>
       </Modal>
 
-      {/* Add media modal */}
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Media to Playlist">
+      {/* Add media modal — multi-select */}
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Media to Playlist" size="lg">
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-tv-textMuted mb-1">Select Media *</label>
+          <div className="flex gap-2 flex-wrap">
+            <input
+              type="search"
+              placeholder="Search library…"
+              className="flex-1 min-w-[140px] rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm"
+              value={assetSearch}
+              onChange={(e) => setAssetSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') fetchAssets(1, assetSearch, assetFilter); }}
+            />
             <select
-              className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent"
-              value={selectedAsset}
-              onChange={e => setSelectedAsset(e.target.value)}
+              className="rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm"
+              value={assetFilter}
+              onChange={(e) => { setAssetFilter(e.target.value); fetchAssets(1, assetSearch, e.target.value); }}
             >
-              <option value="">Choose from library…</option>
-              {assets.map(a => (
-                <option key={a.id} value={a.id}>[{a.type.toUpperCase()}] {a.original_name}</option>
-              ))}
+              <option value="">All</option>
+              <option value="image">Images</option>
+              <option value="video">Videos</option>
             </select>
-            {assets.length === 0 && <p className="text-xs text-tv-textMuted mt-1">No media in library. <button onClick={() => navigate('/admin/media')} className="text-tv-accent underline">Upload some first.</button></p>}
+            <Button size="sm" variant="ghost" onClick={() => fetchAssets(1, assetSearch, assetFilter)}>Search</Button>
           </div>
+          <div className="max-h-64 overflow-y-auto border border-tv-borderSubtle rounded-lg divide-y divide-tv-borderSubtle">
+            {assets.length === 0 ? (
+              <p className="p-4 text-sm text-tv-textMuted text-center">
+                No media found.{' '}
+                <button type="button" onClick={() => navigate('/admin/media')} className="text-tv-accent underline">Upload first.</button>
+              </p>
+            ) : assets.map((a) => (
+              <label key={a.id} className="flex items-center gap-3 p-2 hover:bg-tv-bgSoft cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedAssets.has(a.id)}
+                  onChange={() => toggleAssetSelect(a.id)}
+                  className="accent-tv-accent"
+                />
+                <div className="w-12 h-8 bg-black rounded overflow-hidden flex-shrink-0">
+                  {a.type === 'video' ? (
+                    <video src={a.url} className="w-full h-full object-cover" muted />
+                  ) : (
+                    <img src={a.thumbnail_url || a.url} alt="" className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <span className="text-sm text-tv-text truncate flex-1">[{a.type}] {a.original_name}</span>
+              </label>
+            ))}
+          </div>
+          {assetTotal > 50 && (
+            <div className="flex justify-center gap-2 text-sm">
+              <Button size="sm" variant="ghost" disabled={assetPage <= 1} onClick={() => fetchAssets(assetPage - 1)}>‹</Button>
+              <span className="text-tv-textMuted self-center">Page {assetPage}</span>
+              <Button size="sm" variant="ghost" disabled={assetPage * 50 >= assetTotal} onClick={() => fetchAssets(assetPage + 1)}>›</Button>
+            </div>
+          )}
+          <p className="text-xs text-tv-textMuted">{selectedAssets.size} selected</p>
           <div>
             <label className="block text-sm font-medium text-tv-textMuted mb-1">Image display duration (seconds)</label>
-            <input type="number" min={1} max={300} className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={imgDur} onChange={e => setImgDur(parseInt(e.target.value) || 8)} />
+            <input type="number" min={1} max={300} className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none focus:border-tv-accent" value={imgDur} onChange={(e) => setImgDur(parseInt(e.target.value, 10) || 8)} />
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={playFull} onChange={e => setPlayFull(e.target.checked)} className="w-4 h-4 accent-tv-accent" />
-            <span className="text-tv-text text-sm">Play video to completion</span>
+            <input type="checkbox" checked={playFull} onChange={(e) => setPlayFull(e.target.checked)} className="w-4 h-4 accent-tv-accent" />
+            <span className="text-tv-text text-sm">Play videos to completion</span>
           </label>
           <div className="flex gap-3 justify-end pt-2">
             <Button variant="ghost" onClick={() => setShowAddModal(false)}>Cancel</Button>
-            <Button onClick={addItem} disabled={addingItem || !selectedAsset}>
-              {addingItem ? <Spinner size="sm" /> : 'Add'}
+            <Button onClick={addItems} disabled={addingItem || selectedAssets.size === 0}>
+              {addingItem ? <Spinner size="sm" /> : `Add ${selectedAssets.size || ''}`}
             </Button>
           </div>
         </div>
@@ -394,11 +531,31 @@ export default function MediaPlaylistManagement() {
         </Modal>
       )}
 
+      {/* Fullscreen preview */}
+      {fullscreenPreview && showPreview && items.length > 0 && (
+        <div className="fixed inset-0 z-[60] bg-black flex flex-col">
+          <div className="flex-1 flex items-center justify-center p-4">
+            {items[previewIdx]?.type === 'video' ? (
+              <video key={items[previewIdx]?.url} src={items[previewIdx]?.url} autoPlay muted controls className="max-w-full max-h-full object-contain" />
+            ) : (
+              <img key={items[previewIdx]?.url} src={items[previewIdx]?.url} alt="" className="max-w-full max-h-full object-contain" />
+            )}
+          </div>
+          <div className="p-4 flex items-center justify-between bg-black/80 text-white">
+            <span className="text-sm">{items[previewIdx]?.original_name} · {previewIdx + 1}/{items.length}</span>
+            <div className="flex gap-2">
+              <button type="button" className="px-4 py-2 border border-white/30 rounded-lg" disabled={previewIdx === 0} onClick={() => setPreviewIdx((i) => Math.max(0, i - 1))}>←</button>
+              <button type="button" className="px-4 py-2 border border-white/30 rounded-lg" disabled={previewIdx >= items.length - 1} onClick={() => setPreviewIdx((i) => Math.min(items.length - 1, i + 1))}>→</button>
+              <button type="button" className="px-4 py-2 bg-white/20 rounded-lg" onClick={() => { setShowPreview(false); setFullscreenPreview(false); }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Preview modal */}
-      <Modal isOpen={showPreview} onClose={() => setShowPreview(false)} title={`Preview — ${activePlaylist?.name}`} size="lg">
+      <Modal isOpen={showPreview && !fullscreenPreview} onClose={() => setShowPreview(false)} title={`Preview — ${activePlaylist?.name}`} size="lg">
         {items.length > 0 && (
           <div className="space-y-4">
-            {/* Current item display */}
             <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
               {items[previewIdx]?.type === 'video' ? (
                 <video key={items[previewIdx]?.url} src={items[previewIdx]?.url} autoPlay muted controls className="w-full h-full object-contain" />
