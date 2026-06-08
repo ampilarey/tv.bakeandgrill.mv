@@ -92,6 +92,7 @@ export default function DisplayManagement() {
 
     if (pin) {
       setAutoPairPin(pin);
+      sessionStorage.setItem('postLoginRedirect', `/admin/displays?autoPairPin=${pin}`);
       setTimeout(() => setShowPairModal(true), 500);
     }
   }, [user]);

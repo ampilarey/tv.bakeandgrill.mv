@@ -8,6 +8,35 @@ const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { asyncHandler }              = require('../middleware/errorHandler');
 
 const router = express.Router();
+
+/** GET /api/media-playlists/for-display/items?token=&playlist_id= — kiosk slideshow (no JWT) */
+router.get('/for-display/items', asyncHandler(async (req, res) => {
+  const { token, playlist_id: playlistId } = req.query;
+  if (!token || !playlistId) {
+    return res.status(400).json({ success: false, error: 'token and playlist_id required' });
+  }
+
+  const db = getDatabase();
+  const [displays] = await db.query(
+    'SELECT id FROM displays WHERE token = ? AND is_active = TRUE',
+    [token]
+  );
+  if (!displays.length) {
+    return res.status(401).json({ success: false, error: 'Invalid display token' });
+  }
+
+  const [items] = await db.query(`
+    SELECT mpi.*, ma.type, ma.url, ma.thumbnail_url, ma.original_name,
+           ma.width, ma.height, ma.duration_seconds, ma.mime_type
+    FROM media_playlist_items mpi
+    JOIN media_assets ma ON ma.id = mpi.media_id
+    WHERE mpi.playlist_id = ?
+    ORDER BY mpi.sort_order ASC, mpi.id ASC
+  `, [playlistId]);
+
+  res.json({ success: true, items });
+}));
+
 router.use(verifyToken);
 
 // ── Playlists CRUD ─────────────────────────────────────────────────────────

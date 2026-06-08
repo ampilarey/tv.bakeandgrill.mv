@@ -3,29 +3,36 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { getDatabase } = require('../database/init');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
-const { checkPermission } = require('../middleware/permissions');
+const { checkPermission, checkAnyPermission } = require('../middleware/permissions');
 const { asyncHandler } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 const { createDisplaySystemUser } = require('../utils/displayUser');
 
 const router = express.Router();
 
-// 5 PIN requests per IP per minute — prevents brute-force pairing requests
+const rateLimitJson = {
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Too many pairing requests. Please wait a minute and try again.',
+      code: 'PAIRING_RATE_LIMIT',
+    });
+  },
+};
+
 const pinRequestLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 5,
-  message: 'Too many pairing requests from this IP, please wait a minute',
-  standardHeaders: true,
-  legacyHeaders: false
+  max: 20,
+  ...rateLimitJson,
 });
 
-// 30 PIN checks per IP per minute — display polls every 5 s (12 req/min) with headroom.
+// Display polls every 5 s (~12 req/min); allow several TVs behind one NAT.
 const pinCheckLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 30,
-  message: 'Too many PIN check attempts from this IP, please wait a minute',
-  standardHeaders: true,
-  legacyHeaders: false
+  max: 60,
+  ...rateLimitJson,
 });
 
 // ---------------------------------------------------------------------------
@@ -33,14 +40,16 @@ const pinCheckLimiter = rateLimit({
 // ---------------------------------------------------------------------------
 
 // Columns safe to return to a display device — never include token, location_pin, etc.
-const DISPLAY_SAFE_COLUMNS = 'id, name, location, playlist_id, is_active, last_seen, pairing_enabled_until, user_id';
+const DISPLAY_SAFE_COLUMNS = 'id, name, location, playlist_id, is_active, last_heartbeat, pairing_enabled_until, user_id';
 
 async function createSession(db, type, token, displayId = null, ttlMs = 5 * 60 * 1000) {
   const expiresAt = new Date(Date.now() + ttlMs);
   await db.query(
     `INSERT INTO pairing_sessions (type, token, display_id, expires_at)
      VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE display_id = VALUES(display_id), expires_at = VALUES(expires_at)`,
+     ON DUPLICATE KEY UPDATE
+       display_id = IF(display_id IS NOT NULL, display_id, VALUES(display_id)),
+       expires_at = VALUES(expires_at)`,
     [type, token, displayId, expiresAt]
   );
 }
@@ -134,7 +143,15 @@ router.post('/check-pin', pinCheckLimiter, asyncHandler(async (req, res) => {
  * POST /api/pairing/admin-pair-pin
  * Admin or user with permissions pairs a display using PIN
  */
-router.post('/admin-pair-pin', verifyToken, checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
+router.get('/playlists', verifyToken, checkAnyPermission(['can_manage_displays', 'can_control_displays']), asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const [playlists] = await db.query(
+    'SELECT id, name FROM playlists WHERE is_active = 1 ORDER BY name'
+  );
+  res.json({ success: true, playlists });
+}));
+
+router.post('/admin-pair-pin', verifyToken, checkAnyPermission(['can_manage_displays', 'can_control_displays']), asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { pin, name, location, playlist_id } = req.body;
 
@@ -151,6 +168,13 @@ router.post('/admin-pair-pin', verifyToken, checkPermission('can_manage_displays
     return res.status(400).json({
       success: false,
       error: 'Invalid or expired PIN'
+    });
+  }
+
+  if (session.display_id) {
+    return res.status(409).json({
+      success: false,
+      error: 'This PIN was already used. Request a new PIN on the display.',
     });
   }
 

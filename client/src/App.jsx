@@ -136,11 +136,13 @@ function PermissionRoute({ children, requiredPermissions = [] }) {
 
     if (isAuthenticated) {
       checkAccess();
+    } else if (!loading) {
+      setHasAccess(false);
     }
   // permsKey is a stable primitive derived from the array
-  }, [user, isAuthenticated, permsKey]);
+  }, [user, isAuthenticated, loading, permsKey]);
 
-  if (loading || hasAccess === null) {
+  if (loading || (isAuthenticated && hasAccess === null)) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
         <Spinner size="xl" />
@@ -148,7 +150,15 @@ function PermissionRoute({ children, requiredPermissions = [] }) {
     );
   }
 
-  if (!isAuthenticated || !hasAccess) {
+  if (!isAuthenticated) {
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    if (returnTo && returnTo !== '/login') {
+      sessionStorage.setItem('postLoginRedirect', returnTo);
+    }
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!hasAccess) {
     return <Navigate to="/dashboard" replace />;
   }
 

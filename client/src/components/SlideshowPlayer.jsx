@@ -41,7 +41,14 @@ function IdleScreen({ message, showBrand = true }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
-export default function SlideshowPlayer({ playlistId, muteAudio = false, showBrandOverlay = true, showClockOverlay = false, onNowPlaying }) {
+export default function SlideshowPlayer({
+  playlistId,
+  displayToken = null,
+  muteAudio = false,
+  showBrandOverlay = true,
+  showClockOverlay = false,
+  onNowPlaying,
+}) {
   const [items, setItems]       = useState([]);
   const [idx, setIdx]           = useState(0);
   const [fade, setFade]         = useState(true);
@@ -68,7 +75,10 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
   const loadItems = useCallback(async () => {
     if (!playlistId) return;
     try {
-      const { data } = await api.get(`/media-playlists/${playlistId}/items`);
+      const url = displayToken
+        ? `/media-playlists/for-display/items?token=${encodeURIComponent(displayToken)}&playlist_id=${playlistId}`
+        : `/media-playlists/${playlistId}/items`;
+      const { data } = await api.get(url);
       if (!mountedRef.current) return;
       const list = data.items || [];
       setItems(list);
@@ -77,7 +87,7 @@ export default function SlideshowPlayer({ playlistId, muteAudio = false, showBra
     } catch {
       if (mountedRef.current) setLoadErr(true);
     }
-  }, [playlistId]);
+  }, [playlistId, displayToken]);
 
   useEffect(() => { loadItems(); }, [loadItems]);
 

@@ -29,7 +29,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess, autoPairP
 
   const fetchPlaylists = async () => {
     try {
-      const response = await api.get('/playlists');
+      const response = await api.get('/pairing/playlists');
       setPlaylists(response.data.playlists || []);
     } catch (error) {
       console.error('Error fetching playlists:', error);

@@ -105,8 +105,14 @@ export default function DisplayPairingPage() {
         handlePairingSuccess(response.data.display);
       }
     } catch (err) {
-      if (err.response?.status === 429) {
+      const status = err.response?.status;
+      const msg = err.response?.data?.error;
+      if (status === 429) {
         setError('Checking too fast — pairing poll paused. Will retry automatically.');
+      } else if (status >= 500) {
+        setError(msg || 'Server error while checking pairing status. Retrying…');
+      } else if (msg) {
+        setError(msg);
       }
     }
   };

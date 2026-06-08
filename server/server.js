@@ -125,7 +125,10 @@ const apiLimiter = rateLimit({
   limit: parseInt(process.env.API_RATE_LIMIT || '600', 10),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path.startsWith('/stream'),
+  skip: (req) => {
+    const p = req.path || '';
+    return p.startsWith('/stream') || p.startsWith('/api/stream');
+  },
 });
 
 const authLimiter = rateLimit({

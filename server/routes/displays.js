@@ -15,6 +15,14 @@ const { enrichChannelsForPlaylist } = require('../utils/channelEnrichment');
 
 const router = express.Router();
 
+async function findDisplayByToken(db, token, { activeOnly = false } = {}) {
+  const sql = activeOnly
+    ? 'SELECT * FROM displays WHERE token = ? AND is_active = TRUE'
+    : 'SELECT * FROM displays WHERE token = ?';
+  const [rows] = await db.query(sql, [token]);
+  return rows[0] || null;
+}
+
 // Strip location_pin before returning a display object to API consumers.
 // Admins need the token to configure displays, but location_pin is an
 // internal authentication secret used only during pairing and must never
@@ -38,13 +46,13 @@ const displayLimiter = rateLimit({
  * POST /api/displays/verify
  * Verify display token (public endpoint for displays)
  */
-router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
+router.post('/verify', displayLimiter, verifyDisplayToken, asyncHandler(async (req, res) => {
   const { token, location_pin: locationPin } = req.body;
   const db = getDatabase();
-  
-  const [displays] = await db.query('SELECT * FROM displays WHERE token = ? AND is_active = TRUE', [token]);
-  
-  if (displays.length === 0) {
+
+  const displayRow = await findDisplayByToken(db, token, { activeOnly: true });
+
+  if (!displayRow) {
     return res.status(401).json({
       success: false,
       error: 'Invalid display token',
@@ -52,8 +60,8 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
     });
   }
   
-  const display = displays[0];
-  
+  const display = displayRow;
+
   // Get assigned playlist and fetch channels
   let playlist = null;
   let channels = [];
@@ -193,17 +201,15 @@ router.post('/heartbeat', displayLimiter, verifyDisplayToken, asyncHandler(async
   const { token, current_channel_id, status, nowPlaying, uptime, appVersion } = req.body;
   const db = getDatabase();
 
-  const [displays] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);
+  const display = await findDisplayByToken(db, token, { activeOnly: true });
 
-  if (displays.length === 0) {
-    return res.status(404).json({
+  if (!display) {
+    return res.status(403).json({
       success: false,
-      error: 'Display not found',
-      code: 'DISPLAY_NOT_FOUND'
+      error: 'Display not found or deactivated',
+      code: 'DISPLAY_INACTIVE'
     });
   }
-
-  const display = displays[0];
 
   await db.query(
     `UPDATE displays
@@ -307,20 +313,15 @@ router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => 
   const { token } = req.params;
   const db = getDatabase();
 
-  const [displays] = await db.query(
-    'SELECT id, zone_id FROM displays WHERE token = ?',
-    [token]
-  );
+  const display = await findDisplayByToken(db, token, { activeOnly: true });
 
-  if (displays.length === 0) {
-    return res.status(404).json({
+  if (!display) {
+    return res.status(403).json({
       success: false,
-      error: 'Display not found',
-      code: 'DISPLAY_NOT_FOUND'
+      error: 'Display not found or deactivated',
+      code: 'DISPLAY_INACTIVE'
     });
   }
-
-  const display = displays[0];
 
   // Pending commands
   const [commands] = await db.query(
@@ -334,7 +335,7 @@ router.get('/commands/:token', displayLimiter, asyncHandler(async (req, res) => 
     const [overrides] = await db.query(
       `SELECT eo.*, p.m3u_url, p.name AS playlist_name
        FROM emergency_overrides eo
-       LEFT JOIN playlists p ON p.id = eo.playlist_id
+       LEFT JOIN playlists p ON p.id = COALESCE(eo.media_playlist_id, eo.playlist_id)
        WHERE eo.is_active = 1
          AND eo.expires_at > NOW()
          AND (
@@ -369,9 +370,9 @@ router.get('/events/:token', displayLimiter, asyncHandler(async (req, res) => {
   const { token } = req.params;
   const db = getDatabase();
 
-  const [displays] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);
-  if (displays.length === 0) {
-    return res.status(404).json({ success: false, error: 'Display not found' });
+  const display = await findDisplayByToken(db, token, { activeOnly: true });
+  if (!display) {
+    return res.status(403).json({ success: false, error: 'Display not found or deactivated' });
   }
 
   // SSE headers

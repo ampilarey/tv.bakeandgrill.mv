@@ -39,8 +39,13 @@ export default function LoginPage() {
       console.log('🔐 Login result:', result);
       
       if (result.success) {
-        console.log('✅ Login successful, redirecting to dashboard');
-        navigate('/dashboard');
+        const redirect = sessionStorage.getItem('postLoginRedirect');
+        if (redirect) {
+          sessionStorage.removeItem('postLoginRedirect');
+          navigate(redirect);
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         console.error('❌ Login failed:', result.error);
         setError(result.error || 'Login failed');

@@ -208,8 +208,54 @@ async function getAssignedPlaylists(userId) {
   }
 }
 
+/**
+ * Require at least one of the listed permissions (admin always passes).
+ */
+function checkAnyPermission(permissions) {
+  const required = Array.isArray(permissions) ? permissions : [permissions];
+  return async (req, res, next) => {
+    if (req.user?.role === 'admin') return next();
+
+    try {
+      const db = getDatabase();
+      const [rows] = await db.query(
+        'SELECT * FROM user_permissions WHERE user_id = ?',
+        [req.user.id]
+      );
+      if (rows.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'No permissions configured for this user',
+          code: 'PERMISSION_NOT_CONFIGURED',
+        });
+      }
+      const perms = rows[0];
+      const allowed = required.some(
+        (p) => p && (perms[p] === 1 || perms[p] === true)
+      );
+      if (!allowed) {
+        return res.status(403).json({
+          success: false,
+          error: `You need one of: ${required.join(', ')}`,
+          code: 'PERMISSION_DENIED',
+        });
+      }
+      req.permissions = perms;
+      next();
+    } catch (error) {
+      console.error('Permission check error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to check permissions',
+        code: 'PERMISSION_CHECK_ERROR',
+      });
+    }
+  };
+}
+
 module.exports = {
   checkPermission,
+  checkAnyPermission,
   checkResourceLimit,
   getUserPermissions,
   getAssignedPlaylists

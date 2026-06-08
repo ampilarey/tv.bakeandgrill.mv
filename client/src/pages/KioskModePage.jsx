@@ -317,7 +317,7 @@ export default function KioskModePage() {
     heartbeatRef.current = setInterval(send, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(heartbeatRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayToken, currentChannel, showFallback, nowPlaying]);
+  }, [displayToken, display, currentChannel, showFallback, nowPlaying]);
 
   // ── Overlay data fetch ─────────────────────────────────────────────────
   useEffect(() => {
@@ -705,6 +705,7 @@ export default function KioskModePage() {
         const coreContent = display?.displayType === 'media' && display?.mediaPlaylistId ? (
           <SlideshowPlayer
             playlistId={display.mediaPlaylistId}
+            displayToken={displayToken}
             muteAudio={display.muteAudio}
             showBrandOverlay={overlayMode === 'none' && display.showBrandOverlay !== false}
             showClockOverlay={display.showClockOverlay}

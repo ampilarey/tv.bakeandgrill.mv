@@ -100,6 +100,7 @@ if (typeof window !== 'undefined') {
             document.removeEventListener('visibilitychange', onVisibilityChange);
             window.removeEventListener('focus', onFocus);
             localStorage.setItem('tv_app_version', APP_VERSION);
+            window.location.reload();
           }, { once: true });
 
           window.swRegistration = registration;
