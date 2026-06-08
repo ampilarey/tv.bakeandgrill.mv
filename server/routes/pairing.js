@@ -18,11 +18,10 @@ const pinRequestLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// 15 PIN checks per IP per minute — prevents brute-force PIN enumeration while
-// allowing a single display to poll every 5 s (12 req/min) without being throttled.
+// 30 PIN checks per IP per minute — display polls every 5 s (12 req/min) with headroom.
 const pinCheckLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 15,
+  max: 30,
   message: 'Too many PIN check attempts from this IP, please wait a minute',
   standardHeaders: true,
   legacyHeaders: false

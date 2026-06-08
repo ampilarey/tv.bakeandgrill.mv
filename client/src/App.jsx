@@ -42,7 +42,6 @@ const SlideTemplates         = React.lazy(() => import('./pages/admin/SlideTempl
 // Mobile Components (small — kept eager)
 import BottomNav from './components/BottomNav';
 import ErrorBoundary from './components/common/ErrorBoundary';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 
 // Fallback shown while a lazy chunk is loading
@@ -51,27 +50,6 @@ function PageLoader() {
     <div className="h-screen w-screen flex items-center justify-center bg-background">
       <Spinner size="xl" />
     </div>
-  );
-}
-
-// Wrapper that provides a subtle fade transition between routes
-const pageVariants = {
-  initial: { opacity: 0, y: 6 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
-  exit:    { opacity: 0, transition: { duration: 0.12 } },
-};
-
-function AnimatedPage({ children }) {
-  return (
-    <motion.div
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      style={{ flex: 1, display: 'contents' }}
-    >
-      {children}
-    </motion.div>
   );
 }
 
@@ -179,10 +157,8 @@ function PermissionRoute({ children, requiredPermissions = [] }) {
 
 // Inner routing component — needs to be inside <Router> to use useLocation
 function AnimatedRoutes() {
-  const location = useLocation();
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
+      <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route
@@ -420,7 +396,6 @@ function AnimatedRoutes() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
-    </AnimatePresence>
   );
 }
 

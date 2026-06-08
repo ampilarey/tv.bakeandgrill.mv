@@ -75,24 +75,24 @@ export default function DisplayManagement() {
   
   const { user, logout} = useAuth();
   const navigate = useNavigate();
-  const autoPairPinRef = useRef(null);
+  const [autoPairPin, setAutoPairPin] = useState(null);
   const refreshIntervalRef = useRef(null);
 
   useEffect(() => {
     // Fetch permissions first
     fetchUserPermissions();
-    
-    // Check for QR code auto-pair PIN in URL
-    const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
-    const autoPairPin = urlParams.get('autoPairPin');
-    
-    if (autoPairPin) {
-      console.log('🔍 Auto-pair PIN detected from QR code:', autoPairPin);
-      autoPairPinRef.current = autoPairPin;
-      // Open pair modal with pre-filled PIN after a short delay
-      setTimeout(() => {
-        setShowPairModal(true);
-      }, 500);
+
+    // QR scan opens /admin/displays?autoPairPin=XXXXXX (BrowserRouter query string)
+    const fromSearch = new URLSearchParams(window.location.search).get('autoPairPin');
+    const hashQuery = window.location.hash.includes('?')
+      ? window.location.hash.split('?')[1]
+      : '';
+    const fromHash = new URLSearchParams(hashQuery).get('autoPairPin');
+    const pin = fromSearch || fromHash;
+
+    if (pin) {
+      setAutoPairPin(pin);
+      setTimeout(() => setShowPairModal(true), 500);
     }
   }, [user]);
 
@@ -634,7 +634,7 @@ export default function DisplayManagement() {
               <div className="text-sm text-tv-textSecondary space-y-2">
                 <p className="font-semibold text-tv-text">Quick Start:</p>
                 <ol className="list-decimal list-inside space-y-1 ml-2">
-                  <li><strong>On TV:</strong> Open <code className="bg-tv-bgElevated px-2 py-1 rounded text-xs">https://tv.bakeandgrill.mv/#/pair</code> - copy the 6-digit PIN</li>
+                  <li><strong>On TV:</strong> Open <code className="bg-tv-bgElevated px-2 py-1 rounded text-xs">https://tv.bakeandgrill.mv/pair</code> - copy the 6-digit PIN</li>
                   <li><strong>In Admin:</strong> Click "Pair Display" → Enter PIN + details → Click "Pair Display"</li>
                   <li><strong>Result:</strong> Display connects automatically and starts playing</li>
                 </ol>
@@ -650,7 +650,7 @@ export default function DisplayManagement() {
                         <p className="font-medium text-tv-text mb-1">Step 1: On the TV/Display Device</p>
                         <ol className="list-decimal list-inside space-y-1 ml-2">
                           <li>Open a browser on the TV/device</li>
-                          <li>Navigate to: <code className="bg-tv-bgElevated px-2 py-1 rounded text-xs">https://tv.bakeandgrill.mv/#/pair</code></li>
+                          <li>Navigate to: <code className="bg-tv-bgElevated px-2 py-1 rounded text-xs">https://tv.bakeandgrill.mv/pair</code></li>
                           <li>The screen will show a 6-digit PIN code (e.g., <strong>123456</strong>)</li>
                           <li>You'll see: "Enter this PIN in Admin Panel"</li>
                           <li>Note: PIN refreshes every 5 minutes</li>
@@ -688,7 +688,7 @@ export default function DisplayManagement() {
                   <div>
                     <p className="font-semibold text-tv-text mb-1">Two Ways to Add Displays:</p>
                     <ul className="list-disc list-inside space-y-1 ml-2">
-                      <li><strong>Pair Display:</strong> Use PIN code pairing (recommended). Open <code className="bg-tv-bgElevated px-1 py-0.5 rounded text-xs">/#/pair</code> on your TV, enter the PIN in admin panel, and it will automatically connect.</li>
+                      <li><strong>Pair Display:</strong> Use PIN code pairing (recommended). Open <code className="bg-tv-bgElevated px-1 py-0.5 rounded text-xs">/pair</code> on your TV, enter the PIN in admin panel, and it will automatically connect.</li>
                       <li><strong>Manual:</strong> Create a display manually and copy the display URL to open in your TV's browser.</li>
                     </ul>
                   </div>
@@ -1227,7 +1227,11 @@ export default function DisplayManagement() {
       {/* Pair Display Modal */}
       <PairDisplayModal
         isOpen={showPairModal}
-        onClose={() => setShowPairModal(false)}
+        autoPairPin={autoPairPin}
+        onClose={() => {
+          setShowPairModal(false);
+          setAutoPairPin(null);
+        }}
         onSuccess={(display) => {
           console.log('✅ Display paired successfully:', display);
           setShowPairModal(false);

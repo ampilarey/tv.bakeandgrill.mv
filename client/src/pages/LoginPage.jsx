@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -15,10 +15,18 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Allow authenticated users to stay on login (e.g. to open /pair for display setup)
     if (isAuthenticated) {
-      navigate('/dashboard');
+      const params = new URLSearchParams(window.location.search);
+      if (!params.get('stay')) {
+        navigate('/dashboard');
+      }
     }
   }, [isAuthenticated, navigate]);
+
+  const goToPairing = () => {
+    navigate('/pair');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -236,7 +244,7 @@ export default function LoginPage() {
                 <div>
                   <h4 className="text-tv-text font-bold text-sm mb-2">🚀 Quick Setup (2 minutes):</h4>
                   <ol className="text-tv-textSecondary text-sm space-y-2 list-decimal list-inside">
-                    <li><strong>On TV:</strong> Open <code className="bg-tv-accent/10 text-tv-accent px-1.5 py-0.5 rounded text-xs">tv.bakeandgrill.mv/pair</code></li>
+                    <li><strong>On TV:</strong> Open <code className="bg-tv-accent/10 text-tv-accent px-1.5 py-0.5 rounded text-xs">tv.bakeandgrill.mv/pair</code> (or tap Pair Display below)</li>
                     <li><strong>Choose method:</strong> PIN Code (easy) or QR Code (fastest)</li>
                     <li><strong>On Phone:</strong> Login → Displays → Pair Display</li>
                     <li><strong>Enter PIN or scan QR</strong> shown on TV</li>
@@ -247,15 +255,16 @@ export default function LoginPage() {
             )}
             
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                to="/pair"
+              <button
+                type="button"
+                onClick={goToPairing}
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-tv-goldDark hover:bg-tv-gold text-white font-semibold rounded-lg transition-all shadow-md hover:shadow-lg"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
                 Pair Display Now
-              </Link>
+              </button>
               
               <button
                 onClick={() => setShowDisplayInfo(!showDisplayInfo)}

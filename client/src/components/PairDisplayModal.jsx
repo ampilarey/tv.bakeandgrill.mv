@@ -20,17 +20,12 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess, autoPairP
   useEffect(() => {
     if (isOpen) {
       fetchPlaylists();
-      
-      // Check for auto-pair PIN from QR code scan
-      if (window.autoPairPin) {
-        console.log('📱 Auto-filling PIN from QR code:', window.autoPairPin);
-        setPinCode(window.autoPairPin);
+      if (autoPairPin) {
+        setPinCode(autoPairPin);
         setMethod('pin');
-        // Clear it so it doesn't auto-fill again
-        delete window.autoPairPin;
       }
     }
-  }, [isOpen]);
+  }, [isOpen, autoPairPin]);
 
   const fetchPlaylists = async () => {
     try {
@@ -234,7 +229,7 @@ export default function PairDisplayModal({ isOpen, onClose, onSuccess, autoPairP
                 <div className="flex gap-3 items-start">
                   <span className="flex-shrink-0 w-7 h-7 bg-tv-accent text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
                   <div>
-                    <p className="text-tv-text text-sm font-medium">On TV: Open <code className="bg-tv-accent/10 text-tv-accent px-2 py-0.5 rounded text-xs ml-1">tv.bakeandgrill.mv/#/pair</code></p>
+                    <p className="text-tv-text text-sm font-medium">On TV: Open <code className="bg-tv-accent/10 text-tv-accent px-2 py-0.5 rounded text-xs ml-1">tv.bakeandgrill.mv/pair</code></p>
                   </div>
                 </div>
                 

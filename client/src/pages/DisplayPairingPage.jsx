@@ -20,7 +20,6 @@ export default function DisplayPairingPage() {
   useEffect(() => {
     requestPinFromServer();
     fetchLocations();
-    checkAutoPairing();
   }, []);
 
   // Generate QR code for pairing when QR method is selected
@@ -67,7 +66,7 @@ export default function DisplayPairingPage() {
       // This works for BOTH PIN and QR methods since QR also uses PIN internally
       const checkInterval = setInterval(() => {
         checkIfPinPaired();
-      }, 3000); // Check every 3 seconds
+      }, 5000);
 
       return () => {
         clearInterval(interval);
@@ -78,14 +77,17 @@ export default function DisplayPairingPage() {
 
   const requestPinFromServer = async () => {
     setLoading(true);
+    setError('');
     try {
       const response = await api.post('/pairing/request-pin');
       setPinCode(response.data.pin);
-    } catch (error) {
-      console.error('Error requesting PIN:', error);
-      // Fallback to client-side generation
-      const pin = Math.floor(100000 + Math.random() * 900000).toString();
-      setPinCode(pin);
+    } catch (err) {
+      console.error('Error requesting PIN:', err);
+      setPinCode('');
+      const msg = err.response?.status === 429
+        ? 'Too many PIN requests. Please wait a minute and try again.'
+        : (err.response?.data?.error || err.message || 'Could not get pairing PIN from server.');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -102,9 +104,10 @@ export default function DisplayPairingPage() {
         console.log('✅ Display paired successfully! Redirecting to player...', response.data.display);
         handlePairingSuccess(response.data.display);
       }
-    } catch (error) {
-      // Not paired yet, keep waiting
-      console.log('⏳ Not paired yet, continuing to wait...');
+    } catch (err) {
+      if (err.response?.status === 429) {
+        setError('Checking too fast — pairing poll paused. Will retry automatically.');
+      }
     }
   };
 
@@ -118,21 +121,6 @@ export default function DisplayPairingPage() {
       setLocations([]); // Set empty array on error
     }
   };
-
-  const checkAutoPairing = async () => {
-    try {
-      // Public route - no auth needed
-      const response = await api.post('/pairing/auto-pair');
-      if (response.data.success && response.data.display) {
-        handlePairingSuccess(response.data.display);
-      }
-    } catch (error) {
-      // Auto-pairing not available, that's ok
-      console.log('Auto-pairing not available');
-      // Don't show error to user
-    }
-  };
-
 
   const handleLocationPairing = async () => {
     if (!selectedLocation || !locationPin) {
@@ -162,15 +150,7 @@ export default function DisplayPairingPage() {
     setDisplayInfo(display);
     
     setTimeout(() => {
-      const redirectUrl = `/#/display?token=${display.token}`;
-      
-      // Use both navigate AND window.location as fallback
-      try {
-        navigate(`/display?token=${display.token}`);
-      } catch (navError) {
-        console.error('❌ Navigate failed, using window.location:', navError);
-        window.location.href = `${window.location.origin}/#/display?token=${display.token}`;
-      }
+      navigate(`/display?token=${display.token}`);
     }, 2000);
   };
 
@@ -228,7 +208,7 @@ export default function DisplayPairingPage() {
         <div className="mb-6 md:mb-10">
           <div className="flex items-center justify-center gap-4 mb-6">
             <a
-              href="/#/login"
+              href="/login"
               className="absolute left-4 md:left-8 top-4 md:top-8 flex items-center gap-2 text-tv-textSecondary hover:text-tv-accent transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,12 +225,11 @@ export default function DisplayPairingPage() {
         </div>
 
         {/* Pairing Method Selector */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-10">
           {[
             { value: 'pin', label: 'PIN Code', icon: '🔢', desc: 'Enter 6-digit code' },
             { value: 'qr', label: 'QR Code', icon: '📱', desc: 'Scan to pair' },
             { value: 'id', label: 'Location ID', icon: '📍', desc: 'Select location' },
-            { value: 'auto', label: 'Auto-Detect', icon: '🔍', desc: 'Find automatically' }
           ].map(method => (
             <button
               key={method.value}
@@ -307,13 +286,24 @@ export default function DisplayPairingPage() {
               <div className="bg-tv-accent/10 border-2 border-tv-accent/30 rounded-xl p-3 md:p-4">
                 <p className="text-tv-accent text-sm md:text-base font-bold flex items-center justify-center gap-2">
                   <span className="animate-spin">⟳</span>
-                  Checking for pairing every 3 seconds...
+                  Checking for pairing every 5 seconds...
                 </p>
               </div>
             </div>
             <p className="text-tv-textMuted text-center text-xs md:text-sm mt-6 font-medium">
               🔄 PIN refreshes automatically every 5 minutes
             </p>
+            {!pinCode && !loading && error && (
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={requestPinFromServer}
+                  className="px-6 py-2 rounded-lg bg-tv-accent hover:bg-tv-accentHover text-white font-semibold"
+                >
+                  Retry PIN Request
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -364,7 +354,7 @@ export default function DisplayPairingPage() {
               <div className="bg-tv-accent/10 border-2 border-tv-accent/30 rounded-xl p-3 md:p-4">
                 <p className="text-tv-accent text-sm md:text-base font-bold flex items-center justify-center gap-2">
                   <span className="animate-spin">⟳</span>
-                  Checking for pairing every 3 seconds...
+                  Checking for pairing every 5 seconds...
                 </p>
               </div>
               
@@ -433,38 +423,6 @@ export default function DisplayPairingPage() {
             <p className="text-text-muted text-center text-xs mt-6">
               Get the 4-digit PIN from your cafe manager
             </p>
-          </div>
-        )}
-
-        {/* Method 4: Auto-Discovery */}
-        {pairingMethod === 'auto' && (
-          <div className="bg-background-light rounded-lg p-8 border border-slate-700">
-            <h2 className="text-2xl font-bold text-white text-center mb-6">
-              Auto-Detecting Display...
-            </h2>
-            
-            <div className="text-center py-12">
-              <Spinner size="xl" />
-              <p className="text-text-secondary mt-4">
-                Searching for available displays on your network...
-              </p>
-            </div>
-
-            <div className="mt-6 bg-background rounded-lg p-4">
-              <h3 className="text-white font-medium mb-3">Requirements:</h3>
-              <ul className="text-text-secondary text-sm space-y-2">
-                <li>✓ Display must be on the cafe WiFi network</li>
-                <li>✓ Network discovery must be enabled</li>
-                <li>✓ Firewall must allow local connections</li>
-              </ul>
-            </div>
-
-            <button
-              onClick={checkAutoPairing}
-              className="w-full mt-4 py-3 rounded-lg bg-primary hover:bg-primary-dark text-white font-bold transition-colors"
-            >
-              Retry Auto-Detection
-            </button>
           </div>
         )}
 
