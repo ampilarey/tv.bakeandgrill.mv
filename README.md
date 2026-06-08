@@ -225,6 +225,67 @@ Use case: "Happy Hour starting now — show promo for 1 hour"
 
 ---
 
+## Channel Diagnosis & Playback
+
+### How diagnosis works
+
+The server probes each channel on a schedule (every 30 minutes) and on demand:
+
+1. Fetches the stream URL (with M3U `User-Agent` / `Referer` if set)
+2. For HLS: validates manifest, follows master → media playlist, fetches first segment
+3. Detects DRM (`#EXT-X-KEY`), codec issues (e.g. HEVC), HTTP/mixed-content risks
+4. Stores results in `channel_health` with reason codes (`OFFLINE`, `MANIFEST_OK_SEGMENT_FAIL`, `MIXED_CONTENT_HTTP`, etc.)
+5. Exposes `play_status` and device flags (`playable_ios`, `playable_android_chrome`, …) to the client
+
+**Admin:** `/admin/channel-health` — test all channels, per-channel recheck, hide/untrust bad streams.
+
+**API:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/channels/diagnose` | Body: `{ playlistId, channelId }` or `{ playlistId, url }` |
+| `POST` | `/api/channels/:id/diagnose?playlistId=N` | Diagnose single channel |
+| `POST` | `/api/channels/:id/recheck?playlistId=N` | Admin background recheck |
+| `POST` | `/api/channels/report-failure` | Client playback failure report |
+| `PUT`  | `/api/channels/:id/override` | Hide/trust channel (admin) |
+
+### Playback proxy
+
+When a stream needs proxying (HTTP on HTTPS site, custom headers, referrer), the API returns:
+
+```
+playback_url: /api/stream/:channelId/master.m3u8?token=…&playlistId=N
+```
+
+- Tokens are **HMAC-signed**, **10-minute TTL** (`STREAM_TOKEN_TTL_SEC`)
+- Proxy rewrites manifest segment URLs to same-origin HTTPS paths
+- SSRF protection blocks private IPs; DRM streams are **not** proxied
+- Tokens and origin credentials are **never logged**
+
+Direct HTTPS streams without special requirements use the original URL as `playback_url`.
+
+### Watch page behaviour
+
+- Default channel list shows **playable only**; toggle **Show all** / **Failed**
+- Player timeout: **13 seconds** without advancing `timeupdate` → clear error (not infinite loading)
+- Errors: Retry + **Next Channel** buttons; failures reported to backend
+
+### Environment variables (channel/stream)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_REMOTE_BYTES` | 5242880 | Max M3U/manifest download size |
+| `MANIFEST_MAX_BYTES` | 2097152 | Max manifest size for probes |
+| `SEGMENT_MAX_BYTES` | 10485760 | Max proxied segment size |
+| `STREAM_TOKEN_TTL_SEC` | 600 | Signed stream token lifetime |
+| `STREAM_PROXY_TIMEOUT_MS` | 15000 | Proxy fetch timeout |
+| `CHANNEL_PROBE_TIMEOUT_MS` | 12000 | Health probe timeout |
+| `MAX_STORAGE_MB` | 2048 | Total media library disk quota |
+
+Manual test checklist: [`docs/CHANNEL_PLAYBACK_TEST_CHECKLIST.md`](docs/CHANNEL_PLAYBACK_TEST_CHECKLIST.md)
+
+---
+
 ## Production Checklist
 
 - [ ] `JWT_SECRET` rotated and is ≥ 32 chars
@@ -297,7 +358,8 @@ cd ~/tv.bakeandgrill.mv && \
 | `pairing_sessions` | `2026-02-28-b-…` | DB-backed pairing (no in-memory maps) |
 | `zones` | `2026-02-28-c-…` | Display groupings |
 | `emergency_overrides` | `2026-02-28-c-…` | Zone/display content overrides |
-| `channel_health` | `2026-02-28-a-…` | HLS stream health monitoring |
+| `channel_health` | `2026-02-28-a-…` | Deep channel diagnosis + playability |
+| `channel_overrides` | `2026-06-07-…` | Admin hide/trust per channel |
 
 ### New columns added to existing tables
 

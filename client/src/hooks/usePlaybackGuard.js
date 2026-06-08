@@ -1,0 +1,188 @@
+/**
+ * Playback guard utilities — timeout, error mapping, failure reporting.
+ */
+import api from '../services/api';
+
+export const PLAYBACK_TIMEOUT_MS = 13000;
+
+export function getStreamUrl(channel) {
+  if (!channel) return null;
+  return channel.playback_url || channel.url || null;
+}
+
+export function isHlsStream(url) {
+  if (!url) return false;
+  try {
+    return new URL(url).pathname.toLowerCase().endsWith('.m3u8');
+  } catch {
+    return url.toLowerCase().includes('.m3u8');
+  }
+}
+
+export function getPrePlayError(channel, isIOS) {
+  if (!channel) return null;
+  if (channel.unsupported_protocol) return 'Stream incompatible with this device';
+  if (channel.is_drm) return 'Stream blocked';
+  if (channel.play_status === 'blocked') return 'Stream blocked';
+  if (channel.play_status === 'offline') {
+    return channel.failure_message || 'Stream offline';
+  }
+  if (channel.play_status === 'unsupported') {
+    return 'Unsupported codec';
+  }
+  if (isIOS && channel.playable_ios === 0) {
+    return 'Stream incompatible with this device';
+  }
+  if (!isIOS && channel.playable_android_chrome === 0 && channel.playable_desktop_chrome === 0) {
+    return 'Stream incompatible with this device';
+  }
+  if (!getStreamUrl(channel)) {
+    return channel.failure_message || 'Stream offline';
+  }
+  return null;
+}
+
+const REASON_MESSAGES = {
+  OFFLINE: 'Stream offline',
+  TIMEOUT: 'Stream offline',
+  HTTP_ERROR: 'Stream offline',
+  REDIRECT_ERROR: 'Stream offline',
+  MIXED_CONTENT_HTTP: 'HTTP stream blocked',
+  CORS_RISK: 'Stream blocked',
+  MANIFEST_INVALID: 'Stream offline',
+  MANIFEST_OK_SEGMENT_FAIL: 'Manifest loaded but video segments failed',
+  UNSUPPORTED_CODEC: 'Unsupported codec',
+  UNSUPPORTED_AUDIO: 'Unsupported codec',
+  GEO_BLOCKED_OR_FORBIDDEN: 'Stream blocked',
+  EXPIRED_URL: 'Stream offline',
+  REQUIRES_REFERRER: 'Stream blocked',
+  REQUIRES_USER_AGENT: 'Stream blocked',
+  DRM_OR_PROTECTED_STREAM: 'Stream blocked',
+  UNKNOWN_ERROR: 'Stream offline',
+};
+
+export function mapPlaybackError({ reasonCode, mediaError, hlsError, timedOut, channel }) {
+  if (reasonCode && REASON_MESSAGES[reasonCode]) return REASON_MESSAGES[reasonCode];
+  if (channel?.failure_reason_code && REASON_MESSAGES[channel.failure_reason_code]) {
+    return REASON_MESSAGES[channel.failure_reason_code];
+  }
+  if (timedOut) return 'Stream offline';
+
+  if (hlsError?.fatal) {
+    if (hlsError.details === 'manifestLoadError' || hlsError.details === 'manifestParsingError') {
+      return 'Stream offline';
+    }
+    if (hlsError.details === 'fragLoadError' || hlsError.details === 'fragParsingError') {
+      return 'Manifest loaded but video segments failed';
+    }
+    if (hlsError.type === 'networkError') return 'Stream blocked';
+    if (hlsError.type === 'mediaError') return 'Unsupported codec';
+    return 'Stream offline';
+  }
+
+  if (mediaError) {
+    switch (mediaError.code) {
+      case mediaError.MEDIA_ERR_NETWORK:
+        return 'Stream offline';
+      case mediaError.MEDIA_ERR_DECODE:
+        return 'Unsupported codec';
+      case mediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+        return 'Stream incompatible with this device';
+      default:
+        return 'Stream offline';
+    }
+  }
+
+  return 'Stream offline';
+}
+
+export function detectDeviceType() {
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/.test(ua)) return 'ios_safari';
+  if (/Android/.test(ua)) return 'android_chrome';
+  if (/SmartTV|TV|WebOS|Tizen|HbbTV/i.test(ua)) return 'tv_browser';
+  return 'desktop_chrome';
+}
+
+export async function reportPlaybackFailure({
+  url,
+  playlistId,
+  channelName,
+  reasonCode = 'UNKNOWN_ERROR',
+  failureStage = null,
+}) {
+  if (!url || !playlistId) return;
+  try {
+    await api.post('/channels/report-failure', {
+      url,
+      playlistId,
+      channelName,
+      reasonCode,
+      deviceType: detectDeviceType(),
+      failureStage,
+    });
+  } catch {
+    // non-fatal
+  }
+}
+
+/**
+ * Creates playback timeout + confirmation tracking for a video element.
+ */
+export function createPlaybackGuard({
+  video,
+  onTimeout,
+  onConfirmed,
+  timeoutMs = PLAYBACK_TIMEOUT_MS,
+}) {
+  let confirmed = false;
+  let lastTime = 0;
+  let timer = null;
+
+  const clearTimer = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  const confirm = () => {
+    if (confirmed) return;
+    confirmed = true;
+    clearTimer();
+    onConfirmed?.();
+  };
+
+  const startTimer = () => {
+    clearTimer();
+    timer = setTimeout(() => {
+      if (!confirmed) onTimeout?.();
+    }, timeoutMs);
+  };
+
+  const onPlaying = () => {
+    // playing alone is not enough — wait for timeupdate
+  };
+
+  const onTimeUpdate = () => {
+    if (!video) return;
+    if (video.currentTime > 0 && video.currentTime !== lastTime) {
+      lastTime = video.currentTime;
+      confirm();
+    }
+  };
+
+  const attach = () => {
+    video?.addEventListener('playing', onPlaying);
+    video?.addEventListener('timeupdate', onTimeUpdate);
+    startTimer();
+  };
+
+  const detach = () => {
+    clearTimer();
+    video?.removeEventListener('playing', onPlaying);
+    video?.removeEventListener('timeupdate', onTimeUpdate);
+  };
+
+  return { attach, detach, confirm, startTimer, clearTimer, isConfirmed: () => confirmed };
+}

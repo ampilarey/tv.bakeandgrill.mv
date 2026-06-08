@@ -9,7 +9,8 @@ const { validateDisplayCreate } = require('../middleware/validation');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { checkPermission, checkResourceLimit } = require('../middleware/permissions');
 const { fetch } = require('../utils/httpClient');
-const { parseM3U } = require('../utils/m3uParser');
+const { parseM3U, playlistBaseUrl } = require('../utils/m3uParser');
+const { enrichChannelsForPlaylist } = require('../utils/channelEnrichment');
 
 const router = express.Router();
 
@@ -37,7 +38,7 @@ const displayLimiter = rateLimit({
  * Verify display token (public endpoint for displays)
  */
 router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
-  const { token } = req.body;
+  const { token, location_pin: locationPin } = req.body;
   const db = getDatabase();
   
   const [displays] = await db.query('SELECT * FROM displays WHERE token = ? AND is_active = TRUE', [token]);
@@ -67,7 +68,11 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
           timeout: 10000,
           headers: { 'User-Agent': 'BakeGrillTV/1.0' }
         });
-        channels = parseM3U(m3uResponse.data);
+        const parsed = parseM3U(m3uResponse.data, playlistBaseUrl(playlist.m3u_url));
+        channels = await enrichChannelsForPlaylist(parsed, playlist, req, {
+          hideHidden: true,
+          playableOnly: false,
+        });
       } catch (error) {
         console.error('Error fetching M3U for display:', error.message);
       }
@@ -120,6 +125,22 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
     if (ovrs.length && ovrs[0].pid) activeOverridePlaylistId = ovrs[0].pid;
   } catch (err) { if (err.code !== 'ER_NO_SUCH_TABLE') console.error('Override resolution error:', err.message); }
 
+  // Wi-Fi password only when PIN matches (kiosk setup) — never expose by default
+  const pinOk = locationPin && display.location_pin && locationPin === display.location_pin;
+  const includeWifiPassword = pinOk && display.show_wifi_qr === 1;
+
+  let appName = process.env.APP_NAME || 'Bake & Grill TV';
+  let brandColor = '#B03A48';
+  try {
+    const [settings] = await db.query(
+      "SELECT setting_key, setting_value FROM app_settings WHERE setting_key IN ('app_name', 'brand_color')"
+    );
+    settings.forEach((s) => {
+      if (s.setting_key === 'app_name') appName = s.setting_value;
+      if (s.setting_key === 'brand_color') brandColor = s.setting_value;
+    });
+  } catch { /* non-fatal */ }
+
   res.json({
     success: true,
     display: {
@@ -138,9 +159,11 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
       showBrandOverlay:  display.show_brand_overlay !== 0,
       overlayMode:       display.overlay_mode       || 'none',
       overlaySafeArea:   display.overlay_safe_area  || 'standard',
+      appName,
+      brandColor,
       showWifiQr:           display.show_wifi_qr === 1,
       wifiSsid:             display.wifi_ssid          || null,
-      wifiPassword:         display.wifi_password      || null,
+      wifiPassword:         includeWifiPassword ? (display.wifi_password || null) : null,
       wifiSecurity:         display.wifi_security      || 'WPA',
       wifiQrPosition:       display.wifi_qr_position   || 'bottom-right',
       autoRebootTime:       display.auto_reboot_time   || null,
@@ -373,7 +396,7 @@ router.patch('/commands/:id/execute', displayLimiter, verifyDisplayToken, asyncH
   const db = getDatabase();
 
   // Verify the command belongs to the display making the request
-  const { token } = req.body;
+  const token = req.body.token || req.displayToken;
   const [displayRows] = await db.query('SELECT id FROM displays WHERE token = ?', [token]);
   if (!displayRows.length) {
     return res.status(404).json({ success: false, error: 'Display not found' });
@@ -505,6 +528,27 @@ router.get('/:id', checkPermission('can_manage_displays'), asyncHandler(async (r
   res.json({
     success: true,
     display: sanitizeDisplay(displays[0])
+  });
+}));
+
+/**
+ * POST /api/displays/:id/rotate-token
+ * Generate a new display token (invalidates the old URL)
+ */
+router.post('/:id/rotate-token', checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const { id } = req.params;
+  const [existing] = await db.query('SELECT id, token FROM displays WHERE id = ?', [id]);
+  if (!existing.length) {
+    return res.status(404).json({ success: false, error: 'Display not found' });
+  }
+  const newToken = uuidv4();
+  await db.query('UPDATE displays SET token = ? WHERE id = ?', [newToken, id]);
+  res.json({
+    success: true,
+    token: newToken,
+    displayUrl: `/display?token=${newToken}`,
+    message: 'Display token rotated — update the kiosk URL',
   });
 }));
 

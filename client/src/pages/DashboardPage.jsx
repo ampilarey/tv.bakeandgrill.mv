@@ -288,9 +288,9 @@ export default function DashboardPage() {
                   </div>
                   
                   {/* Edit & Delete buttons - only show if user has permission */}
-                  {(user?.role === 'admin' || permissions?.can_edit_own_playlists || permissions?.can_delete_own_playlists) && (
+                  {(user?.role === 'admin' || playlist.can_edit || playlist.can_delete || permissions?.can_edit_own_playlists || permissions?.can_delete_own_playlists) && (
                     <div className="flex gap-2">
-                      {(user?.role === 'admin' || permissions?.can_edit_own_playlists) && (
+                      {(user?.role === 'admin' || playlist.can_edit || permissions?.can_edit_own_playlists) && (
                         <button
                           onClick={(e) => openEditModal(playlist, e)}
                           className="px-3 py-1.5 bg-tv-bgSoft hover:bg-tv-bgHover text-tv-text rounded-lg transition-colors text-xs font-semibold"
@@ -298,7 +298,7 @@ export default function DashboardPage() {
                           ✏️ Edit
                         </button>
                       )}
-                      {(user?.role === 'admin' || permissions?.can_delete_own_playlists) && (
+                      {(user?.role === 'admin' || playlist.can_delete || permissions?.can_delete_own_playlists) && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

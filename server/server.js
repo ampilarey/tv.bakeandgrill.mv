@@ -191,6 +191,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/playlists', playlistsRoutes);
 app.use('/api/channels', channelsRoutes);
+const streamRoutes = require('./routes/stream');
+app.use('/api/stream', streamRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/displays', displaysRoutes);

@@ -1,122 +1,121 @@
-/**
- * useChannelList
- * Fetch channels for a playlist, support debounced search, group filtering,
- * and favorites-only view. Uses TanStack Query for server state management.
- */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
 
-async function fetchChannels(playlistId) {
-  const response = await api.get(`/channels?playlistId=${playlistId}`);
+const SEARCH_DEBOUNCE_MS = 250;
+
+async function fetchChannels(playlistId, playStatusFilter) {
+  const playableOnly = playStatusFilter === 'playable' ? '1' : '0';
+  const response = await api.get(`/channels?playlistId=${playlistId}&playableOnly=${playableOnly}`);
   return {
     channels: response.data.channels || [],
     groups: response.data.groups || [],
   };
 }
 
-export function useChannelList({ playlistId, favorites }) {
+export function useChannelList({ playlistId, favorites, playStatusFilter = 'playable' }) {
   const navigate = useNavigate();
 
-  const {
-    data,
-    isLoading: loading,
-  } = useQuery({
-    queryKey: ['channels', playlistId],
-    queryFn: () => fetchChannels(playlistId),
-    enabled: !!playlistId,
-    onError: () => { /* navigate handled below */ },
-  });
-
-  const channels = data?.channels ?? [];
-  const groups   = data?.groups   ?? [];
-
-  // Navigate to dashboard if playlistId is missing
-  useEffect(() => {
-    if (!playlistId) navigate('/dashboard');
-  }, [playlistId, navigate]);
-
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [displayedChannels, setDisplayedChannels] = useState(50);
   const [searchHistory, setSearchHistory] = useState(() => {
+    if (typeof window === 'undefined') return [];
     try {
-      return JSON.parse(localStorage.getItem('searchHistory') || '[]');
+      return JSON.parse(localStorage.getItem('channelSearchHistory') || '[]');
     } catch {
-      localStorage.removeItem('searchHistory');
       return [];
     }
   });
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
 
-  const searchDebounceRef = useRef(null);
+  useEffect(() => {
+    if (!playlistId) navigate('/dashboard');
+  }, [playlistId, navigate]);
 
-  // Derived: filtered channel list
-  const filteredChannels = (() => {
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  const { data, isLoading: loading, isError, error, refetch } = useQuery({
+    queryKey: ['channels', playlistId, playStatusFilter],
+    queryFn: () => fetchChannels(playlistId, playStatusFilter),
+    enabled: !!playlistId,
+  });
+
+  const channels = data?.channels || [];
+  const groups = data?.groups || [];
+
+  const filteredChannels = useMemo(() => {
     let result = channels;
 
-    if (showFavoritesOnly) {
-      const favIds = new Set(favorites.map(f => f.channel_id));
-      result = result.filter(ch => favIds.has(ch.id));
+    if (playStatusFilter === 'failed') {
+      result = result.filter(
+        (c) => c.play_status === 'offline' || c.play_status === 'unsupported' || c.play_status === 'blocked'
+      );
+    }
+
+    if (showFavoritesOnly && favorites) {
+      result = result.filter((c) => favorites.has(c.id));
     }
 
     if (selectedGroup) {
-      result = result.filter(ch => ch.group?.trim() === selectedGroup.trim());
+      result = result.filter((c) => c.group === selectedGroup);
     }
 
-    if (debouncedSearchQuery.trim()) {
-      const query = debouncedSearchQuery.toLowerCase().trim();
-      result = result.filter(ch =>
-        ch.name?.toLowerCase().includes(query) ||
-        ch.group?.toLowerCase().includes(query)
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      result = result.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          (c.group && c.group.toLowerCase().includes(q))
       );
     }
 
     return result;
-  })();
+  }, [channels, playStatusFilter, showFavoritesOnly, favorites, selectedGroup, debouncedSearch]);
 
-  const handleSearch = useCallback((value) => {
-    setSearchQuery(value);
-    clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => {
-      setDebouncedSearchQuery(value);
-    }, 250);
-
-    if (value.trim() && value !== searchHistory[0]) {
-      const newHistory = [value, ...searchHistory.filter(h => h !== value)].slice(0, 10);
-      setSearchHistory(newHistory);
-      try { localStorage.setItem('searchHistory', JSON.stringify(newHistory)); } catch { /* quota */ }
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (query.trim()) {
+      setSearchHistory((prev) => {
+        const updated = [query.trim(), ...prev.filter((s) => s !== query.trim())].slice(0, 8);
+        localStorage.setItem('channelSearchHistory', JSON.stringify(updated));
+        return updated;
+      });
     }
-  }, [searchHistory]);
+  };
 
-  const clearSearchHistory = useCallback(() => {
+  const clearSearchHistory = () => {
     setSearchHistory([]);
-    localStorage.removeItem('searchHistory');
-  }, []);
+    localStorage.removeItem('channelSearchHistory');
+  };
 
-  // Clear any pending debounce when the hook unmounts to prevent state updates
-  // on an already-unmounted component.
-  useEffect(() => () => clearTimeout(searchDebounceRef.current), []);
-
-  const loadMore = useCallback(() => setDisplayedChannels(prev => prev + 50), []);
+  const loadMore = () => setDisplayedChannels((n) => n + 50);
 
   return {
     channels,
     filteredChannels,
     groups,
     loading,
+    isError,
+    error,
+    refetch,
     searchQuery,
     setSearchQuery,
-    debouncedSearchQuery,
-    selectedGroup, setSelectedGroup,
-    showFavoritesOnly, setShowFavoritesOnly,
+    selectedGroup,
+    setSelectedGroup,
+    showFavoritesOnly,
+    setShowFavoritesOnly,
     displayedChannels,
     loadMore,
     searchHistory,
-    showSearchSuggestions, setShowSearchSuggestions,
+    showSearchSuggestions,
+    setShowSearchSuggestions,
     handleSearch,
     clearSearchHistory,
   };

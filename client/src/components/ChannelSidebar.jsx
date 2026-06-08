@@ -8,7 +8,31 @@ import Button from './common/Button';
 import Input from './common/Input';
 import Badge from './common/Badge';
 
-/** Small coloured dot showing channel live-status */
+function PlayStatusBadge({ channel, isIOS }) {
+  let status = channel.play_status;
+  if (isIOS && channel.playable_ios === 0 && status === 'playable') {
+    status = 'unsupported';
+  }
+
+  const map = {
+    playable: { label: 'Playable', color: 'success' },
+    offline: { label: 'Offline', color: 'danger' },
+    unsupported: { label: 'Unsupported', color: 'warning' },
+    needs_recheck: { label: 'Recheck', color: 'default' },
+    unknown: { label: 'Unknown', color: 'default' },
+    blocked: { label: 'Blocked', color: 'danger' },
+  };
+
+  const info = map[status] || map.unknown;
+  const pulse = status === 'needs_recheck' ? ' animate-pulse' : '';
+  return (
+    <Badge color={info.color} size="sm" className={pulse} title={channel.failure_message || info.label}>
+      {info.label}
+    </Badge>
+  );
+}
+
+/** Small coloured dot showing channel live-status (legacy fallback) */
 function LiveStatusDot({ isLive, size = 'sm' }) {
   const s = size === 'lg' ? 'w-3 h-3' : 'w-2 h-2';
   if (isLive === 1 || isLive === true)
@@ -49,6 +73,9 @@ export default function ChannelSidebar({
   onBack,
   onLogout,
   onShowAllRecentToggle,
+  playStatusFilter = 'playable',
+  onPlayStatusFilterChange,
+  isIOS = false,
 }) {
   const headerClasses = variant === 'mobile'
     ? 'p-4 pb-3 border-b border-tv-borderSubtle bg-tv-bgElevated sticky top-0 z-20 shadow-[0_-12px_32px_rgba(0,0,0,0.65)] flex-shrink-0'
@@ -109,6 +136,29 @@ export default function ChannelSidebar({
         </div>
 
         {/* Filters */}
+        <div className="flex flex-wrap gap-2 items-center mb-2">
+          <Button
+            variant={playStatusFilter === 'playable' ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => onPlayStatusFilterChange?.('playable')}
+          >
+            Playable only
+          </Button>
+          <Button
+            variant={playStatusFilter === 'all' ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => onPlayStatusFilterChange?.('all')}
+          >
+            Show all
+          </Button>
+          <Button
+            variant={playStatusFilter === 'failed' ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => onPlayStatusFilterChange?.('failed')}
+          >
+            Failed
+          </Button>
+        </div>
         <div className="flex flex-wrap gap-2 items-center">
           <Button variant={showFavoritesOnly ? 'primary' : 'ghost'} size="sm" onClick={onFavoritesToggle}>
             ⭐ Favorites
@@ -218,8 +268,8 @@ export default function ChannelSidebar({
                     : <span className="text-xl text-tv-textMuted">📺</span>}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <LiveStatusDot isLive={channel.is_live} />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <PlayStatusBadge channel={channel} isIOS={isIOS} />
                     <h3 className={`font-medium truncate ${currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'}`}>
                       {channel.name}
                     </h3>
@@ -260,8 +310,8 @@ export default function ChannelSidebar({
                       ) : (
                         <div className="w-16 h-16 mx-auto mb-2 bg-tv-bgHover border border-tv-borderSubtle rounded-lg flex items-center justify-center text-2xl">📺</div>
                       )}
-                      <div className="flex items-center justify-center gap-1.5 mb-1">
-                        <LiveStatusDot isLive={channel.is_live} />
+                      <div className="flex items-center justify-center gap-1.5 mb-1 flex-wrap">
+                        <PlayStatusBadge channel={channel} isIOS={isIOS} />
                         <h3 className={`font-medium text-sm truncate ${currentChannel?.id === channel.id ? 'text-tv-accent' : 'text-tv-text'}`}>
                           {channel.name}
                         </h3>

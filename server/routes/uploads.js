@@ -153,6 +153,18 @@ function baseUrl(req) {
   return `${req.protocol}://${req.get('host')}`;
 }
 
+const MAX_STORAGE_MB = parseInt(process.env.MAX_STORAGE_MB || '2048', 10);
+
+async function assertStorageQuota(db, additionalBytes = 0) {
+  const [rows] = await db.query('SELECT COALESCE(SUM(size_bytes), 0) AS total FROM media_assets');
+  const total = Number(rows[0]?.total || 0);
+  if (total + additionalBytes > MAX_STORAGE_MB * 1024 * 1024) {
+    const err = new Error(`Storage quota exceeded (${MAX_STORAGE_MB} MB max)`);
+    err.status = 507;
+    throw err;
+  }
+}
+
 async function saveAsset(db, { type, originalName, storedName, url, thumbnailUrl, mimeType, sizeBytes, width, height, uploadedBy }) {
   const [r] = await db.query(
     `INSERT INTO media_assets (type, original_name, stored_name, url, thumbnail_url, mime_type, size_bytes, width, height, uploaded_by)
@@ -164,6 +176,7 @@ async function saveAsset(db, { type, originalName, storedName, url, thumbnailUrl
 }
 
 async function processImageFile(file, req, db) {
+  await assertStorageQuota(db, file.size || 0);
   const origPath = file.path;
   const magicOk  = await checkMagic(origPath, 'image');
   if (!magicOk) { await deleteImage(origPath); throw new Error('File signature mismatch — not a valid image'); }
@@ -206,6 +219,7 @@ async function processImageFile(file, req, db) {
 }
 
 async function processVideoFile(file, req, db) {
+  await assertStorageQuota(db, file.size || 0);
   const magicOk = await checkMagic(file.path, 'video');
   if (!magicOk) { await deleteImage(file.path); throw new Error('File signature mismatch — not a valid MP4'); }
 
@@ -226,9 +240,10 @@ async function processVideoFile(file, req, db) {
 /**
  * POST /api/uploads  — unified upload (field: "file")
  */
-router.post('/', verifyToken, unifiedUpload.single('file'), asyncHandler(async (req, res) => {
+router.post('/', verifyToken, requireAdmin, unifiedUpload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'No file provided (field: file)' });
   const db   = getDatabase();
+  await assertStorageQuota(db, req.file.size || 0);
   const isVid = req.file.mimetype === 'video/mp4';
   const asset = isVid
     ? await processVideoFile(req.file, req, db)
@@ -283,7 +298,7 @@ router.delete('/:id(\\d+)', verifyToken, requireAdmin, asyncHandler(async (req, 
 // ── Backward-compatible legacy endpoints ───────────────────────────────────
 
 /** POST /api/uploads/image */
-router.post('/image', verifyToken, imageUpload.single('image'), asyncHandler(async (req, res) => {
+router.post('/image', verifyToken, requireAdmin, imageUpload.single('image'), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'No image file provided' });
   const db    = getDatabase();
   const asset = await processImageFile(req.file, req, db);
@@ -296,7 +311,7 @@ router.post('/image', verifyToken, imageUpload.single('image'), asyncHandler(asy
 }));
 
 /** POST /api/uploads/images */
-router.post('/images', verifyToken, imageUpload.array('images', 10), asyncHandler(async (req, res) => {
+router.post('/images', verifyToken, requireAdmin, imageUpload.array('images', 10), asyncHandler(async (req, res) => {
   if (!req.files?.length) return res.status(400).json({ success: false, message: 'No files provided' });
   const db     = getDatabase();
   const assets = [];
@@ -307,7 +322,7 @@ router.post('/images', verifyToken, imageUpload.array('images', 10), asyncHandle
 }));
 
 /** POST /api/uploads/video */
-router.post('/video', verifyToken, videoUpload.single('video'), asyncHandler(async (req, res) => {
+router.post('/video', verifyToken, requireAdmin, videoUpload.single('video'), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'No video file provided' });
   const db    = getDatabase();
   const asset = await processVideoFile(req.file, req, db);

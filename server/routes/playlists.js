@@ -7,6 +7,20 @@ const { checkPermission, checkResourceLimit, getAssignedPlaylists } = require('.
 
 const router = express.Router();
 
+async function assertPlaylistModifyAccess(req, playlistId, action = 'edit') {
+  if (req.user.role === 'admin') return true;
+  const db = getDatabase();
+  const [rows] = await db.query('SELECT created_by FROM playlists WHERE id = ?', [playlistId]);
+  if (!rows.length) return false;
+  if (rows[0].created_by === req.user.id) return true;
+  const col = action === 'delete' ? 'can_delete' : 'can_edit';
+  const [access] = await db.query(
+    `SELECT 1 FROM user_assigned_playlists WHERE user_id = ? AND playlist_id = ? AND ${col} = 1`,
+    [req.user.id, playlistId]
+  );
+  return access.length > 0;
+}
+
 // All routes require authentication
 router.use(verifyToken);
 
@@ -191,6 +205,14 @@ router.put('/:id',
       code: 'PLAYLIST_NOT_FOUND'
     });
   }
+
+  if (!(await assertPlaylistModifyAccess(req, id, 'edit'))) {
+    return res.status(403).json({
+      success: false,
+      error: 'You do not have permission to edit this playlist',
+      code: 'PLAYLIST_ACCESS_DENIED',
+    });
+  }
   
   // Build update query
   const updates = [];
@@ -261,6 +283,14 @@ router.delete('/:id',
       success: false,
       error: 'Playlist not found',
       code: 'PLAYLIST_NOT_FOUND'
+    });
+  }
+
+  if (!(await assertPlaylistModifyAccess(req, id, 'delete'))) {
+    return res.status(403).json({
+      success: false,
+      error: 'You do not have permission to delete this playlist',
+      code: 'PLAYLIST_ACCESS_DENIED',
     });
   }
   

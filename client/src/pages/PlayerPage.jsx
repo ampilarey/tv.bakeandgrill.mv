@@ -12,6 +12,14 @@ import { useFavorites } from '../hooks/useFavorites';
 import { useChannelList } from '../hooks/useChannelList';
 import { useWatchHistory } from '../hooks/useWatchHistory';
 import { usePlayerKeyboardShortcuts } from '../hooks/usePlayerKeyboardShortcuts';
+import {
+  getStreamUrl,
+  isHlsStream,
+  getPrePlayError,
+  mapPlaybackError,
+  reportPlaybackFailure,
+  PLAYBACK_TIMEOUT_MS,
+} from '../hooks/usePlaybackGuard';
 
 /** Small coloured dot showing channel live-status */
 function LiveStatusDot({ isLive, size = 'sm' }) {
@@ -64,6 +72,7 @@ export default function PlayerPage() {
     return window.innerWidth < 1024;
   });
   const [isChannelDrawerOpen, setIsChannelDrawerOpen] = useState(false);
+  const [playStatusFilter, setPlayStatusFilter] = useState('playable');
   
   // Now Playing overlay state
   const [showNowPlaying, setShowNowPlaying] = useState(false);
@@ -95,7 +104,7 @@ export default function PlayerPage() {
     showSearchSuggestions, setShowSearchSuggestions,
     handleSearch,
     clearSearchHistory,
-  } = useChannelList({ playlistId, favorites });
+  } = useChannelList({ playlistId, favorites, playStatusFilter });
 
   const { recentlyWatched } = useWatchHistory(playlistId, channels);
 
@@ -234,7 +243,15 @@ export default function PlayerPage() {
   // Video player setup
   useEffect(() => {
     if (!currentChannel || !videoRef.current) return;
-    if (!currentChannel.url) {
+
+    const streamUrl = getStreamUrl(currentChannel);
+    const prePlayErr = getPrePlayError(currentChannel, isIOS);
+    if (prePlayErr) {
+      setVideoError(prePlayErr);
+      setVideoLoading(false);
+      return;
+    }
+    if (!streamUrl) {
       setVideoError('This channel has no stream URL.');
       setVideoLoading(false);
       return;
@@ -250,7 +267,7 @@ export default function PlayerPage() {
     dimensionCheckTimerRef.current = null;
 
     const video = videoRef.current;
-    const isHLS = (() => { try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); } catch { return currentChannel.url?.toLowerCase().includes('.m3u8') ?? false; } })();
+    const isHLS = isHlsStream(streamUrl);
     
     // 🚨 CRITICAL: Use iOS detection from top level (already calculated)
     // Re-check iOS detection to be absolutely sure
@@ -281,7 +298,7 @@ export default function PlayerPage() {
       isHLS: isHLS,
       hasNativeHLS: hasNativeHLS,
       HlsSupported: typeof Hls !== 'undefined' ? Hls.isSupported() : false,
-      url: currentChannel.url
+      url: '[stream]'
     });
     
     // Clean up previous HLS instance
@@ -306,45 +323,55 @@ export default function PlayerPage() {
     retryCountRef.current = 0;
     setVideoLoading(true);
     
-    // 🚨 CRITICAL: Timeout guard to prevent infinite loading
-    // If video doesn't start playing within 12 seconds, show error
+    // Timeout guard — confirm playback via advancing timeupdate, not readyState alone
     let playbackStartTimeout = null;
     let hasStartedPlaying = false;
+    let hasConfirmedPlayback = false;
+    let lastPlaybackTime = 0;
     let timeoutCleared = false;
-    
+
     const clearPlaybackTimeout = () => {
       if (playbackStartTimeout && !timeoutCleared) {
         clearTimeout(playbackStartTimeout);
         timeoutCleared = true;
       }
     };
-    
-    const startPlaybackTimeout = () => {
+
+    const confirmPlayback = () => {
+      if (hasConfirmedPlayback) return;
+      hasConfirmedPlayback = true;
+      hasStartedPlaying = true;
       clearPlaybackTimeout();
-      playbackStartTimeout = setTimeout(() => {
-        if (!hasStartedPlaying && video.readyState < 3) {
-          console.error('⏱️ TIMEOUT: Video did not start playing within 12 seconds');
-          console.error('Video state:', {
-            readyState: video.readyState,
-            networkState: video.networkState,
-            paused: video.paused,
-            ended: video.ended,
-            currentTime: video.currentTime,
-            src: video.src,
-            currentSrc: video.currentSrc,
-            error: video.error
-          });
-          
-          setVideoLoading(false);
-          setVideoError(
-            'This stream is not responding on your device. The channel may be offline or experiencing issues. ' +
-            'Please try another channel or tap the play button to retry.'
-          );
-          
-          // Ensure controls are visible for manual retry
-          video.controls = true;
-        }
-      }, 12000); // 12 second timeout
+      setVideoLoading(false);
+      setVideoError(null);
+    };
+
+    const handlePlaybackTimeout = () => {
+      if (hasConfirmedPlayback) return;
+      setVideoLoading(false);
+      const msg = mapPlaybackError({ timedOut: true, channel: currentChannel });
+      setVideoError(msg);
+      video.controls = true;
+      reportPlaybackFailure({
+        url: currentChannel.url,
+        playlistId,
+        channelName: currentChannel.name,
+        reasonCode: 'TIMEOUT',
+        failureStage: 'playback_start_timeout',
+      });
+    };
+
+    const startPlaybackTimeout = () => {
+      timeoutCleared = false;
+      clearPlaybackTimeout();
+      playbackStartTimeout = setTimeout(handlePlaybackTimeout, PLAYBACK_TIMEOUT_MS);
+    };
+
+    const trackTimeUpdateForConfirm = () => {
+      if (video.currentTime > 0 && video.currentTime !== lastPlaybackTime) {
+        lastPlaybackTime = video.currentTime;
+        confirmPlayback();
+      }
     };
 
     // 🚨 CRITICAL: On iOS - ALWAYS use native HLS (NEVER HLS.js - avoids CORS issues)
@@ -384,7 +411,7 @@ export default function PlayerPage() {
       video.autoplay = true;
 
       // Set source — do NOT call load() again; setting src triggers load automatically
-      video.src = currentChannel.url;
+      video.src = streamUrl;
       
       console.log('📱 iOS Native HLS Setup:', {
         src: video.src,
@@ -618,6 +645,7 @@ export default function PlayerPage() {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
         }
+        trackTimeUpdateForConfirm();
         setVideoLoading(false);
       };
       video.addEventListener('timeupdate', storedHandlers.iosTimeUpdateHandler);
@@ -649,32 +677,20 @@ export default function PlayerPage() {
           // Ensure controls are visible for manual play
           video.controls = true;
           
-          switch(errorCode) {
-            case video.error.MEDIA_ERR_ABORTED:
-              setVideoError('Playback aborted. Tap the play button to try again.');
-              break;
-            case video.error.MEDIA_ERR_NETWORK:
-              setVideoError('Network error. Please check your connection and tap play to retry.');
-              break;
-            case video.error.MEDIA_ERR_DECODE:
-              setVideoError('Decode error. This stream may not be compatible with your device.');
-              break;
-            case video.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-              setVideoError('Stream format not supported. The channel may be offline. Tap play to retry.');
-              break;
-            default:
-              setVideoError('Unable to play this channel. The stream may be offline. Tap play to retry.');
-          }
+          const mapped = mapPlaybackError({ mediaError: video.error, channel: currentChannel });
+          setVideoError(errorCode === video.error.MEDIA_ERR_ABORTED
+            ? 'Playback aborted. Tap the play button to try again.'
+            : mapped);
           setVideoLoading(false);
 
-          // Report playback failure to server so health checker can mark channel as down
-          if (currentChannel?.url && playlistId &&
-              errorCode !== video.error.MEDIA_ERR_ABORTED) {
-            api.post('/channels/report-failure', {
+          if (currentChannel?.url && playlistId && errorCode !== video.error.MEDIA_ERR_ABORTED) {
+            reportPlaybackFailure({
               url: currentChannel.url,
-              playlistId: parseInt(playlistId),
+              playlistId: parseInt(playlistId, 10),
               channelName: currentChannel.name,
-            }).catch(() => {}); // fire-and-forget
+              reasonCode: errorCode === video.error.MEDIA_ERR_DECODE ? 'UNSUPPORTED_CODEC' : 'OFFLINE',
+              failureStage: `media_error_${errorCode}`,
+            });
           }
         }
       };
@@ -868,7 +884,7 @@ export default function PlayerPage() {
         video.src = '';
         video.load();
         video.controls = true;
-        video.src = currentChannel.url;
+        video.src = streamUrl;
         video.play().catch(err => {
           console.warn('Autoplay failed:', err);
           setVideoLoading(false);
@@ -954,11 +970,11 @@ export default function PlayerPage() {
 
       hlsRef.current = hls;
       
-      console.log('Loading HLS source:', currentChannel.url);
+      debugLog('Loading HLS source');
       console.log('Video element:', { readyState: video.readyState, networkState: video.networkState });
       
       try {
-        hls.loadSource(currentChannel.url);
+        hls.loadSource(streamUrl);
         hls.attachMedia(video);
         console.log('HLS source loaded and attached');
       } catch (error) {
@@ -1077,10 +1093,7 @@ export default function PlayerPage() {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
         }
-        if (!hasStartedPlaying) {
-          hasStartedPlaying = true;
-          clearPlaybackTimeout();
-        }
+        trackTimeUpdateForConfirm();
         setVideoLoading(false);
       };
       video.addEventListener('timeupdate', handleTimeUpdate);
@@ -1123,11 +1136,14 @@ export default function PlayerPage() {
         
         // Try to recover from errors
         if (data.fatal) {
-          clearPlaybackTimeout(); // Clear timeout on fatal errors
-          
-          switch(data.type) {
+          clearPlaybackTimeout();
+
+          const reasonCode = data.type === Hls.ErrorTypes.MEDIA_ERROR
+            ? 'UNSUPPORTED_CODEC'
+            : data.details?.includes('frag') ? 'MANIFEST_OK_SEGMENT_FAIL' : 'CORS_RISK';
+
+          switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log('Network error, trying to recover...');
               if (retryCountRef.current < 3) {
                 retryCountRef.current += 1;
                 setVideoError('Network error. Retrying...');
@@ -1139,11 +1155,17 @@ export default function PlayerPage() {
                   }
                 }, 1000);
               } else {
-                setVideoError('Network error. Unable to load stream after 3 attempts.');
+                setVideoError(mapPlaybackError({ hlsError: data, reasonCode, channel: currentChannel }));
+                reportPlaybackFailure({
+                  url: currentChannel.url,
+                  playlistId: parseInt(playlistId, 10),
+                  channelName: currentChannel.name,
+                  reasonCode,
+                  failureStage: data.details,
+                });
               }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log('Media error, trying to recover...');
               if (retryCountRef.current < 3) {
                 retryCountRef.current += 1;
                 setVideoError('Media error. Retrying...');
@@ -1155,12 +1177,25 @@ export default function PlayerPage() {
                   }
                 }, 1000);
               } else {
-                setVideoError('Media error. This stream may not be compatible.');
+                setVideoError(mapPlaybackError({ hlsError: data, reasonCode: 'UNSUPPORTED_CODEC', channel: currentChannel }));
+                reportPlaybackFailure({
+                  url: currentChannel.url,
+                  playlistId: parseInt(playlistId, 10),
+                  channelName: currentChannel.name,
+                  reasonCode: 'UNSUPPORTED_CODEC',
+                  failureStage: data.details,
+                });
               }
               break;
             default:
-              console.log('Fatal error, destroying HLS...');
-              setVideoError('Unable to play this channel. The stream may be offline.');
+              setVideoError(mapPlaybackError({ hlsError: data, reasonCode, channel: currentChannel }));
+              reportPlaybackFailure({
+                url: currentChannel.url,
+                playlistId: parseInt(playlistId, 10),
+                channelName: currentChannel.name,
+                reasonCode,
+                failureStage: data.details,
+              });
               hls.destroy();
               break;
           }
@@ -1226,7 +1261,7 @@ export default function PlayerPage() {
       video.load();
       video.controls = true;
       video.playsInline = true;
-      video.src = currentChannel.url;
+      video.src = streamUrl;
       
       const handleNativePlaying = () => {
         hasStartedPlaying = true;
@@ -1282,7 +1317,7 @@ export default function PlayerPage() {
       // Start timeout guard
       startPlaybackTimeout();
       
-      video.src = currentChannel.url;
+      video.src = streamUrl;
       video.controls = true;
       video.playsInline = true;
       
@@ -1397,6 +1432,13 @@ export default function PlayerPage() {
     }
   }, [isMobileView]);
 
+  const handleNextChannel = useCallback(() => {
+    if (!currentChannel || filteredChannels.length === 0) return;
+    const idx = filteredChannels.findIndex((c) => c.id === currentChannel.id);
+    const next = filteredChannels[(idx + 1) % filteredChannels.length];
+    if (next) handleChannelClick(next);
+  }, [currentChannel, filteredChannels, handleChannelClick]);
+
   const togglePictureInPicture = useCallback(async () => {
     if (!videoRef.current) return;
     try {
@@ -1450,6 +1492,9 @@ export default function PlayerPage() {
       onBack={() => currentChannel ? setCurrentChannel(null) : navigate('/dashboard')}
       onLogout={logout}
       onShowAllRecentToggle={() => setShowAllRecent(prev => !prev)}
+      playStatusFilter={playStatusFilter}
+      onPlayStatusFilterChange={setPlayStatusFilter}
+      isIOS={isIOS}
     />
   );
 
@@ -1815,18 +1860,26 @@ export default function PlayerPage() {
                             <div className="text-6xl mb-4">⚠️</div>
                             <h3 className="text-2xl font-bold text-tv-text mb-3">Playback Error</h3>
                             <p className="text-tv-textSecondary text-base mb-6">{videoError}</p>
-                            <div className="flex gap-2 justify-center">
+                            <div className="flex flex-wrap gap-2 justify-center">
                               <Button
                                 onClick={() => {
                                   setVideoError(null);
                                   retryCountRef.current = 0;
-                                  // Force reload channel
                                   const current = currentChannel;
                                   setCurrentChannel(null);
                                   setTimeout(() => setCurrentChannel(current), 100);
                                 }}
                               >
-                                🔄 Retry
+                                Retry
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                onClick={() => {
+                                  setVideoError(null);
+                                  handleNextChannel();
+                                }}
+                              >
+                                Next Channel
                               </Button>
                               <Button
                                 variant="ghost"

@@ -7,6 +7,7 @@ import SlideshowPlayer from '../components/SlideshowPlayer';
 import BottomBarOverlay  from '../components/overlays/BottomBarOverlay';
 import PopupCardOverlay  from '../components/overlays/PopupCardOverlay';
 import SplitRightPanel   from '../components/overlays/SplitRightPanel';
+import { getStreamUrl, isHlsStream, PLAYBACK_TIMEOUT_MS } from '../hooks/usePlaybackGuard';
 
 const APP_VERSION = '1.1.0';
 const HEARTBEAT_INTERVAL_MS   = 25_000; // every 25 s
@@ -53,19 +54,18 @@ function WifiQrOverlay({ ssid, password = '', security = 'WPA', position = 'bott
 // ---------------------------------------------------------------------------
 // Branded fallback screen
 // ---------------------------------------------------------------------------
-function FallbackScreen({ retryIn, message }) {
+function FallbackScreen({ retryIn, message, appName = 'Bake & Grill TV', brandColor = '#B03A48' }) {
   return (
     <div className="h-screen w-screen bg-black flex flex-col items-center justify-center select-none">
       <div className="text-center px-8">
-        {/* Logo / brand mark */}
-        <div className="w-24 h-24 mx-auto mb-6 rounded-2xl bg-[#B03A48] flex items-center justify-center shadow-2xl">
+        <div className="w-24 h-24 mx-auto mb-6 rounded-2xl flex items-center justify-center shadow-2xl" style={{ backgroundColor: brandColor }}>
           <svg viewBox="0 0 48 48" className="w-14 h-14" fill="none">
             <rect x="6" y="28" width="36" height="6" rx="3" fill="white" opacity=".9"/>
             <rect x="6" y="20" width="36" height="6" rx="3" fill="white" opacity=".7"/>
             <rect x="6" y="12" width="36" height="6" rx="3" fill="white" opacity=".5"/>
           </svg>
         </div>
-        <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">Bake &amp; Grill TV</h1>
+        <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">{appName}</h1>
         <p className="text-xl text-white/60 mb-8">{message || 'Back soon'}</p>
         {retryIn > 0 && (
           <div className="inline-flex items-center gap-2 bg-white/10 px-5 py-2 rounded-full">
@@ -209,7 +209,10 @@ export default function KioskModePage() {
       setDisplay(data.display);
       setChannels(data.channels);
       normalPlaylistRef.current = data.channels;
-      if (data.channels.length) setCurrentChannel(data.channels[0]);
+      if (data.channels.length) {
+        const first = data.channels.find((c) => c.playback_url || c.play_status === 'playable') || data.channels[0];
+        setCurrentChannel(first);
+      }
       return true;
     } catch { return false; }
   }, []);
@@ -254,7 +257,10 @@ export default function KioskModePage() {
       setChannels(ch || []);
       normalPlaylistRef.current = ch || [];
       if (d?.muteAudio) setIsMuted(true);
-      if (ch && ch.length && d?.displayType !== 'media') setCurrentChannel(ch[0]);
+      if (ch && ch.length && d?.displayType !== 'media') {
+        const firstPlayable = ch.find((c) => c.playback_url || c.play_status === 'playable') || ch[0];
+        setCurrentChannel(firstPlayable);
+      }
       saveToCache(d, ch || []);
       setShowFallback(false);
       clearInterval(retryCountdownRef.current);
@@ -418,7 +424,7 @@ export default function KioskModePage() {
             } catch { /* ignore screenshot errors */ }
           }
 
-          await displayApi.patch(`/displays/commands/${cmd.id}/execute`).catch(() => {});
+          await displayApi.patch(`/displays/commands/${cmd.id}/execute`, { token: displayToken }).catch(() => {});
         }
       } catch { /* network down — silent */ }
     };
@@ -479,20 +485,19 @@ export default function KioskModePage() {
   // ── Video player ─────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!currentChannel?.url || !videoRef.current) return;
+    const streamUrl = getStreamUrl(currentChannel);
+    if (!streamUrl || !videoRef.current) return;
 
     const video = videoRef.current;
     const ua = navigator.userAgent || '';
     const isIOS = (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) ||
                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isHLS = (() => {
-      try { return new URL(currentChannel.url).pathname.toLowerCase().endsWith('.m3u8'); }
-      catch { return currentChannel.url?.toLowerCase().includes('.m3u8') ?? false; }
-    })();
+    const isHLS = isHlsStream(streamUrl);
 
     let retryCount = 0;
     const maxRetries = 5;
-    let hasStarted = false;
+    let hasConfirmedPlayback = false;
+    let lastPlaybackTime = 0;
     let playTimeout = null;
 
     const clearPT = () => { if (playTimeout) { clearTimeout(playTimeout); playTimeout = null; } };
@@ -500,15 +505,31 @@ export default function KioskModePage() {
     let retryDelayTimeout = null;
     const clearRDT = () => { if (retryDelayTimeout) { clearTimeout(retryDelayTimeout); retryDelayTimeout = null; } };
 
+    const confirmPlayback = () => {
+      if (hasConfirmedPlayback) return;
+      hasConfirmedPlayback = true;
+      clearPT();
+    };
+
+    const advanceToNextChannel = () => {
+      const list = channelsRef.current;
+      if (!list?.length || !currentChannel) return;
+      const idx = list.findIndex((c) => c.id === currentChannel.id);
+      const next = list[(idx + 1) % list.length];
+      if (next && next.id !== currentChannel.id) setCurrentChannel(next);
+    };
+
     const startPT = () => {
       clearPT();
       playTimeout = setTimeout(() => {
-        if (!hasStarted && retryCount < maxRetries) {
+        if (!hasConfirmedPlayback && retryCount < maxRetries) {
           retryCount++;
           clearRDT();
           retryDelayTimeout = setTimeout(() => setupPlayer(), 2000);
+        } else if (!hasConfirmedPlayback) {
+          advanceToNextChannel();
         }
-      }, 15_000);
+      }, PLAYBACK_TIMEOUT_MS);
     };
 
     const setupPlayer = () => {
@@ -516,21 +537,19 @@ export default function KioskModePage() {
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
       if (isHLS && (isIOS || (!Hls.isSupported() && video.canPlayType('application/vnd.apple.mpegurl') !== ''))) {
-        // Native HLS (iOS / Safari)
         video.src = ''; video.load();
         video.playsInline = true;
         video.setAttribute('playsinline', 'true');
         video.setAttribute('webkit-playsinline', 'true');
         video.muted = false;
-        video.src = currentChannel.url;
+        video.src = streamUrl;
         startPT();
         video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
       } else if (isHLS && Hls.isSupported()) {
-        // HLS.js
         const isMobileKiosk = /Android|iPhone|iPad/i.test(navigator.userAgent);
         const hls = new Hls({ enableWorker: !isMobileKiosk, lowLatencyMode: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
         hlsRef.current = hls;
-        hls.loadSource(currentChannel.url);
+        hls.loadSource(streamUrl);
         hls.attachMedia(video);
         startPT();
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -541,27 +560,31 @@ export default function KioskModePage() {
           if (d.fatal && retryCount < maxRetries) {
             retryCount++;
             clearRDT();
-            retryDelayTimeout = setTimeout(() => setupPlayer(), 5_000);
+            retryDelayTimeout = setTimeout(() => setupPlayer(), 5000);
           }
         });
       } else {
-        // Native MP4 / RTSP fallback
-        video.src = currentChannel.url;
+        video.src = streamUrl;
         video.playsInline = true;
         startPT();
         video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
       }
     };
 
-    const onPlaying = () => { hasStarted = true; clearPT(); };
-    video.addEventListener('playing', onPlaying);
+    const onTimeUpdate = () => {
+      if (video.currentTime > 0 && video.currentTime !== lastPlaybackTime) {
+        lastPlaybackTime = video.currentTime;
+        confirmPlayback();
+      }
+    };
+    video.addEventListener('timeupdate', onTimeUpdate);
 
     setupPlayer();
 
     return () => {
       clearPT();
       clearRDT();
-      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('timeupdate', onTimeUpdate);
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     };
   }, [currentChannel]);
@@ -617,12 +640,15 @@ export default function KioskModePage() {
   }
 
   if (error) {
-    return <FallbackScreen retryIn={0} message={error} />;
+    return <FallbackScreen retryIn={0} message={error} appName={display?.appName} brandColor={display?.brandColor} />;
   }
 
   if (showFallback && !display) {
-    return <FallbackScreen retryIn={retryIn} message={fallbackMsg} />;
+    return <FallbackScreen retryIn={retryIn} message={fallbackMsg} appName={display?.appName} brandColor={display?.brandColor} />;
   }
+
+  const brandName = display?.appName || 'Bake & Grill TV';
+  const brandColor = display?.brandColor || '#B03A48';
 
   return (
     <div
@@ -636,14 +662,14 @@ export default function KioskModePage() {
           className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm"
           onClick={handleStart}
         >
-          <div className="w-20 h-20 rounded-2xl bg-[#B03A48] flex items-center justify-center mb-6 shadow-2xl">
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-6 shadow-2xl" style={{ backgroundColor: brandColor }}>
             <svg viewBox="0 0 48 48" className="w-12 h-12" fill="none">
               <rect x="6" y="28" width="36" height="6" rx="3" fill="white" opacity=".9"/>
               <rect x="6" y="20" width="36" height="6" rx="3" fill="white" opacity=".7"/>
               <rect x="6" y="12" width="36" height="6" rx="3" fill="white" opacity=".5"/>
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Bake &amp; Grill TV</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">{brandName}</h1>
           <p className="text-white/50 mb-10 text-sm">{display?.name || 'Display'}</p>
           <div className="bg-white/10 border border-white/20 px-8 py-3 rounded-full text-white font-semibold text-lg animate-pulse">
             Tap to Start
@@ -737,7 +763,8 @@ export default function KioskModePage() {
           onClick={() => {
             if (videoRef.current) { videoRef.current.muted = false; setIsMuted(false); }
           }}
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#B03A48] hover:bg-[#8f2d3a] text-white px-8 py-4 rounded-full shadow-2xl transition-all z-30"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white px-8 py-4 rounded-full shadow-2xl transition-all z-30"
+          style={{ backgroundColor: brandColor }}
         >
           <svg className="w-8 h-8 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />

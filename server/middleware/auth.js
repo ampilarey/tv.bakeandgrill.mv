@@ -1,9 +1,10 @@
 const jwt = require('jsonwebtoken');
+const { getDatabase } = require('../database/init');
 
 /**
  * Verify JWT token from Authorization header
  */
-function verifyToken(req, res, next) {
+async function verifyToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
     
@@ -37,14 +38,31 @@ function verifyToken(req, res, next) {
       }
     }
 
-    // Attach user info to request
+    // Enforce token_version — invalidate JWTs after password change
+    try {
+      const db = getDatabase();
+      const [users] = await db.query(
+        'SELECT token_version FROM users WHERE id = ?',
+        [decoded.id]
+      );
+      if (users.length > 0 && (users[0].token_version || 0) !== (decoded.tv || 0)) {
+        return res.status(401).json({
+          success: false,
+          error: 'Session invalidated — please log in again',
+          code: 'AUTH_TOKEN_REVOKED',
+        });
+      }
+    } catch (dbErr) {
+      console.error('[AUTH] token_version check failed:', dbErr.message);
+    }
+
     req.user = {
       id:           decoded.id,
       email:        decoded.email,
       role:         decoded.role,
-      tokenVersion: decoded.tv || 0
+      tokenVersion: decoded.tv || 0,
     };
-    
+
     next();
     
   } catch (error) {
