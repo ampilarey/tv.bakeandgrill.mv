@@ -160,10 +160,6 @@ export default function KioskModePage() {
   useEffect(() => { displayRef.current = display; }, [display]);
   useEffect(() => { pseudoFullscreenRef.current = pseudoFullscreen; }, [pseudoFullscreen]);
 
-  useEffect(() => {
-    if (displayToken) applyImmersiveMode(readStoredImmersive(displayToken));
-  }, [displayToken, applyImmersiveMode]);
-
   // Cleanup all long-running timers on unmount so they don't fire after the
   // component is gone (e.g. navigation away from kiosk page).
   useEffect(() => () => {
@@ -254,6 +250,11 @@ export default function KioskModePage() {
   useEffect(() => {
     applyImmersiveRef.current = applyImmersiveMode;
   }, [applyImmersiveMode]);
+
+  // Restore immersive preference once helper is defined (must not run before applyImmersiveMode exists)
+  useEffect(() => {
+    if (displayToken) applyImmersiveMode(readStoredImmersive(displayToken));
+  }, [displayToken, applyImmersiveMode]);
 
   useEffect(() => () => {
     clearTimeout(immersiveNoticeTimerRef.current);
