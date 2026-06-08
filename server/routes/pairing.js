@@ -7,6 +7,7 @@ const { checkPermission, checkAnyPermission } = require('../middleware/permissio
 const { asyncHandler } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 const { createDisplaySystemUser } = require('../utils/displayUser');
+const { normalizePlaylistIds, syncDisplayPlaylists } = require('../utils/displayChannelLoader');
 
 const router = express.Router();
 
@@ -153,12 +154,14 @@ router.get('/playlists', verifyToken, checkAnyPermission(['can_manage_displays',
 
 router.post('/admin-pair-pin', verifyToken, checkAnyPermission(['can_manage_displays', 'can_control_displays']), asyncHandler(async (req, res) => {
   const db = getDatabase();
-  const { pin, name, location, playlist_id } = req.body;
+  const { pin, name, location } = req.body;
+  const playlistIds = normalizePlaylistIds(req.body);
+  const playlist_id = playlistIds[0];
 
   if (!pin || !name || !playlist_id) {
     return res.status(400).json({
       success: false,
-      error: 'PIN, display name, and playlist are required',
+      error: 'PIN, display name, and at least one playlist are required',
     });
   }
 
@@ -211,6 +214,8 @@ router.post('/admin-pair-pin', verifyToken, checkAnyPermission(['can_manage_disp
 
     displayId = insertResult.insertId;
 
+    await syncDisplayPlaylists(connection, displayId, playlistIds);
+
     await connection.query(
       'UPDATE pairing_sessions SET display_id = ? WHERE token = ?',
       [displayId, pin]
@@ -244,7 +249,13 @@ router.post('/admin-pair-pin', verifyToken, checkAnyPermission(['can_manage_disp
  */
 router.post('/generate-qr', verifyToken, checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
   const db = getDatabase();
-  const { name, location, playlist_id } = req.body;
+  const { name, location } = req.body;
+  const playlistIds = normalizePlaylistIds(req.body);
+  const playlist_id = playlistIds[0];
+
+  if (!name || !playlist_id) {
+    return res.status(400).json({ success: false, error: 'Name and at least one playlist are required' });
+  }
 
   const token = crypto.randomBytes(32).toString('hex');
   const qrToken = crypto.randomBytes(16).toString('hex');
@@ -256,6 +267,7 @@ router.post('/generate-qr', verifyToken, checkPermission('can_manage_displays'),
     [name, location || null, token, playlist_id, locationPin, req.user.id]
   );
 
+  await syncDisplayPlaylists(db, result.insertId, playlistIds);
   await createSession(db, 'qr', qrToken, result.insertId, 10 * 60 * 1000);
 
   const baseUrl = process.env.CLIENT_URL || 'http://localhost:4173';

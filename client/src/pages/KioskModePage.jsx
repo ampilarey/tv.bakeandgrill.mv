@@ -18,6 +18,21 @@ const RETRY_INTERVAL_MS        = 10_000;
 const CACHE_KEY                = 'kiosk_cache_v1';
 const CACHE_MAX_AGE_MS         = 24 * 60 * 60 * 1000; // 24 h
 
+/** Prefer health-tested channels; fall back to any stream with a URL. */
+function pickPlayableChannel(channels) {
+  const list = channels || [];
+  const strict = list.filter((c) => c.play_status === 'playable');
+  if (strict.length) return strict[0];
+  const soft = list.filter((c) => c.playback_url || c.url);
+  return soft[0] || null;
+}
+
+function filterAdvanceableChannels(channels) {
+  return (channels || []).filter(
+    (c) => c.play_status === 'playable' || c.playback_url || c.url
+  );
+}
+
 // Use same-origin relative path in prod; direct IP in dev via IP access
 const getBase = () => {
   if (import.meta.env.DEV) {
@@ -94,7 +109,7 @@ export default function KioskModePage() {
   const [isMuted, setIsMuted]               = useState(false);
   const [lastCommand, setLastCommand]       = useState(null);
   const [isFullscreen, setIsFullscreen]     = useState(false);
-  const [showStartOverlay, setShowStartOverlay] = useState(true);
+  const [showStartOverlay, setShowStartOverlay] = useState(false);
   const [cursorVisible, setCursorVisible]   = useState(true);
   const [showFallback, setShowFallback]     = useState(false);
   const [fallbackMsg, setFallbackMsg]       = useState('Back soon');
@@ -211,7 +226,7 @@ export default function KioskModePage() {
       setChannels(data.channels);
       normalPlaylistRef.current = data.channels;
       if (data.channels.length) {
-        const first = data.channels.find((c) => c.play_status === 'playable');
+        const first = pickPlayableChannel(data.channels);
         if (first) setCurrentChannel(first);
       }
       return true;
@@ -259,19 +274,27 @@ export default function KioskModePage() {
       normalPlaylistRef.current = ch || [];
       if (d?.muteAudio) setIsMuted(true);
       if (d?.displayType !== 'media') {
-        const count = playableCount ?? (ch || []).filter((c) => c.play_status === 'playable').length;
-        if (count === 0) {
+        const first = pickPlayableChannel(ch);
+        if (!first) {
           setCurrentChannel(null);
-          setFallbackMsg('No playable channels. Run channel test in admin.');
+          setFallbackMsg(
+            (ch || []).length
+              ? 'No stream URLs available. Check playlist in admin or run Channel Health test.'
+              : 'No channels in playlist. Assign a playlist with a valid M3U URL.'
+          );
           setShowFallback(true);
         } else {
-          const firstPlayable = (ch || []).find((c) => c.play_status === 'playable');
-          if (firstPlayable) setCurrentChannel(firstPlayable);
+          setCurrentChannel(first);
+          setShowFallback(false);
         }
+      } else {
+        setShowFallback(false);
       }
       saveToCache(d, ch || []);
-      setShowFallback(false);
       clearInterval(retryCountdownRef.current);
+      // TV kiosk: auto fullscreen + start (no tap required)
+      setShowStartOverlay(false);
+      setTimeout(() => enterFullscreen().catch(() => {}), 300);
 
       // ── Auto-reboot scheduling ──────────────────────────────────────
       if (d?.autoRebootTime) {
@@ -291,7 +314,7 @@ export default function KioskModePage() {
     } finally {
       setLoading(false);
     }
-  }, [displayToken, loadFromCache, saveToCache, scheduleRetry]);
+  }, [displayToken, loadFromCache, saveToCache, scheduleRetry, enterFullscreen]);
 
   // Keep ref current so polling closure always calls the latest version
   useEffect(() => { verifyDisplayRef.current = verifyDisplay; }, [verifyDisplay]);
@@ -362,7 +385,7 @@ export default function KioskModePage() {
           setActiveOverride(null);
           if (normalPlaylistRef.current?.length) {
             setChannels(normalPlaylistRef.current);
-            setCurrentChannel(normalPlaylistRef.current[0]);
+            setCurrentChannel(pickPlayableChannel(normalPlaylistRef.current));
           }
         }
 
@@ -374,8 +397,18 @@ export default function KioskModePage() {
           commandTimeoutRef.current = setTimeout(() => setLastCommand(null), 3000);
 
           if (cmd.command_type === 'change_channel') {
-            const ch = channelsRef.current.find(c => c.id === d.channel_id);
-            if (ch) setCurrentChannel(ch);
+            let ch = channelsRef.current.find((c) => c.id === d.channel_id);
+            if (!ch && d.channel && (d.channel.playback_url || d.channel.url)) {
+              ch = d.channel;
+              setChannels((prev) => (prev.some((c) => c.id === ch.id) ? prev : [...prev, ch]));
+            }
+            if (ch) {
+              setCurrentChannel(ch);
+              setShowFallback(false);
+              if (videoRef.current) {
+                videoRef.current.play().catch(() => {});
+              }
+            }
           } else if (cmd.command_type === 'set_volume' && videoRef.current) {
             videoRef.current.volume = (parseInt(d.volume) || 50) / 100;
             videoRef.current.muted = false;
@@ -443,34 +476,32 @@ export default function KioskModePage() {
     // ── Try SSE first ────────────────────────────────────────────────────
     const sseBase = displayApi.defaults.baseURL || '/api';
     let es = null;
-    let usedSSE = false;
+    let sseConnected = false;
+
+    const ensurePolling = () => {
+      if (!commandPollRef.current) {
+        poll();
+        commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
+      }
+    };
 
     try {
       es = new EventSource(`${sseBase}/displays/events/${displayToken}`);
 
       es.addEventListener('connected', () => {
-        usedSSE = true;
-        // SSE is working — stop any polling fallback
-        clearInterval(commandPollRef.current);
-        commandPollRef.current = null;
+        sseConnected = true;
       });
 
-      es.addEventListener('command', (e) => {
-        try {
-          const { commands } = JSON.parse(e.data);
-          if (commands?.length) {
-            // Re-use the same poll handler for command processing
-            handleCommandsRef.current?.();
-          }
-        } catch { /* malformed data — ignore */ }
+      es.addEventListener('command', () => {
+        handleCommandsRef.current?.();
       });
 
       es.onerror = () => {
-        // SSE failed or not supported — fall back to polling
-        if (!usedSSE) {
-          poll();
-          commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
+        if (sseConnected) {
+          es?.close();
+          sseConnected = false;
         }
+        ensurePolling();
       };
     } catch {
       // EventSource not available (very old browser) — use polling
@@ -520,7 +551,7 @@ export default function KioskModePage() {
     };
 
     const advanceToNextChannel = () => {
-      const list = (channelsRef.current || []).filter((c) => c.play_status === 'playable');
+      const list = filterAdvanceableChannels(channelsRef.current);
       if (!list.length || !currentChannel) return;
       const idx = list.findIndex((c) => c.id === currentChannel.id);
       const next = list[(idx + 1) % list.length];

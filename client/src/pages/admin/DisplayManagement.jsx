@@ -353,18 +353,17 @@ export default function DisplayManagement() {
     setChannelSearchQuery('');
     setChannels([]); // Clear previous channels
     
-    // Fetch channels from assigned playlist
     if (display.playlist_id) {
       try {
-        const response = await api.get(`/channels?playlistId=${display.playlist_id}`);
+        const response = await api.get(`/displays/${display.id}/channels`);
         const channelsList = response.data.channels || [];
         const groups = response.data.groups || [];
         setChannels(channelsList);
         setFilteredChannelsForControl(channelsList);
         setGroupsForControl(groups);
-      } catch (error) {
-        console.error('Error fetching channels:', error);
-        setError('Failed to load channels: ' + (error.response?.data?.error || error.message));
+      } catch (err) {
+        console.error('Error fetching channels:', err);
+        setError('Failed to load channels: ' + (err.response?.data?.error || err.message));
         setTimeout(() => setError(''), 3000);
       }
     } else {
@@ -1045,7 +1044,17 @@ export default function DisplayManagement() {
                           }}
                           className="w-full px-4 py-3 text-left transition-colors hover:bg-tv-accent hover:text-white text-tv-text group"
                         >
-                          <div className="font-medium group-hover:text-white">{channel.name}</div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-medium group-hover:text-white">{channel.name}</div>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                              channel.play_status === 'playable' ? 'bg-green-500/20 text-green-400' :
+                              channel.play_status === 'needs_recheck' ? 'bg-yellow-500/20 text-yellow-400' :
+                              channel.play_status === 'offline' ? 'bg-red-500/20 text-red-400' :
+                              'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {channel.play_status || 'unknown'}
+                            </span>
+                          </div>
                           {channel.group && (
                             <div className="text-xs mt-1 text-tv-textMuted group-hover:text-white/90">
                               📂 {channel.group}

@@ -10,8 +10,12 @@ const { validateDisplayCreate } = require('../middleware/validation');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { checkPermission, checkResourceLimit } = require('../middleware/permissions');
 const { fetch } = require('../utils/httpClient');
-const { parseM3U, playlistBaseUrl } = require('../utils/m3uParser');
-const { enrichChannelsForPlaylist } = require('../utils/channelEnrichment');
+const {
+  normalizePlaylistIds,
+  syncDisplayPlaylists,
+  loadDisplayChannels,
+  findChannelForDisplay,
+} = require('../utils/displayChannelLoader');
 
 const router = express.Router();
 
@@ -62,36 +66,13 @@ router.post('/verify', displayLimiter, verifyDisplayToken, asyncHandler(async (r
   
   const display = displayRow;
 
-  // Get assigned playlist and fetch channels
-  let playlist = null;
-  let channels = [];
-  let allEnriched = null;
-
-  if (display.playlist_id) {
-    const [playlists] = await db.query('SELECT * FROM playlists WHERE id = ?', [display.playlist_id]);
-    playlist = playlists[0] || null;
-    
-    // Fetch and parse M3U for display (so display doesn't need JWT)
-    if (playlist && playlist.m3u_url) {
-      try {
-        const m3uResponse = await fetch(playlist.m3u_url, {
-          timeout: 10000,
-          headers: { 'User-Agent': 'BakeGrillTV/1.0' }
-        });
-        const parsed = parseM3U(m3uResponse.data, playlistBaseUrl(playlist.m3u_url));
-        allEnriched = await enrichChannelsForPlaylist(parsed, playlist, req, {
-          hideHidden: true,
-          playableOnly: false,
-        });
-        channels = await enrichChannelsForPlaylist(parsed, playlist, req, {
-          hideHidden: true,
-          playableOnly: 'strict',
-        });
-      } catch (error) {
-        console.error('Error fetching M3U for display:', error.message);
-      }
-    }
-  }
+  // Load channels from primary + extra playlists (soft filter: includes untested streams)
+  const {
+    playlist,
+    channels,
+    allEnriched,
+    playlistIds,
+  } = await loadDisplayChannels(db, display, req, { playableOnly: 'soft' });
   
   // Resolve active media playlist via content schedule
   let resolvedMediaPlaylistId = display.media_playlist_id || null;
@@ -162,6 +143,7 @@ router.post('/verify', displayLimiter, verifyDisplayToken, asyncHandler(async (r
       name:              display.name,
       location:          display.location,
       playlistId:        display.playlist_id,
+      playlistIds:       playlistIds || (display.playlist_id ? [display.playlist_id] : []),
       currentChannelId:  display.current_channel_id,
       autoPlay:          display.auto_play === 1,
       scheduleEnabled:   display.schedule_enabled === 1,
@@ -397,7 +379,7 @@ router.get('/events/:token', displayLimiter, asyncHandler(async (req, res) => {
   // Send any currently pending commands immediately on connect
   db.query(
     'SELECT * FROM display_commands WHERE display_id = ? AND is_executed = FALSE ORDER BY created_at ASC',
-    [displays[0].id]
+    [display.id]
   ).then(([cmds]) => {
     if (cmds.length) {
       res.write(`event: command\ndata: ${JSON.stringify({ commands: cmds })}\n\n`);
@@ -509,9 +491,15 @@ router.post('/',
   }),
   validateDisplayCreate, 
   asyncHandler(async (req, res) => {
-  const { name, location, playlist_id } = req.body;
+  const { name, location } = req.body;
+  const playlistIds = normalizePlaylistIds(req.body);
+  const playlist_id = playlistIds[0];
   const db = getDatabase();
-  
+
+  if (!playlist_id) {
+    return res.status(400).json({ success: false, error: 'At least one playlist is required' });
+  }
+
   // Generate unique token
   const token = uuidv4();
   
@@ -532,6 +520,8 @@ router.post('/',
       throw error;
     }
   }
+
+  await syncDisplayPlaylists(db, result.insertId, playlistIds);
   
   const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [result.insertId]);
   
@@ -541,6 +531,32 @@ router.post('/',
       ...sanitizeDisplay(displays[0]),
       displayUrl: `/display?token=${token}`
     }
+  });
+}));
+
+/**
+ * GET /api/displays/:id/channels
+ * Merged channel list for remote control (all assigned playlists).
+ */
+router.get('/:id/channels', checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const { id } = req.params;
+
+  const [displays] = await db.query('SELECT * FROM displays WHERE id = ?', [id]);
+  if (displays.length === 0) {
+    return res.status(404).json({ success: false, error: 'Display not found' });
+  }
+
+  const { allEnriched, playlistIds } = await loadDisplayChannels(db, displays[0], req, {
+    playableOnly: false,
+  });
+  const groups = [...new Set(allEnriched.map((c) => c.group).filter(Boolean))].sort();
+
+  res.json({
+    success: true,
+    channels: allEnriched,
+    playlistIds,
+    groups,
   });
 }));
 
@@ -779,9 +795,28 @@ router.post('/:id/control',
   let commandData = {};
   
   switch (action) {
-    case 'change_channel':
-      commandData = { channel_id, channel_name };
+    case 'change_channel': {
+      const [displayRows] = await db.query('SELECT * FROM displays WHERE id = ?', [id]);
+      const displayRow = displayRows[0];
+      const channelPayload = displayRow
+        ? await findChannelForDisplay(db, displayRow, channel_id, req)
+        : null;
+      commandData = {
+        channel_id,
+        channel_name: channel_name || channelPayload?.name,
+        channel: channelPayload
+          ? {
+              id: channelPayload.id,
+              name: channelPayload.name,
+              url: channelPayload.url,
+              playback_url: channelPayload.playback_url,
+              play_status: channelPayload.play_status,
+              group: channelPayload.group,
+            }
+          : null,
+      };
       break;
+    }
     case 'set_volume':
       commandData = { volume };
       break;
