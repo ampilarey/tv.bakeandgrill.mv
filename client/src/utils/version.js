@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.2.1'; // No auto day/night or expand mode; screen choice persists
+export const APP_VERSION = '1.2.2'; // HLS proxy playback reliability fixes
 
 export function checkVersion() {
   try {

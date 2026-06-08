@@ -135,6 +135,7 @@ async function fetchOnce(url, options = {}) {
         const data = Buffer.concat(chunks).toString('utf8');
         const response = {
           status: res.statusCode,
+          statusCode: res.statusCode,
           statusText: res.statusMessage,
           headers: res.headers,
           data,
@@ -153,7 +154,7 @@ async function fetchOnce(url, options = {}) {
           return;
         }
 
-        if (res.statusCode >= 200 && res.statusCode < 300) {
+        if ((res.statusCode >= 200 && res.statusCode < 300) || res.statusCode === 206) {
           resolve(response);
         } else {
           const error = new Error(`Request failed with status code ${res.statusCode}`);
@@ -294,8 +295,10 @@ function streamRange(originUrl, options = {}) {
 
         res.status(upstream.statusCode);
         if (upstream.headers['content-type']) res.set('Content-Type', upstream.headers['content-type']);
+        if (upstream.headers['content-length']) res.set('Content-Length', upstream.headers['content-length']);
         if (upstream.headers['content-range']) res.set('Content-Range', upstream.headers['content-range']);
-        res.set('Accept-Ranges', 'bytes');
+        if (upstream.headers['accept-ranges']) res.set('Accept-Ranges', upstream.headers['accept-ranges']);
+        else res.set('Accept-Ranges', 'bytes');
         res.set('Cache-Control', 'no-store');
 
         let totalBytes = 0;
@@ -378,6 +381,7 @@ async function fetchRange(url, options = {}) {
         upstream.on('end', () => {
           resolve({
             status: upstream.statusCode,
+            statusCode: upstream.statusCode,
             headers: upstream.headers,
             data: Buffer.concat(chunks),
             finalUrl: currentUrl,

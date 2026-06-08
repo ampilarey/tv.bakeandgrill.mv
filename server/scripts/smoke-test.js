@@ -61,6 +61,24 @@ async function run() {
   await check('/api/version returns version string', '/api/version',
     (s, j) => s === 200 && typeof j.version === 'string');
 
+  try {
+    const httpClient = require('../utils/httpClient');
+    const exportsOk =
+      typeof httpClient.fetchRange === 'function' &&
+      typeof httpClient.streamRange === 'function' &&
+      typeof httpClient.redactUrl === 'function';
+    if (exportsOk) {
+      console.log('  ✅  httpClient exports (fetchRange, streamRange, redactUrl)');
+      passed++;
+    } else {
+      console.error('  ❌  httpClient exports missing');
+      failed++;
+    }
+  } catch (err) {
+    console.error(`  ❌  httpClient exports — ${err.message}`);
+    failed++;
+  }
+
   console.log(`\n${passed} passed, ${failed} failed\n`);
   if (failed > 0) process.exit(1);
 }

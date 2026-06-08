@@ -17,6 +17,34 @@ const REASON_CODES = new Set([
   'UNKNOWN_ERROR',
 ]);
 
+const REASON_MESSAGES = {
+  OFFLINE: 'Stream offline',
+  TIMEOUT: 'Stream offline',
+  HTTP_ERROR: 'Stream offline',
+  REDIRECT_ERROR: 'Stream offline',
+  MIXED_CONTENT_HTTP: 'HTTP stream blocked',
+  CORS_RISK: 'Stream blocked',
+  MANIFEST_INVALID: 'Stream offline',
+  MANIFEST_OK_SEGMENT_FAIL: 'Manifest loaded but video segments failed',
+  MEDIA_PLAYLIST_FAILED: 'Stream offline',
+  INIT_MAP_FAILED: 'Stream incompatible with this device',
+  ENCRYPTED_KEY_FETCH_FAILED: 'Encrypted stream not supported',
+  UNSUPPORTED_CODEC: 'Unsupported codec',
+  UNSUPPORTED_AUDIO: 'Unsupported codec',
+  GEO_BLOCKED_OR_FORBIDDEN: 'Stream blocked',
+  EXPIRED_URL: 'Stream offline',
+  REQUIRES_REFERRER: 'Stream blocked',
+  REQUIRES_USER_AGENT: 'Stream blocked',
+  DRM_OR_PROTECTED_STREAM: 'Stream blocked',
+  PROXY_REQUIRED: 'HTTP stream blocked',
+  RATE_LIMITED: 'Stream offline',
+  UNKNOWN_ERROR: 'Stream offline',
+};
+
+function isProbeSuccessStatus(status) {
+  return status === 206 || (status >= 200 && status < 300);
+}
+
 function setFailure(d, stage, code, message) {
   d.failure_stage = stage;
   d.failure_reason_code = code;
@@ -222,6 +250,7 @@ async function diagnoseChannel(channel, playlistId) {
             timeout: PROBE_TIMEOUT_MS,
             headers,
             maxBytes: MANIFEST_MAX_BYTES,
+            followRedirects: true,
           });
           mediaBody = mediaRes.data;
           mediaUrl = mediaRes.finalUrl || mediaUrl;
@@ -260,7 +289,7 @@ async function diagnoseChannel(channel, playlistId) {
                 end: 4095,
                 maxBytes: 4096,
               });
-              if (keyRes.status < 200 || keyRes.status >= 400) {
+              if (!isProbeSuccessStatus(keyRes.status)) {
                 setFailure(d, 'key_fetch', 'ENCRYPTED_KEY_FETCH_FAILED', `Key URL returned HTTP ${keyRes.status}`);
                 d.is_live = 0;
                 return computePlayability(d);
@@ -281,7 +310,7 @@ async function diagnoseChannel(channel, playlistId) {
               start: 0,
               end: 8191,
             });
-            if (mapRes.status < 200 || mapRes.status >= 400) {
+            if (!isProbeSuccessStatus(mapRes.status)) {
               setFailure(d, 'init_map', 'INIT_MAP_FAILED', `Init map returned HTTP ${mapRes.status}`);
               d.is_live = 0;
               return computePlayability(d);
@@ -313,7 +342,7 @@ async function diagnoseChannel(channel, playlistId) {
           start: 0,
           end: 8191,
         });
-        d.first_segment_reachable = segRes.status >= 200 && segRes.status < 400 ? 1 : 0;
+        d.first_segment_reachable = isProbeSuccessStatus(segRes.status) ? 1 : 0;
         d.segment_content_type = segRes.headers['content-type'] || null;
         if (!d.first_segment_reachable) {
           setFailure(d, 'segment', 'MANIFEST_OK_SEGMENT_FAIL', `First segment returned HTTP ${segRes.status}`);
@@ -466,6 +495,8 @@ module.exports = {
   computeNeedsProxy,
   urlHash,
   REASON_CODES,
+  REASON_MESSAGES,
   isHlsUrl,
+  isProbeSuccessStatus,
   DIAGNOSIS_VERSION,
 };

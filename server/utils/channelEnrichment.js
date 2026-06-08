@@ -1,6 +1,10 @@
-const { urlHash, computePlayStatus } = require('../services/channelDiagnosis');
+const { urlHash, computePlayStatus, isHlsUrl } = require('../services/channelDiagnosis');
 const { buildPlaybackProxyUrl } = require('./streamToken');
 const { getDatabase } = require('../database/init');
+
+function urlIsHttpScheme(url) {
+  return /^http:/i.test(String(url || ''));
+}
 
 /** Kiosk auto-play: only health-checked playable channels. */
 function isStrictlyPlayable(channel) {
@@ -23,17 +27,25 @@ function enrichChannel(ch, health, override, playlist, req) {
   const h = health || {};
   const o = override || {};
 
+  const urlIsHttp = h.is_http === 1 || (h.is_http == null && urlIsHttpScheme(ch.url));
+  const urlIsHls = ch.url ? isHlsUrl(ch.url) : false;
+  const inferredNeedsProxy =
+    urlIsHttp || ch.requires_referrer || ch.requires_user_agent || urlIsHls ? 1 : 0;
+
   const diagnosis = {
     is_live: h.is_live ?? null,
     last_checked: h.last_checked ?? null,
     failure_reason_code: h.failure_reason_code ?? null,
     failure_message: h.failure_message ?? null,
+    failure_stage: h.failure_stage ?? null,
+    last_device_type: h.last_device_type ?? null,
     playable_ios: h.playable_ios ?? null,
     playable_android_chrome: h.playable_android_chrome ?? null,
     playable_desktop_chrome: h.playable_desktop_chrome ?? null,
     playable_tv_browser: h.playable_tv_browser ?? null,
-    needs_proxy: h.needs_proxy ?? (ch.requires_referrer || ch.requires_user_agent ? 1 : 0),
+    needs_proxy: h.needs_proxy ?? inferredNeedsProxy,
     is_drm: h.is_drm ?? 0,
+    is_http: urlIsHttp ? 1 : 0,
     manifest_reachable: h.manifest_reachable ?? null,
     first_segment_reachable: h.first_segment_reachable ?? null,
     is_hidden: o.is_hidden ?? 0,
@@ -47,13 +59,15 @@ function enrichChannel(ch, health, override, playlist, req) {
 
   let playback_url = null;
   if (!diagnosis.is_drm && play_status !== 'blocked' && ch.url) {
-    const needsProxy =
+    const useProxy =
       diagnosis.needs_proxy ||
-      (h.is_http === 1) ||
+      diagnosis.is_http === 1 ||
+      urlIsHttpScheme(ch.url) ||
       ch.requires_referrer ||
-      ch.requires_user_agent;
+      ch.requires_user_agent ||
+      urlIsHls;
 
-    if (needsProxy && play_status !== 'offline') {
+    if (useProxy && play_status !== 'offline') {
       playback_url = buildPlaybackProxyUrl(ch.id, playlist.id, hash, req);
     } else if (play_status === 'playable' || play_status === 'unknown' || play_status === 'needs_recheck') {
       playback_url = ch.url;
@@ -75,9 +89,9 @@ async function loadHealthAndOverrides(playlistId) {
 
   try {
     const [healthRows] = await db.query(
-      `SELECT url_hash, is_live, last_checked, failure_reason_code, failure_message,
-              playable_ios, playable_android_chrome, playable_desktop_chrome, playable_tv_browser,
-              needs_proxy, is_drm, manifest_reachable, first_segment_reachable, is_http
+      `SELECT url_hash, is_live, last_checked, failure_reason_code, failure_message, failure_stage,
+              last_device_type, playable_ios, playable_android_chrome, playable_desktop_chrome,
+              playable_tv_browser, needs_proxy, is_drm, manifest_reachable, first_segment_reachable, is_http
        FROM channel_health WHERE playlist_id = ?`,
       [playlistId]
     );

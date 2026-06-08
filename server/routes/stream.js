@@ -149,14 +149,9 @@ router.get('/:channelId/seg', asyncHandler(async (req, res) => {
     const looksLikeKey = /\.key(\?|$)/i.test(segmentUrl) || (segmentUrl.includes('key') && !/\.(ts|m4s|mp4)(\?|$)/i.test(segmentUrl));
     const maxBytes = looksLikeKey ? KEY_MAX_BYTES : SEGMENT_MAX_BYTES;
 
-    let upstreamRange = rangeHeader;
-    if (!upstreamRange && !looksLikeKey) {
-      upstreamRange = `bytes=0-${SEGMENT_MAX_BYTES - 1}`;
-    }
-
     await streamRange(segmentUrl, {
       headers,
-      rangeHeader: upstreamRange,
+      rangeHeader: rangeHeader || null,
       maxBytes,
       timeout: PROXY_TIMEOUT_MS,
       res,
@@ -164,7 +159,7 @@ router.get('/:channelId/seg', asyncHandler(async (req, res) => {
   } catch (err) {
     console.warn('[StreamProxy] Segment stream failed');
     if (!res.headersSent) {
-      res.status(502).json({ success: false, error: 'Failed to fetch segment' });
+      res.status(502).json({ success: false, error: 'Failed to fetch segment', code: 'SEGMENT_FETCH_FAILED' });
     }
   }
 }));
