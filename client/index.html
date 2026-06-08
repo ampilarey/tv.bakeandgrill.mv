@@ -27,6 +27,9 @@
     <!-- Recover when cached HTML references JS chunks removed by a new deploy -->
     <script>
       (function () {
+        var p = window.location.pathname || '';
+        if (p.startsWith('/display') || p.startsWith('/pair')) return;
+
         var RECOVERY_KEY = 'asset_recovery_once';
 
         function recoverFromStaleAssets() {

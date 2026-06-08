@@ -6,14 +6,14 @@ import api from './services/api';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import LoginPage from './pages/LoginPage';
 import DisplayPairingPage from './pages/DisplayPairingPage';
+import KioskModePage from './pages/KioskModePage';
 
-// Public TV/setup routes are bundled eagerly — lazy chunks breaking after deploy blocked /pair.
+// TV routes bundled eagerly — lazy chunk reloads disrupted kiosk playback.
 const FirstTimeSetupPage = lazyWithRetry(() => import('./pages/FirstTimeSetupPage'));
 const DashboardPage      = lazyWithRetry(() => import('./pages/DashboardPage'));
 const PlayerPage         = lazyWithRetry(() => import('./pages/PlayerPage'));
 const ProfilePage        = lazyWithRetry(() => import('./pages/ProfilePage'));
 const HistoryPage        = lazyWithRetry(() => import('./pages/HistoryPage'));
-const KioskModePage      = lazyWithRetry(() => import('./pages/KioskModePage'));
 
 // Admin Pages
 const AdminDashboard         = lazyWithRetry(() => import('./pages/admin/AdminDashboard'));
@@ -437,7 +437,7 @@ function LocationKeyedBoundary() {
 // Auto-reloads after 10 seconds so kiosk screens self-heal without staff input.
 function KioskErrorFallback({ onReset }) {
   React.useEffect(() => {
-    const t = setTimeout(() => { onReset?.(); window.location.reload(); }, 10_000);
+    const t = setTimeout(() => { onReset?.(); window.location.reload(); }, 60_000);
     return () => clearTimeout(t);
   }, [onReset]);
   return (

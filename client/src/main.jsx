@@ -7,6 +7,7 @@ import './index.css';
 import { APP_VERSION } from './utils/version.js';
 import { clearChunkReloadFlag } from './utils/lazyWithRetry.js';
 import { redirectLegacyHashRoutes } from './utils/legacyHashRedirect.js';
+import { isTvKioskPath } from './utils/tvRoutes.js';
 
 redirectLegacyHashRoutes();
 import { initSentry, setupGlobalErrorHandlers } from './utils/errorTracking.js';
@@ -38,78 +39,55 @@ if (typeof window !== 'undefined') {
   // never boots on a stale cache if a version change was detected.
   (async () => {
     try {
-      const storedVersion = localStorage.getItem('tv_app_version');
-      const versionChanged = storedVersion && storedVersion !== APP_VERSION;
+      const onTv = isTvKioskPath();
 
-      if (versionChanged) {
-        // 1. Unregister ALL service workers
-        if ('serviceWorker' in navigator) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
+      // TVs: no service worker — SW update reloads were disrupting 24/7 playback.
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        if (onTv) {
           for (const registration of registrations) {
             await registration.unregister();
           }
-        }
+          if ('caches' in window) {
+            const cacheNames = await caches.keys();
+            for (const cacheName of cacheNames) {
+              await caches.delete(cacheName);
+            }
+          }
+        } else {
+          const storedVersion = localStorage.getItem('tv_app_version');
+          const versionChanged = storedVersion && storedVersion !== APP_VERSION;
 
-        // 2. Delete ALL caches
-        if ('caches' in window) {
-          const cacheNames = await caches.keys();
-          for (const cacheName of cacheNames) {
-            await caches.delete(cacheName);
+          if (versionChanged) {
+            for (const registration of registrations) {
+              await registration.unregister();
+            }
+            if ('caches' in window) {
+              const cacheNames = await caches.keys();
+              for (const cacheName of cacheNames) {
+                await caches.delete(cacheName);
+              }
+            }
+            localStorage.setItem('tv_app_version', APP_VERSION);
+          } else if (!storedVersion) {
+            localStorage.setItem('tv_app_version', APP_VERSION);
+          }
+
+          if (!navigator.serviceWorker.controller) {
+            try {
+              const registration = await navigator.serviceWorker.register('/sw.js', {
+                scope: '/',
+                updateViaCache: 'none',
+              });
+              // Check for updates periodically — never force reload (admin can hard-refresh).
+              setInterval(() => registration.update().catch(() => {}), 30 * 60 * 1000);
+              window.swRegistration = registration;
+            } catch { /* SW not supported — continue without */ }
           }
         }
-
-        // Update stored version BEFORE render to prevent a loop
-        localStorage.setItem('tv_app_version', APP_VERSION);
-      } else if (!storedVersion) {
-        localStorage.setItem('tv_app_version', APP_VERSION);
       }
 
-      // Register service worker (always, regardless of version)
-      if ('serviceWorker' in navigator) {
-        try {
-          const registration = await navigator.serviceWorker.register('/sw.js', {
-            scope: '/',
-            updateViaCache: 'none',
-          });
-
-          const checkForUpdates = async () => {
-            try { await registration.update(); } catch { /* silent */ }
-          };
-
-          await checkForUpdates();
-
-          const updateInterval = setInterval(checkForUpdates, 5 * 60 * 1000);
-
-          // Track handlers so they can be removed when the controller changes
-          const onVisibilityChange = () => { if (!document.hidden) checkForUpdates(); };
-          const onFocus = () => checkForUpdates();
-
-          document.addEventListener('visibilitychange', onVisibilityChange);
-          window.addEventListener('focus', onFocus);
-
-          registration.addEventListener('updatefound', () => {
-            const newWorker = registration.installing;
-            if (!newWorker) return;
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                newWorker.postMessage({ type: 'SKIP_WAITING' });
-                localStorage.setItem('tv_app_version', APP_VERSION);
-              }
-            });
-          });
-
-          // Clean up listeners when the controller changes (SW activated)
-          navigator.serviceWorker.addEventListener('controllerchange', () => {
-            clearInterval(updateInterval);
-            document.removeEventListener('visibilitychange', onVisibilityChange);
-            window.removeEventListener('focus', onFocus);
-            localStorage.setItem('tv_app_version', APP_VERSION);
-            window.location.reload();
-          }, { once: true });
-
-          window.swRegistration = registration;
-        } catch { /* SW not supported or blocked — continue without */ }
-      }
+      localStorage.setItem('tv_app_version', APP_VERSION);
     } catch { /* version/cache management failed — continue */ }
 
     clearChunkReloadFlag();

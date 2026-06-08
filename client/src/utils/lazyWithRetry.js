@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { isTvKioskPath } from './tvRoutes';
 
 const RELOAD_KEY = 'chunk_reload_once';
 
@@ -16,7 +17,11 @@ function isChunkLoadError(error) {
 export function lazyWithRetry(factory) {
   return lazy(() =>
     factory().catch((error) => {
-      if (isChunkLoadError(error) && !sessionStorage.getItem(RELOAD_KEY)) {
+      if (
+        isChunkLoadError(error)
+        && !sessionStorage.getItem(RELOAD_KEY)
+        && !isTvKioskPath()
+      ) {
         sessionStorage.setItem(RELOAD_KEY, '1');
         window.location.reload();
         return new Promise(() => {});
