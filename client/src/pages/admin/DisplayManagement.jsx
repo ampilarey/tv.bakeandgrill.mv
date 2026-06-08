@@ -545,8 +545,22 @@ export default function DisplayManagement() {
   };
 
   const handleImmersiveControl = async (enable) => {
-    setIsImmersiveOnTv(enable);
-    await sendRemoteAction(enable ? 'enter_fullscreen' : 'exit_immersive');
+    if (!selectedDisplay) return;
+    setRemoteBusy('set_immersive');
+    try {
+      await api.post(`/displays/${selectedDisplay.id}/control`, {
+        action: 'set_immersive',
+        immersive: enable,
+      });
+      setIsImmersiveOnTv(enable);
+      setError(enable ? '✅ Expand screen sent' : '✅ Normal screen sent');
+      setTimeout(() => setError(''), 2500);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to change screen mode');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setRemoteBusy('');
+    }
   };
 
   const handleApplyOverlayMode = async () => {
@@ -1058,7 +1072,7 @@ export default function DisplayManagement() {
                 onClick={() => handleImmersiveControl(true)}
                 disabled={!!remoteBusy}
               >
-                {remoteBusy === 'enter_fullscreen' ? '…' : 'Expand Screen'}
+                {remoteBusy === 'set_immersive' && isImmersiveOnTv ? '…' : 'Expand Screen'}
               </Button>
               <Button
                 variant={!isImmersiveOnTv ? 'primary' : 'secondary'}
@@ -1067,7 +1081,7 @@ export default function DisplayManagement() {
                 onClick={() => handleImmersiveControl(false)}
                 disabled={!!remoteBusy}
               >
-                {remoteBusy === 'exit_immersive' ? '…' : 'Normal Screen'}
+                {remoteBusy === 'set_immersive' && !isImmersiveOnTv ? '…' : 'Normal Screen'}
               </Button>
             </div>
           </div>

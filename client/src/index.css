@@ -239,4 +239,31 @@ video {
   }
 }
 
+/* Kiosk display — immersive vs normal screen modes */
+html.kiosk-immersive,
+body.kiosk-immersive {
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+html.kiosk-normal,
+body.kiosk-normal {
+  overflow: hidden;
+  background: #18181b;
+}
+
+.kiosk-root--immersive {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483640;
+}
+
+.kiosk-root--normal {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 

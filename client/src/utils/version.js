@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.1.2'; // Instant immersive remote + overlay controls
+export const APP_VERSION = '1.1.3'; // Fix remote command polling + screen modes
 
 export function checkVersion() {
   try {

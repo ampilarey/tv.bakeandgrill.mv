@@ -18,6 +18,19 @@ const RETRY_INTERVAL_MS        = 10_000;
 const CACHE_KEY                = 'kiosk_cache_v1';
 const CACHE_MAX_AGE_MS         = 24 * 60 * 60 * 1000; // 24 h
 
+function immersiveStorageKey(token) {
+  return `kiosk_immersive_${token || 'default'}`;
+}
+
+function readStoredImmersive(token) {
+  try {
+    const v = sessionStorage.getItem(immersiveStorageKey(token));
+    if (v === '0') return false;
+    if (v === '1') return true;
+  } catch { /* ignore */ }
+  return true;
+}
+
 /** Prefer health-tested channels; fall back to any stream with a URL. */
 function pickPlayableChannel(channels) {
   const list = channels || [];
@@ -109,7 +122,8 @@ export default function KioskModePage() {
   const [isMuted, setIsMuted]               = useState(false);
   const [lastCommand, setLastCommand]       = useState(null);
   const [isFullscreen, setIsFullscreen]     = useState(false);
-  const [pseudoFullscreen, setPseudoFullscreen] = useState(true);
+  const [pseudoFullscreen, setPseudoFullscreen] = useState(() => readStoredImmersive(displayToken));
+  const [immersiveNotice, setImmersiveNotice] = useState('');
   const [announcementClearSignal, setAnnouncementClearSignal] = useState(0);
   const [showStartOverlay, setShowStartOverlay] = useState(false);
   const [cursorVisible, setCursorVisible]   = useState(true);
@@ -136,9 +150,19 @@ export default function KioskModePage() {
   const rebootTimerRef      = useRef(null);
   const failoverTimerRef    = useRef(null);
   const failoverActiveRef   = useRef(false);
+  const displayRef          = useRef(null);
+  const applyImmersiveRef   = useRef(null);
+  const pseudoFullscreenRef = useRef(true);
+  const immersiveNoticeTimerRef = useRef(null);
 
-  // Keep channelsRef in sync for use in polling closure
+  // Keep refs in sync for command polling closure
   useEffect(() => { channelsRef.current = channels; }, [channels]);
+  useEffect(() => { displayRef.current = display; }, [display]);
+  useEffect(() => { pseudoFullscreenRef.current = pseudoFullscreen; }, [pseudoFullscreen]);
+
+  useEffect(() => {
+    if (displayToken) applyImmersiveMode(readStoredImmersive(displayToken));
+  }, [displayToken, applyImmersiveMode]);
 
   // Cleanup all long-running timers on unmount so they don't fire after the
   // component is gone (e.g. navigation away from kiosk page).
@@ -213,7 +237,28 @@ export default function KioskModePage() {
   ), []);
 
   const applyImmersiveMode = useCallback((enabled = true) => {
-    setPseudoFullscreen(enabled);
+    const on = !!enabled;
+    setPseudoFullscreen(on);
+    if (displayToken) {
+      try { sessionStorage.setItem(immersiveStorageKey(displayToken), on ? '1' : '0'); } catch { /* ignore */ }
+    }
+    document.documentElement.classList.toggle('kiosk-immersive', on);
+    document.body.classList.toggle('kiosk-immersive', on);
+    document.documentElement.classList.toggle('kiosk-normal', !on);
+    document.body.classList.toggle('kiosk-normal', !on);
+    setImmersiveNotice(on ? 'Expanded — edge-to-edge' : 'Normal — margins visible');
+    clearTimeout(immersiveNoticeTimerRef.current);
+    immersiveNoticeTimerRef.current = setTimeout(() => setImmersiveNotice(''), 5000);
+  }, [displayToken]);
+
+  useEffect(() => {
+    applyImmersiveRef.current = applyImmersiveMode;
+  }, [applyImmersiveMode]);
+
+  useEffect(() => () => {
+    clearTimeout(immersiveNoticeTimerRef.current);
+    document.documentElement.classList.remove('kiosk-immersive', 'kiosk-normal');
+    document.body.classList.remove('kiosk-immersive', 'kiosk-normal');
   }, []);
 
   const tryBrowserFullscreenSilently = useCallback(async () => {
@@ -328,9 +373,8 @@ export default function KioskModePage() {
       }
       saveToCache(d, ch || []);
       clearInterval(retryCountdownRef.current);
-      // TV kiosk: immersive mode on load (no tap required)
       setShowStartOverlay(false);
-      applyImmersiveMode(true);
+      applyImmersiveMode(readStoredImmersive(displayToken));
       tryBrowserFullscreenSilently();
 
       // ── Auto-reboot scheduling ──────────────────────────────────────
@@ -400,7 +444,7 @@ export default function KioskModePage() {
   const handleCommandsRef = useRef(null);
 
   useEffect(() => {
-    if (!displayToken || !display) return;
+    if (!displayToken) return;
 
     const poll = async () => {
       try {
@@ -459,12 +503,19 @@ export default function KioskModePage() {
               // Autoplay policy requires muted — fall back gracefully
               if (videoRef.current) { videoRef.current.muted = true; setIsMuted(true); videoRef.current.play().catch(() => {}); }
             });
-          } else if (cmd.command_type === 'toggle_fullscreen' || cmd.command_type === 'enter_fullscreen') {
-            applyImmersiveMode(true);
-            tryBrowserFullscreenSilently();
-          } else if (cmd.command_type === 'exit_immersive') {
-            applyImmersiveMode(false);
-            if (isInBrowserFullscreen()) {
+          } else if (
+            cmd.command_type === 'set_immersive'
+            || cmd.command_type === 'toggle_fullscreen'
+            || cmd.command_type === 'enter_fullscreen'
+            || cmd.command_type === 'exit_immersive'
+          ) {
+            let enable = true;
+            if (cmd.command_type === 'exit_immersive') enable = false;
+            else if (cmd.command_type === 'set_immersive') enable = !!d.immersive;
+            else if (cmd.command_type === 'toggle_fullscreen') enable = !pseudoFullscreenRef.current;
+            applyImmersiveRef.current?.(enable);
+            if (enable) tryBrowserFullscreenSilently();
+            else if (isInBrowserFullscreen()) {
               if (document.exitFullscreen) await document.exitFullscreen();
               else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
             }
@@ -522,12 +573,9 @@ export default function KioskModePage() {
     let es = null;
     let sseConnected = false;
 
-    const ensurePolling = () => {
-      if (!commandPollRef.current) {
-        poll();
-        commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
-      }
-    };
+    // Always poll — SSE alone is unreliable on some TVs / proxies
+    poll();
+    commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
 
     try {
       es = new EventSource(`${sseBase}/displays/events/${displayToken}`);
@@ -545,16 +593,10 @@ export default function KioskModePage() {
           es?.close();
           sseConnected = false;
         }
-        ensurePolling();
       };
     } catch {
-      // EventSource not available (very old browser) — use polling
-      poll();
-      commandPollRef.current = setInterval(poll, COMMAND_POLL_INTERVAL_MS);
+      // EventSource not available — polling already running
     }
-
-    // Initial poll to pick up any commands that arrived before SSE connected
-    poll();
 
     return () => {
       es?.close();
@@ -563,7 +605,7 @@ export default function KioskModePage() {
     };
   // verifyDisplay intentionally excluded — accessed via verifyDisplayRef to
   // prevent the interval from being torn down and recreated on every verify call.
-  }, [displayToken, display, activeOverride, applyImmersiveMode, tryBrowserFullscreenSilently, refreshOverlayData, isInBrowserFullscreen, applyPlaylistFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [displayToken, activeOverride, tryBrowserFullscreenSilently, refreshOverlayData, isInBrowserFullscreen, applyPlaylistFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Video player ─────────────────────────────────────────────────────────
 
@@ -710,19 +752,6 @@ export default function KioskModePage() {
     tryBrowserFullscreenSilently();
   };
 
-  // Immersive mode: fill viewport without requiring a user tap
-  useEffect(() => {
-    if (!pseudoFullscreen) return undefined;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-    const prevBodyOverflow = document.body.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.documentElement.style.overflow = prevHtmlOverflow;
-      document.body.style.overflow = prevBodyOverflow;
-    };
-  }, [pseudoFullscreen]);
-
   const isImmersive = pseudoFullscreen || isFullscreen;
 
   // ── Renders ──────────────────────────────────────────────────────────────
@@ -752,14 +781,21 @@ export default function KioskModePage() {
   return (
     <div
       ref={containerRef}
-      className="h-screen w-screen bg-black overflow-hidden relative"
-      style={{
-        cursor: cursorVisible ? 'default' : 'none',
-        ...(pseudoFullscreen
-          ? { position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 2147483640 }
-          : {}),
-      }}
+      className={`kiosk-root overflow-hidden relative ${
+        pseudoFullscreen
+          ? 'kiosk-root--immersive fixed inset-0 w-screen h-screen bg-black'
+          : 'kiosk-root--normal min-h-screen w-screen bg-zinc-900 p-3 sm:p-4'
+      }`}
+      style={{ cursor: cursorVisible ? 'default' : 'none' }}
     >
+      {/* Normal mode frame — visible margin around video */}
+      <div
+        className={
+          pseudoFullscreen
+            ? 'absolute inset-0'
+            : 'relative w-full h-[calc(100vh-2.5rem)] rounded-lg border-4 border-zinc-600 bg-black overflow-hidden shadow-2xl'
+        }
+      >
       {/* ── Tap-to-start overlay (first load) ──────────────────── */}
       {showStartOverlay && (
         <div
@@ -914,6 +950,22 @@ export default function KioskModePage() {
           apiClient={displayApi}
           clearSignal={announcementClearSignal}
         />
+      )}
+      </div>
+
+      {/* Mode feedback after remote control */}
+      {immersiveNotice && (
+        <div
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[2147483647] px-5 py-2 rounded-full bg-yellow-500 text-black text-sm font-bold shadow-lg"
+        >
+          {immersiveNotice}
+        </div>
+      )}
+
+      {!pseudoFullscreen && !showStartOverlay && (
+        <p className="text-center text-zinc-500 text-xs mt-2 pb-1">
+          Normal screen — gray border visible. Remote → Expand Screen for edge-to-edge.
+        </p>
       )}
     </div>
   );

@@ -784,7 +784,7 @@ router.post('/:id/control',
   asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
-  const { action, channel_id, channel_name, volume, playlist_id, overlay_mode } = req.body;
+  const { action, channel_id, channel_name, volume, playlist_id, overlay_mode, immersive } = req.body;
   
   if (!action) {
     return res.status(400).json({
@@ -837,7 +837,14 @@ router.post('/:id/control',
     case 'unmute':
     case 'toggle_fullscreen':
     case 'enter_fullscreen':
+      commandData = { immersive: true };
+      break;
     case 'exit_immersive':
+      commandData = { immersive: false };
+      break;
+    case 'set_immersive':
+      commandData = { immersive: immersive === true || immersive === 1 || immersive === 'true' };
+      break;
     case 'clear_announcement':
     case 'refresh_playlist':
     case 'refresh_overlays':
