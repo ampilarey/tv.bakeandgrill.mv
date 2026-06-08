@@ -50,6 +50,8 @@ export default function DisplayManagement() {
   const [remoteBusy, setRemoteBusy] = useState('');
   const [remoteOverlayMode, setRemoteOverlayMode] = useState('none');
   const [isImmersiveOnTv, setIsImmersiveOnTv] = useState(true);
+  const [pendingChannel, setPendingChannel] = useState(null);
+  const [settingsChannels, setSettingsChannels] = useState([]);
   const [newDisplay, setNewDisplay] = useState({ name: '', location: '', playlist_id: '' });
   const [selectedChannel, setSelectedChannel] = useState('');
   const [volumeLevel, setVolumeLevel] = useState(50);
@@ -194,6 +196,15 @@ export default function DisplayManagement() {
     try { const r = await api.get('/zones'); setZones(r.data.zones || []); } catch { /* ignore */ }
   };
 
+  const loadSettingsChannels = async (displayId) => {
+    try {
+      const r = await api.get(`/displays/${displayId}/channels`);
+      setSettingsChannels(r.data.channels || []);
+    } catch {
+      setSettingsChannels([]);
+    }
+  };
+
   const openSettings = (display) => {
     setSelectedDisplay(display);
     setSettingsForm({
@@ -201,6 +212,7 @@ export default function DisplayManagement() {
       location:            display.location       || '',
       display_type:        display.display_type   || 'stream',
       playlist_id:         display.playlist_id    || '',
+      current_channel_id:  display.current_channel_id || '',
       media_playlist_id:   display.media_playlist_id || '',
       overlay_mode:        display.overlay_mode   || 'none',
       overlay_safe_area:   display.overlay_safe_area || 'standard',
@@ -225,6 +237,8 @@ export default function DisplayManagement() {
     });
     fetchMediaPlaylists();
     fetchZones();
+    if (display.playlist_id) loadSettingsChannels(display.id);
+    else setSettingsChannels([]);
     setShowSettingsModal(true);
   };
 
@@ -236,6 +250,7 @@ export default function DisplayManagement() {
         location:          settingsForm.location,
         display_type:      settingsForm.display_type,
         playlist_id:       settingsForm.playlist_id       || null,
+        current_channel_id: settingsForm.current_channel_id || null,
         media_playlist_id: settingsForm.media_playlist_id || null,
         overlay_mode:      settingsForm.overlay_mode,
         overlay_safe_area: settingsForm.overlay_safe_area,
@@ -365,6 +380,7 @@ export default function DisplayManagement() {
     setChannelSearchQuery('');
     setChannels([]);
     setPlaylistsForControl([]);
+    setPendingChannel(null);
     setRemoteOverlayMode(display.overlay_mode || 'none');
     setIsImmersiveOnTv(true);
     
@@ -1038,6 +1054,7 @@ export default function DisplayManagement() {
           setSelectedGroupForControl('');
           setSelectedPlaylistForControl('');
           setPlaylistsForControl([]);
+          setPendingChannel(null);
         }}
         title={`Remote Control: ${selectedDisplay?.name}`}
       >
@@ -1206,7 +1223,9 @@ export default function DisplayManagement() {
             </div>
           )}
           
-          <p className="text-tv-textSecondary">Select a channel to play on this display:</p>
+          <p className="text-tv-textSecondary">
+            Tap a channel to select it, then confirm — prevents accidental switches.
+          </p>
           
           {channels.length === 0 ? (
             <div className="text-center py-8">
@@ -1303,11 +1322,13 @@ export default function DisplayManagement() {
                       {filteredChannelsForControl.map(channel => (
                         <button
                           key={channel.id}
-                          onClick={() => {
-                            // Automatically change channel when clicked
-                            handleRemoteControl(channel.id);
-                          }}
-                          className="w-full px-4 py-3 text-left transition-colors hover:bg-tv-accent hover:text-white text-tv-text group"
+                          type="button"
+                          onClick={() => setPendingChannel({ id: channel.id, name: channel.name })}
+                          className={`w-full px-4 py-3 text-left transition-colors group ${
+                            pendingChannel?.id === channel.id
+                              ? 'bg-tv-accent text-white ring-2 ring-tv-gold'
+                              : 'hover:bg-tv-accent/80 hover:text-white text-tv-text'
+                          }`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="font-medium group-hover:text-white">{channel.name}</div>
@@ -1331,6 +1352,33 @@ export default function DisplayManagement() {
                   </div>
                 )}
               </div>
+
+              {pendingChannel && (
+                <div className="bg-tv-accent/15 border-2 border-tv-accent rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <p className="text-tv-text text-sm flex-1">
+                    Switch to <strong className="text-tv-accent">{pendingChannel.name}</strong>?
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        handleRemoteControl(pendingChannel.id);
+                        setPendingChannel(null);
+                      }}
+                    >
+                      Confirm switch
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPendingChannel(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1771,12 +1819,45 @@ export default function DisplayManagement() {
               </select>
             </div>
             {settingsForm.display_type === 'stream' ? (
-              <div>
-                <label className="block text-xs font-medium text-tv-textMuted mb-1">M3U Playlist</label>
-                <select className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none" value={settingsForm.playlist_id || ''} onChange={e => setSettingsForm(f => ({...f, playlist_id: e.target.value}))}>
-                  <option value="">None</option>
-                  {playlists.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-tv-textMuted mb-1">M3U Playlist</label>
+                  <select
+                    className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none"
+                    value={settingsForm.playlist_id || ''}
+                    onChange={async (e) => {
+                      const playlist_id = e.target.value;
+                      setSettingsForm((f) => ({ ...f, playlist_id, current_channel_id: '' }));
+                      if (playlist_id && selectedDisplay) await loadSettingsChannels(selectedDisplay.id);
+                      else setSettingsChannels([]);
+                    }}
+                  >
+                    <option value="">None</option>
+                    {playlists.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                {settingsForm.playlist_id && (
+                  <div>
+                    <label className="block text-xs font-medium text-tv-textMuted mb-1">
+                      Default startup channel
+                    </label>
+                    <select
+                      className="w-full rounded-lg border border-tv-borderSubtle bg-tv-bgSoft text-tv-text px-3 py-2 text-sm focus:outline-none"
+                      value={settingsForm.current_channel_id || ''}
+                      onChange={(e) => setSettingsForm((f) => ({ ...f, current_channel_id: e.target.value }))}
+                    >
+                      <option value="">Auto — first playable channel</option>
+                      {settingsChannels.map((ch) => (
+                        <option key={ch.id} value={ch.id}>
+                          {ch.name}{ch.group ? ` (${ch.group})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-tv-textMuted mt-1">
+                      Plays when the TV starts, reloads, or after pairing. Remote switches override until reload.
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div>

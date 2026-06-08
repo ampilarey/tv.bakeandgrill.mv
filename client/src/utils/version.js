@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.1.4'; // Fix kiosk crash (applyImmersiveMode TDZ)
+export const APP_VERSION = '1.1.5'; // Remote channel confirm + default startup channel
 
 export function checkVersion() {
   try {

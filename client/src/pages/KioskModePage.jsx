@@ -40,6 +40,17 @@ function pickPlayableChannel(channels) {
   return soft[0] || null;
 }
 
+/** Use admin-configured default channel, else first playable. */
+function pickStartupChannel(channels, preferredId) {
+  const list = channels || [];
+  if (preferredId != null && preferredId !== '') {
+    const id = String(preferredId);
+    const preferred = list.find((c) => String(c.id) === id);
+    if (preferred && (preferred.playback_url || preferred.url)) return preferred;
+  }
+  return pickPlayableChannel(list);
+}
+
 function filterAdvanceableChannels(channels) {
   return (channels || []).filter(
     (c) => c.play_status === 'playable' || c.playback_url || c.url
@@ -308,7 +319,7 @@ export default function KioskModePage() {
       setChannels(data.channels);
       normalPlaylistRef.current = data.channels;
       if (data.channels.length) {
-        const first = pickPlayableChannel(data.channels);
+        const first = pickStartupChannel(data.channels, data.display?.currentChannelId);
         if (first) setCurrentChannel(first);
       }
       return true;
@@ -356,7 +367,7 @@ export default function KioskModePage() {
       normalPlaylistRef.current = ch || [];
       if (d?.muteAudio) setIsMuted(true);
       if (d?.displayType !== 'media') {
-        const first = pickPlayableChannel(ch);
+        const first = pickStartupChannel(ch, d?.currentChannelId);
         if (!first) {
           setCurrentChannel(null);
           setFallbackMsg(
