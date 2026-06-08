@@ -51,6 +51,7 @@ async function runMigration() {
     'ER_DUP_KEYNAME',
     'ER_TABLE_EXISTS_ERROR',
     'ER_DUP_ENTRY',
+    'ER_NO_SUCH_TABLE',
   ]);
 
   try {
