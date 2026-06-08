@@ -119,6 +119,23 @@ router.post('/', verifyToken, checkAnyPermission(['can_manage_displays', 'can_co
 }));
 
 /**
+ * DELETE /api/announcements/:displayId/dismiss
+ * Kiosk / display token — staff tap-to-dismiss on TV
+ */
+router.delete('/:displayId/dismiss', asyncHandler(async (req, res) => {
+  const displayId = parseInt(req.params.displayId, 10);
+  const token = extractDisplayToken(req);
+
+  if (!(await assertDisplayToken(displayId, token))) {
+    return res.status(401).json({ success: false, error: 'Valid display token required' });
+  }
+
+  const db = getDatabase();
+  await db.query('DELETE FROM announcements WHERE display_id = ?', [displayId]);
+  res.json({ success: true, message: 'Announcement dismissed' });
+}));
+
+/**
  * DELETE /api/announcements/:id
  */
 router.delete('/:id', verifyToken, asyncHandler(async (req, res) => {
@@ -143,17 +160,12 @@ router.delete('/:id', verifyToken, asyncHandler(async (req, res) => {
 /**
  * DELETE /api/announcements/display/:displayId/clear
  */
-router.delete('/display/:displayId/clear', verifyToken, asyncHandler(async (req, res) => {
+router.delete('/display/:displayId/clear', verifyToken, checkAnyPermission(['can_manage_displays', 'can_control_displays']), asyncHandler(async (req, res) => {
   const db = getDatabase();
-  const { displayId } = req.params;
+  const displayId = parseInt(req.params.displayId, 10);
 
-  const [displays] = await db.query(
-    'SELECT id FROM displays WHERE id = ? AND (created_by = ? OR user_id = ?)',
-    [displayId, req.user.id, req.user.id]
-  );
-
-  if (displays.length === 0) {
-    return res.status(403).json({ success: false, message: 'Not authorized' });
+  if (!(await canManageDisplay(req, displayId))) {
+    return res.status(403).json({ success: false, message: 'Not authorized for this display' });
   }
 
   await db.query('DELETE FROM announcements WHERE display_id = ?', [displayId]);

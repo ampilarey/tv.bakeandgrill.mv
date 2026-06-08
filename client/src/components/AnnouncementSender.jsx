@@ -14,6 +14,7 @@ import { useToast } from '../hooks/useToast';
 function AnnouncementSender({ displayId, displayName, isOpen, onClose }) {
   const { showToast } = useToast();
   const [sending, setSending] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [formData, setFormData] = useState({
     text: '',
     text_dv: '',
@@ -61,6 +62,19 @@ function AnnouncementSender({ displayId, displayName, isOpen, onClose }) {
       text: template.text,
       duration_seconds: template.duration
     });
+  };
+
+  const handleClearActive = async () => {
+    try {
+      setClearing(true);
+      await api.delete(`/announcements/display/${displayId}/clear`);
+      await api.post(`/displays/${displayId}/control`, { action: 'clear_announcement' });
+      showToast(`Announcement cleared on ${displayName}`);
+    } catch (error) {
+      showToast(error.response?.data?.message || 'Failed to clear announcement', 'error');
+    } finally {
+      setClearing(false);
+    }
   };
 
   const handleClose = () => {
@@ -204,21 +218,32 @@ function AnnouncementSender({ displayId, displayName, isOpen, onClose }) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 pt-4">
-          <Button
-            type="submit"
-            disabled={sending || !formData.text.trim()}
-            className="flex-1"
-          >
-            {sending ? 'Sending...' : 'Send Announcement'}
-          </Button>
+        <div className="flex flex-col gap-3 pt-4">
+          <div className="flex gap-3">
+            <Button
+              type="submit"
+              disabled={sending || !formData.text.trim()}
+              className="flex-1"
+            >
+              {sending ? 'Sending...' : 'Send Announcement'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleClose}
+              disabled={sending}
+            >
+              Close
+            </Button>
+          </div>
           <Button
             type="button"
-            variant="secondary"
-            onClick={handleClose}
-            disabled={sending}
+            variant="danger"
+            onClick={handleClearActive}
+            disabled={clearing || sending}
+            className="w-full"
           >
-            Cancel
+            {clearing ? 'Clearing…' : '✕ Clear Active Announcement on TV'}
           </Button>
         </div>
       </form>

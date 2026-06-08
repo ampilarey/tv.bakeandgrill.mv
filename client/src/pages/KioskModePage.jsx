@@ -109,6 +109,8 @@ export default function KioskModePage() {
   const [isMuted, setIsMuted]               = useState(false);
   const [lastCommand, setLastCommand]       = useState(null);
   const [isFullscreen, setIsFullscreen]     = useState(false);
+  const [needsFullscreenTap, setNeedsFullscreenTap] = useState(false);
+  const [announcementClearSignal, setAnnouncementClearSignal] = useState(0);
   const [showStartOverlay, setShowStartOverlay] = useState(false);
   const [cursorVisible, setCursorVisible]   = useState(true);
   const [showFallback, setShowFallback]     = useState(false);
@@ -193,7 +195,9 @@ export default function KioskModePage() {
   // Fullscreen change listener
   useEffect(() => {
     const onChange = () => {
-      setIsFullscreen(!!(document.fullscreenElement || document.webkitFullscreenElement));
+      const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      setIsFullscreen(inFs);
+      if (!inFs && display && !showStartOverlay) setNeedsFullscreenTap(true);
     };
     document.addEventListener('fullscreenchange', onChange);
     document.addEventListener('webkitfullscreenchange', onChange);
@@ -201,7 +205,7 @@ export default function KioskModePage() {
       document.removeEventListener('fullscreenchange', onChange);
       document.removeEventListener('webkitfullscreenchange', onChange);
     };
-  }, []);
+  }, [display, showStartOverlay]);
 
   // ── Fullscreen helper ────────────────────────────────────────────────────
 
@@ -210,8 +214,30 @@ export default function KioskModePage() {
       const el = containerRef.current || document.documentElement;
       if (el.requestFullscreen) await el.requestFullscreen();
       else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+      else if (el.webkitEnterFullscreen) el.webkitEnterFullscreen();
       setIsFullscreen(true);
-    } catch { /* user denied — ok */ }
+      setNeedsFullscreenTap(false);
+      return true;
+    } catch {
+      setNeedsFullscreenTap(true);
+      return false;
+    }
+  }, []);
+
+  const applyPlaylistFilter = useCallback((playlistId) => {
+    const pid = parseInt(playlistId, 10);
+    if (!pid) return;
+    const pool = normalPlaylistRef.current || channelsRef.current || [];
+    const filtered = pool.filter(
+      (c) => c.source_playlist_id === pid || String(c.id).startsWith(`${pid}-`)
+    );
+    if (!filtered.length) return;
+    setChannels(filtered);
+    const first = pickPlayableChannel(filtered);
+    if (first) {
+      setCurrentChannel(first);
+      setShowFallback(false);
+    }
   }, []);
 
   // ── Initial verify ───────────────────────────────────────────────────────
@@ -294,7 +320,10 @@ export default function KioskModePage() {
       clearInterval(retryCountdownRef.current);
       // TV kiosk: auto fullscreen + start (no tap required)
       setShowStartOverlay(false);
-      setTimeout(() => enterFullscreen().catch(() => {}), 300);
+      setTimeout(async () => {
+        const ok = await enterFullscreen();
+        if (!ok) setNeedsFullscreenTap(true);
+      }, 300);
 
       // ── Auto-reboot scheduling ──────────────────────────────────────
       if (d?.autoRebootTime) {
@@ -424,8 +453,14 @@ export default function KioskModePage() {
             });
           } else if (cmd.command_type === 'toggle_fullscreen') {
             const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-            if (!inFS) await enterFullscreen().catch(() => {});
-            else { if (document.exitFullscreen) document.exitFullscreen(); }
+            if (!inFS) await enterFullscreen();
+            else if (document.exitFullscreen) document.exitFullscreen();
+          } else if (cmd.command_type === 'enter_fullscreen') {
+            await enterFullscreen();
+          } else if (cmd.command_type === 'clear_announcement') {
+            setAnnouncementClearSignal((n) => n + 1);
+          } else if (cmd.command_type === 'switch_playlist' && d.playlist_id) {
+            applyPlaylistFilter(d.playlist_id);
           } else if (cmd.command_type === 'check_override' || cmd.command_type === 'revert_override') {
             // Already handled above via override field
           } else if (cmd.command_type === 'refresh_playlist') {
@@ -665,6 +700,11 @@ export default function KioskModePage() {
     await enterFullscreen();
   };
 
+  const handleFullscreenTap = async (e) => {
+    e?.stopPropagation?.();
+    await enterFullscreen();
+  };
+
   // ── Renders ──────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -824,16 +864,34 @@ export default function KioskModePage() {
         </div>
       )}
 
-      {/* ── Fullscreen button (only when not in fullscreen & overlay gone) ── */}
+      {/* ── Fullscreen prompt (browser requires a tap on many TVs) ── */}
+      {!isFullscreen && !showStartOverlay && needsFullscreenTap && (
+        <button
+          type="button"
+          onClick={handleFullscreenTap}
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-6 py-3 rounded-full shadow-2xl text-white font-semibold text-lg animate-pulse border-2 border-white/30"
+          style={{ backgroundColor: brandColor, zIndex: 2147483645 }}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg>
+          Tap for Fullscreen
+        </button>
+      )}
+
+      {/* ── Compact fullscreen control (always reachable when not in FS) ── */}
       {!isFullscreen && !showStartOverlay && (
         <button
-          onClick={enterFullscreen}
-          className="absolute top-4 left-4 bg-black/60 hover:bg-black/80 text-white p-3 rounded-lg shadow-lg transition-all z-20 backdrop-blur-sm"
+          type="button"
+          onClick={handleFullscreenTap}
+          className="absolute bottom-6 left-4 bg-black/75 hover:bg-black/90 text-white px-4 py-3 rounded-xl shadow-lg transition-all z-30 backdrop-blur-sm flex items-center gap-2"
+          style={{ zIndex: 2147483644 }}
           title="Enter Fullscreen"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
           </svg>
+          <span className="text-sm font-semibold">Fullscreen</span>
         </button>
       )}
 
@@ -856,7 +914,12 @@ export default function KioskModePage() {
 
       {/* ── Full-screen announcements (admin push) ─────────────────────── */}
       {display?.id && displayToken && !showStartOverlay && (
-        <AnnouncementOverlay displayId={display.id} displayToken={displayToken} />
+        <AnnouncementOverlay
+          displayId={display.id}
+          displayToken={displayToken}
+          apiClient={displayApi}
+          clearSignal={announcementClearSignal}
+        />
       )}
     </div>
   );

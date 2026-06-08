@@ -45,7 +45,10 @@ export default function DisplayManagement() {
   const [filteredChannelsForControl, setFilteredChannelsForControl] = useState([]);
   const [selectedGroupForControl, setSelectedGroupForControl] = useState('');
   const [groupsForControl, setGroupsForControl] = useState([]);
+  const [playlistsForControl, setPlaylistsForControl] = useState([]);
+  const [selectedPlaylistForControl, setSelectedPlaylistForControl] = useState('');
   const [channelSearchQuery, setChannelSearchQuery] = useState('');
+  const [remoteBusy, setRemoteBusy] = useState('');
   const [newDisplay, setNewDisplay] = useState({ name: '', location: '', playlist_id: '' });
   const [selectedChannel, setSelectedChannel] = useState('');
   const [volumeLevel, setVolumeLevel] = useState(50);
@@ -350,17 +353,21 @@ export default function DisplayManagement() {
     setShowControlModal(true);
     setSelectedChannel('');
     setSelectedGroupForControl('');
+    setSelectedPlaylistForControl('');
     setChannelSearchQuery('');
     setChannels([]); // Clear previous channels
+    setPlaylistsForControl([]);
     
     if (display.playlist_id) {
       try {
         const response = await api.get(`/displays/${display.id}/channels`);
         const channelsList = response.data.channels || [];
         const groups = response.data.groups || [];
+        const pls = response.data.playlists || [];
         setChannels(channelsList);
         setFilteredChannelsForControl(channelsList);
         setGroupsForControl(groups);
+        setPlaylistsForControl(pls);
       } catch (err) {
         console.error('Error fetching channels:', err);
         setError('Failed to load channels: ' + (err.response?.data?.error || err.message));
@@ -372,16 +379,21 @@ export default function DisplayManagement() {
     }
   };
 
-  // Filter channels in remote control by group AND search query
+  // Filter channels in remote control by playlist, group, and search query
   useEffect(() => {
     let filtered = [...channels];
+
+    if (selectedPlaylistForControl) {
+      const pid = parseInt(selectedPlaylistForControl, 10);
+      filtered = filtered.filter(
+        (ch) => ch.source_playlist_id === pid || String(ch.id).startsWith(`${pid}-`)
+      );
+    }
     
-    // Filter by group
     if (selectedGroupForControl && selectedGroupForControl !== '') {
       filtered = filtered.filter(ch => ch.group && ch.group.trim() === selectedGroupForControl.trim());
     }
     
-    // Filter by search query
     if (channelSearchQuery && channelSearchQuery.trim() !== '') {
       const query = channelSearchQuery.toLowerCase().trim();
       filtered = filtered.filter(ch => 
@@ -391,7 +403,47 @@ export default function DisplayManagement() {
     }
     
     setFilteredChannelsForControl(filtered);
-  }, [selectedGroupForControl, channelSearchQuery, channels]);
+  }, [selectedPlaylistForControl, selectedGroupForControl, channelSearchQuery, channels]);
+
+  const sendRemoteAction = async (action, extra = {}) => {
+    if (!selectedDisplay) return;
+    setRemoteBusy(action);
+    try {
+      await api.post(`/displays/${selectedDisplay.id}/control`, { action, ...extra });
+      setError(`✅ ${action.replace(/_/g, ' ')} sent`);
+      setTimeout(() => setError(''), 2000);
+    } catch (err) {
+      setError(err.response?.data?.error || `Failed: ${action}`);
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setRemoteBusy('');
+    }
+  };
+
+  const handleSwitchPlaylistOnDisplay = async () => {
+    if (!selectedPlaylistForControl) {
+      setError('Select a playlist first');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+    await sendRemoteAction('switch_playlist', { playlist_id: parseInt(selectedPlaylistForControl, 10) });
+  };
+
+  const handleClearAnnouncement = async () => {
+    if (!selectedDisplay) return;
+    setRemoteBusy('clear_announcement');
+    try {
+      await api.delete(`/announcements/display/${selectedDisplay.id}/clear`);
+      await api.post(`/displays/${selectedDisplay.id}/control`, { action: 'clear_announcement' });
+      setError('✅ Announcement cleared');
+      setTimeout(() => setError(''), 2000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to clear announcement');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setRemoteBusy('');
+    }
+  };
 
   const handleRemoteControl = async (channelId = null) => {
     const targetChannelId = channelId || selectedChannel;
@@ -470,14 +522,7 @@ export default function DisplayManagement() {
   };
 
   const handleFullscreenControl = async () => {
-    try {
-      await api.post(`/displays/${selectedDisplay.id}/control`, {
-        action: 'toggle_fullscreen'
-      });
-      console.log('✅ Fullscreen command sent');
-    } catch (error) {
-      console.error('Fullscreen control error:', error);
-    }
+    await sendRemoteAction('enter_fullscreen');
   };
 
   const handleOpenSchedules = async (display) => {
@@ -934,6 +979,8 @@ export default function DisplayManagement() {
           setChannels([]);
           setChannelSearchQuery('');
           setSelectedGroupForControl('');
+          setSelectedPlaylistForControl('');
+          setPlaylistsForControl([]);
         }}
         title={`Remote Control: ${selectedDisplay?.name}`}
       >
@@ -949,6 +996,87 @@ export default function DisplayManagement() {
                   Currently playing: {selectedDisplay.current_channel_id}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Quick actions */}
+          <div>
+            <label className="block text-sm font-medium text-tv-textSecondary mb-2">
+              ⚡ Quick Actions
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleFullscreenControl}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'enter_fullscreen' ? '…' : '⛶ Fullscreen'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => sendRemoteAction('refresh_playlist')}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'refresh_playlist' ? '…' : '🔄 Refresh'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleClearAnnouncement}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'clear_announcement' ? '…' : '✕ Clear Msg'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => sendRemoteAction('refresh_overlays')}
+                disabled={!!remoteBusy}
+              >
+                {remoteBusy === 'refresh_overlays' ? '…' : '📋 Overlays'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Playlist selector */}
+          {playlistsForControl.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-tv-textSecondary mb-2">
+                📂 Playlist
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={selectedPlaylistForControl}
+                  onChange={(e) => setSelectedPlaylistForControl(e.target.value)}
+                  className="flex-1 px-4 py-2 rounded-lg bg-tv-bgElevated border-2 border-tv-borderSubtle text-tv-text focus:outline-none focus:ring-2 focus:ring-tv-accent"
+                >
+                  <option value="">All playlists ({channels.length} channels)</option>
+                  {playlistsForControl.map((pl) => {
+                    const count = channels.filter(
+                      (ch) => ch.source_playlist_id === pl.id || String(ch.id).startsWith(`${pl.id}-`)
+                    ).length;
+                    return (
+                      <option key={pl.id} value={pl.id}>
+                        {pl.name} ({count})
+                      </option>
+                    );
+                  })}
+                </select>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSwitchPlaylistOnDisplay}
+                  disabled={!selectedPlaylistForControl || !!remoteBusy}
+                  className="whitespace-nowrap"
+                >
+                  {remoteBusy === 'switch_playlist' ? 'Switching…' : 'Switch TV to Playlist'}
+                </Button>
+              </div>
+              <p className="text-xs text-tv-textMuted mt-1">
+                Filter channels below, or switch the TV to play from one playlist.
+              </p>
             </div>
           )}
           
@@ -1129,6 +1257,8 @@ export default function DisplayManagement() {
                 setChannels([]);
                 setChannelSearchQuery('');
                 setSelectedGroupForControl('');
+                setSelectedPlaylistForControl('');
+                setPlaylistsForControl([]);
               }} 
               className="w-full"
             >

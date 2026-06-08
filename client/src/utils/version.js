@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.0.9'; // Forces cache refresh for login pair button fix
+export const APP_VERSION = '1.1.0'; // Kiosk fullscreen + remote control enhancements
 
 export function checkVersion() {
   try {

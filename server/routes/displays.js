@@ -8,7 +8,7 @@ const { getDatabase } = require('../database/init');
 const { verifyToken, requireAdmin, verifyDisplayToken } = require('../middleware/auth');
 const { validateDisplayCreate } = require('../middleware/validation');
 const { asyncHandler } = require('../middleware/errorHandler');
-const { checkPermission, checkResourceLimit } = require('../middleware/permissions');
+const { checkPermission, checkAnyPermission, checkResourceLimit } = require('../middleware/permissions');
 const { fetch } = require('../utils/httpClient');
 const {
   normalizePlaylistIds,
@@ -538,7 +538,7 @@ router.post('/',
  * GET /api/displays/:id/channels
  * Merged channel list for remote control (all assigned playlists).
  */
-router.get('/:id/channels', checkPermission('can_manage_displays'), asyncHandler(async (req, res) => {
+router.get('/:id/channels', checkAnyPermission(['can_manage_displays', 'can_control_displays']), asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
 
@@ -552,10 +552,23 @@ router.get('/:id/channels', checkPermission('can_manage_displays'), asyncHandler
   });
   const groups = [...new Set(allEnriched.map((c) => c.group).filter(Boolean))].sort();
 
+  const playlists = [];
+  if (playlistIds.length) {
+    const [rows] = await db.query(
+      `SELECT id, name FROM playlists WHERE id IN (${playlistIds.map(() => '?').join(',')})`,
+      playlistIds
+    );
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    playlistIds.forEach((pid) => {
+      if (byId[pid]) playlists.push(byId[pid]);
+    });
+  }
+
   res.json({
     success: true,
     channels: allEnriched,
     playlistIds,
+    playlists,
     groups,
   });
 }));
@@ -771,7 +784,7 @@ router.post('/:id/control',
   asyncHandler(async (req, res) => {
   const db = getDatabase();
   const { id } = req.params;
-  const { action, channel_id, channel_name, volume } = req.body;
+  const { action, channel_id, channel_name, volume, playlist_id } = req.body;
   
   if (!action) {
     return res.status(400).json({
@@ -822,10 +835,18 @@ router.post('/:id/control',
       break;
     case 'mute':
     case 'unmute':
+    case 'toggle_fullscreen':
+    case 'enter_fullscreen':
+    case 'clear_announcement':
+    case 'refresh_playlist':
+    case 'refresh_overlays':
       commandData = {};
       break;
+    case 'switch_playlist':
+      commandData = { playlist_id: parseInt(playlist_id, 10) || null };
+      break;
     default:
-      commandData = { channel_id, channel_name, volume };
+      commandData = { channel_id, channel_name, volume, playlist_id };
   }
   
   const commandDataStr = JSON.stringify(commandData);
