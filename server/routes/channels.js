@@ -17,7 +17,7 @@ const {
   diagnoseAndPersist,
   REASON_CODES,
 } = require('../services/channelDiagnosis');
-const { enrichChannel } = require('../utils/channelEnrichment');
+const { enrichChannel, isVisibleInPlayableFilter } = require('../utils/channelEnrichment');
 const channelChecker = require('../services/channelChecker');
 
 const router = express.Router();
@@ -108,9 +108,8 @@ router.get('/', asyncHandler(async (req, res) => {
       channels = channels.filter((c) => c.is_trusted !== 0);
     }
 
-    const hideUnplayable = playableOnly === '1' || (playableOnly !== '0' && req.user.role !== 'admin');
-    if (hideUnplayable) {
-      channels = channels.filter((c) => c.is_hidden !== 1 && c.play_status === 'playable');
+    if (playableOnly === '1') {
+      channels = channels.filter(isVisibleInPlayableFilter);
     } else {
       channels = channels.filter((c) => c.is_hidden !== 1);
       channels.sort((a, b) => {

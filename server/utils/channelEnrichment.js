@@ -2,6 +2,16 @@ const { urlHash, computePlayStatus } = require('../services/channelDiagnosis');
 const { buildPlaybackProxyUrl } = require('./streamToken');
 const { getDatabase } = require('../database/init');
 
+/** Channels worth showing in "Playable only" — includes undiagnosed streams users can still try. */
+function isVisibleInPlayableFilter(channel) {
+  if (!channel || channel.is_hidden === 1) return false;
+  if (channel.play_status === 'playable') return true;
+  if (channel.play_status === 'unknown' || channel.play_status === 'needs_recheck') {
+    return !!(channel.playback_url || channel.url);
+  }
+  return false;
+}
+
 function enrichChannel(ch, health, override, playlist, req) {
   const hash = ch.url ? urlHash(ch.url) : null;
   const h = health || {};
@@ -102,7 +112,7 @@ async function enrichChannelsForPlaylist(channels, playlist, req, { hideHidden =
     enriched = enriched.filter((c) => c.is_hidden !== 1);
   }
   if (playableOnly) {
-    enriched = enriched.filter((c) => c.play_status === 'playable');
+    enriched = enriched.filter(isVisibleInPlayableFilter);
   } else {
     enriched.sort((a, b) => {
       const order = { playable: 0, unknown: 1, needs_recheck: 2, unsupported: 3, offline: 4, blocked: 5 };
@@ -113,4 +123,9 @@ async function enrichChannelsForPlaylist(channels, playlist, req, { hideHidden =
   return enriched;
 }
 
-module.exports = { enrichChannel, enrichChannelsForPlaylist, loadHealthAndOverrides };
+module.exports = {
+  enrichChannel,
+  enrichChannelsForPlaylist,
+  loadHealthAndOverrides,
+  isVisibleInPlayableFilter,
+};

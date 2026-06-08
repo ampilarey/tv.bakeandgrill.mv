@@ -241,7 +241,22 @@ export default function ChannelSidebar({
 
         {/* All Channels */}
         {filteredChannels.length === 0 ? (
-          <div className="p-8 text-center text-tv-textMuted"><p>No channels found</p></div>
+          <div className="p-8 text-center text-tv-textMuted">
+            <p>No channels found</p>
+            {playStatusFilter === 'playable' && channels.length > 0 && (
+              <p className="text-sm mt-2">
+                Try{' '}
+                <button
+                  type="button"
+                  className="text-tv-accent underline"
+                  onClick={() => onPlayStatusFilterChange?.('all')}
+                >
+                  Show all
+                </button>{' '}
+                to see every channel in this playlist.
+              </p>
+            )}
+          </div>
         ) : (
           <div>
             {showRecent && (
