@@ -92,8 +92,8 @@ export default defineConfig({
         clientsClaim: true,
         cleanupOutdatedCaches: true,
         navigationPreload: true,
-        // Serve offline.html for navigation requests when the network is unavailable
-        navigateFallback: '/offline.html',
+        // SPA fallback when offline — index.html so client routes like /pair still work
+        navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         // Only precache critical assets, NOT JS/HTML to avoid stale cache issues
         globPatterns: ['**/*.{ico,png,svg,woff,woff2}', 'offline.html'],

@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.0.8'; // Semantic versioning - forces cache refresh for pairing link fix
+export const APP_VERSION = '1.0.9'; // Forces cache refresh for login pair button fix
 
 export function checkVersion() {
   try {
