@@ -808,6 +808,23 @@ export default function KioskModePage() {
             : 'relative w-full h-[calc(100vh-2.5rem)] rounded-lg border-4 border-zinc-600 bg-black overflow-hidden shadow-2xl'
         }
       >
+      {/* ── Screen mode (on-display, same as remote Expand / Normal) ─ */}
+      {!showStartOverlay && (
+        <button
+          type="button"
+          onClick={() => applyImmersiveMode(!pseudoFullscreen)}
+          className={`absolute top-4 left-4 z-30 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg border transition-opacity ${
+            cursorVisible ? 'opacity-100' : 'opacity-50'
+          } ${
+            pseudoFullscreen
+              ? 'bg-zinc-800/90 text-white border-zinc-500 backdrop-blur-sm'
+              : 'bg-black/60 text-white border-white/25 backdrop-blur-sm'
+          }`}
+        >
+          {pseudoFullscreen ? '⊟ Normal Screen' : '⛶ Expand Screen'}
+        </button>
+      )}
+
       {/* ── Tap-to-start overlay (first load) ──────────────────── */}
       {showStartOverlay && (
         <div
@@ -976,7 +993,7 @@ export default function KioskModePage() {
 
       {!pseudoFullscreen && !showStartOverlay && (
         <p className="text-center text-zinc-500 text-xs mt-2 pb-1">
-          Normal screen — gray border visible. Remote → Expand Screen for edge-to-edge.
+          Normal screen — tap Expand Screen (top-left) or use remote to go edge-to-edge.
         </p>
       )}
     </div>

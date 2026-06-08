@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.1.9'; // Stop TV display refresh loops (no SW reload on /display)
+export const APP_VERSION = '1.2.0'; // On-display Expand / Normal screen button
 
 export function checkVersion() {
   try {
