@@ -9,6 +9,7 @@ import Input from '../../components/common/Input';
 import Modal from '../../components/common/Modal';
 import { useToast } from '../../hooks/useToast';
 import Spinner from '../../components/common/Spinner';
+import AdminTopBar from '../../components/AdminTopBar';
 
 const TEMPLATE_TYPES = [
   { value: 'image_price', label: 'Image + Price', icon: '🖼️', desc: 'Product photo with name and price' },
@@ -209,18 +210,11 @@ export default function SlideTemplates() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Slide Templates</h1>
-          <p className="text-gray-600 mt-1">
-            Reusable designs for your media slides
-          </p>
-        </div>
-        <Button onClick={openNew}>+ New Template</Button>
-      </div>
-
+    <div className="min-h-screen bg-tv-bg flex flex-col">
+      <AdminTopBar title="Slide Templates" subtitle="Reusable designs for your media slides">
+        <Button size="sm" onClick={openNew}>+ New Template</Button>
+      </AdminTopBar>
+      <div className="flex-1 p-6 max-w-5xl mx-auto w-full pb-24 space-y-6">
       {/* Grid */}
       {templates.length === 0 ? (
         <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
@@ -384,6 +378,7 @@ export default function SlideTemplates() {
           </div>
         </form>
       </Modal>
+      </div>
     </div>
   );
 }

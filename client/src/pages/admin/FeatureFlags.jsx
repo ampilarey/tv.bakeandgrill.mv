@@ -9,6 +9,7 @@ import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import { useToast } from '../../hooks/useToast';
 import Spinner from '../../components/common/Spinner';
+import AdminTopBar from '../../components/AdminTopBar';
 
 const FLAG_DESCRIPTIONS = {
   image_slides:        'Allow image slides in media playlists',
@@ -131,18 +132,11 @@ export default function FeatureFlags() {
   const enabledCount = flags.filter(f => f.is_enabled).length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Feature Flags</h1>
-          <p className="text-gray-600 mt-1">
-            {enabledCount} of {flags.length} features enabled
-          </p>
-        </div>
-        <Button onClick={() => setShowAddModal(true)}>+ Add Flag</Button>
-      </div>
-
+    <div className="min-h-screen bg-tv-bg flex flex-col">
+      <AdminTopBar title="Feature Flags" subtitle={`${enabledCount} of ${flags.length} features enabled`}>
+        <Button size="sm" onClick={() => setShowAddModal(true)}>+ Add Flag</Button>
+      </AdminTopBar>
+      <div className="flex-1 p-6 max-w-5xl mx-auto w-full pb-24 space-y-6">
       {/* Categories */}
       {Object.entries(CATEGORY).map(([category, flagNames]) => {
         const categoryFlags = flagNames.map(n => flagsByName[n]).filter(Boolean);
@@ -258,6 +252,7 @@ export default function FeatureFlags() {
           </div>
         </form>
       </Modal>
+      </div>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 import Spinner from '../../components/common/Spinner';
 
@@ -195,33 +195,19 @@ export default function ChannelHealth() {
 
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col">
-      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={() => navigate('/admin/dashboard')} className="text-white/70 hover:text-white">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl font-bold text-white">Channel Health</h1>
-              <p className="text-xs text-white/70 hidden sm:block">Deep diagnosis &amp; playability</p>
-            </div>
-          </div>
-          {selectedPl && (
-            <button
-              type="button"
-              onClick={triggerRecheck}
-              disabled={rechecking}
-              className="flex items-center gap-2 text-sm text-white border border-white/30 hover:border-white/60 px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-            >
-              {rechecking ? <Spinner size="sm" /> : null}
-              {rechecking ? 'Testing all channels…' : 'Test all channels'}
-            </button>
-          )}
-        </div>
-      </div>
+      <AdminTopBar title="Channel Health" subtitle="Deep diagnosis and playability">
+        {selectedPl && (
+          <button
+            type="button"
+            onClick={triggerRecheck}
+            disabled={rechecking}
+            className="flex items-center gap-2 text-sm text-white border border-white/30 hover:border-white/60 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {rechecking ? <Spinner size="sm" /> : null}
+            {rechecking ? 'Testing…' : 'Test all'}
+          </button>
+        )}
+      </AdminTopBar>
 
       <div className="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full pb-24">
         {err && <div className="mb-4 bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm">{err}</div>}

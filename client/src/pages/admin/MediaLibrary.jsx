@@ -5,7 +5,7 @@ import api from '../../services/api';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import Spinner from '../../components/common/Spinner';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 
 const ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp,video/mp4';
@@ -129,45 +129,28 @@ export default function MediaLibrary() {
 
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col">
-      {/* Header */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/admin/dashboard')} className="text-white/70 hover:text-white">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl font-bold text-white">Media Library</h1>
-              <p className="text-xs text-white/70 hidden sm:block">{total} file{total !== 1 ? 's' : ''} total</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              className="text-sm bg-white/10 text-white border border-white/20 rounded-lg px-3 py-1.5 focus:outline-none"
-              value={filter}
-              onChange={e => { setFilter(e.target.value); setPage(1); }}
-            >
-              <option value="">All</option>
-              <option value="image">Images</option>
-              <option value="video">Videos</option>
-            </select>
-            <Button onClick={() => fileRef.current?.click()} size="sm" variant="secondary" disabled={uploading}>
-              {uploading ? `Uploading ${uploadPct}%…` : '+ Upload'}
-            </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept={ACCEPT}
-              multiple
-              className="hidden"
-              onChange={e => handleUpload(Array.from(e.target.files))}
-            />
-          </div>
-        </div>
-      </div>
+      <AdminTopBar title="Media Library" subtitle="Upload images and videos for displays">
+        <select
+          className="text-sm bg-white/10 text-white border border-white/20 rounded-lg px-3 py-1.5 focus:outline-none"
+          value={filter}
+          onChange={e => { setFilter(e.target.value); setPage(1); }}
+        >
+          <option value="">All</option>
+          <option value="image">Images</option>
+          <option value="video">Videos</option>
+        </select>
+        <Button onClick={() => fileRef.current?.click()} size="sm" variant="secondary" disabled={uploading}>
+          {uploading ? `Uploading ${uploadPct}%…` : '+ Upload'}
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={ACCEPT}
+          multiple
+          className="hidden"
+          onChange={e => handleUpload(Array.from(e.target.files))}
+        />
+      </AdminTopBar>
 
       <div className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full pb-24">
         {err && (

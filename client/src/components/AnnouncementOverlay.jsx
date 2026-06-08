@@ -20,8 +20,8 @@ function AnnouncementOverlay({ displayId, displayToken, onDismiss }) {
 
     checkForAnnouncements();
 
-    // Check for new announcements every 10 seconds
-    const interval = setInterval(checkForAnnouncements, 10000);
+    // Check for new announcements every 5 seconds
+    const interval = setInterval(checkForAnnouncements, 5000);
     return () => clearInterval(interval);
   }, [displayId, displayToken, announcementsEnabled]);
 

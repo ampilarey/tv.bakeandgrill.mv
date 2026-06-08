@@ -4,6 +4,7 @@ import axios from 'axios';
 import Hls from 'hls.js';
 import { QRCodeSVG } from 'qrcode.react';
 import SlideshowPlayer from '../components/SlideshowPlayer';
+import AnnouncementOverlay from '../components/AnnouncementOverlay';
 import BottomBarOverlay  from '../components/overlays/BottomBarOverlay';
 import PopupCardOverlay  from '../components/overlays/PopupCardOverlay';
 import SplitRightPanel   from '../components/overlays/SplitRightPanel';
@@ -820,6 +821,11 @@ export default function KioskModePage() {
           security={display.wifiSecurity}
           position={display.wifiQrPosition}
         />
+      )}
+
+      {/* ── Full-screen announcements (admin push) ─────────────────────── */}
+      {display?.id && displayToken && !showStartOverlay && (
+        <AnnouncementOverlay displayId={display.id} displayToken={displayToken} />
       )}
     </div>
   );

@@ -9,7 +9,7 @@ import api from '../../services/api';
 import Button from '../../components/common/Button';
 import Modal from '../../components/common/Modal';
 import Spinner from '../../components/common/Spinner';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 
 const PRIORITY_LABELS = { 1: 'Low', 5: 'Normal', 10: 'High', 20: 'Urgent' };
@@ -163,24 +163,9 @@ export default function OverlaySchedule() {
 
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col">
-      {/* Header */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/admin/dashboard')} className="text-white/70 hover:text-white">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl font-bold text-white">Overlay Scheduler</h1>
-              <p className="text-xs text-white/70 hidden sm:block">Timed ticker messages for display bottom bars</p>
-            </div>
-          </div>
-          <Button onClick={openCreate}>+ New Message</Button>
-        </div>
-      </div>
+      <AdminTopBar title="Overlay Scheduler" subtitle="Timed ticker messages for display bottom bars">
+        <Button size="sm" onClick={openCreate}>+ New Message</Button>
+      </AdminTopBar>
 
       <div className="flex-1 p-4 md:p-6 max-w-4xl mx-auto w-full pb-24 space-y-6">
         {err && (

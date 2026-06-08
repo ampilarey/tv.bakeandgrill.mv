@@ -4,7 +4,7 @@ import api from '../../services/api';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 import { lightTap, successFeedback, errorFeedback } from '../../utils/haptics';
 
@@ -61,27 +61,7 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-tv-bg md:pb-6 overflow-y-auto">
-      {/* Header */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4 flex-1">
-            <button
-              onClick={() => navigate('/admin/dashboard')}
-              className="flex items-center gap-2 text-white/70 hover:text-white transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              <span className="hidden md:inline">Admin Home</span>
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-white">⚙️ System Settings</h1>
-              <p className="text-white/90 text-sm mt-1">Configure platform preferences</p>
-            </div>
-          </div>
-          <MobileMenu />
-        </div>
-      </div>
+      <AdminTopBar title="System Settings" subtitle="Configure platform preferences" />
 
       <div className="max-w-4xl mx-auto p-4 pb-32 md:pb-4">
         {/* Message Display */}

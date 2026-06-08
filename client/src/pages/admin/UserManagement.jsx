@@ -10,7 +10,7 @@ import Spinner from '../../components/common/Spinner';
 import Badge from '../../components/common/Badge';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import PermissionManager from '../../components/PermissionManager';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 
 export default function UserManagement() {
@@ -190,24 +190,7 @@ export default function UserManagement() {
 
   return (
     <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
-      {/* Top Bar */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-white">User Management</h1>
-              <p className="text-xs md:text-sm text-white/90 hidden sm:block">Manage admin and staff accounts</p>
-            </div>
-          </div>
-          <div className="hidden md:flex gap-3">
-            <Button variant="ghost" onClick={() => navigate('/admin/dashboard')}>
-              ← Admin Home
-            </Button>
-            <Button variant="ghost" onClick={logout}>Logout</Button>
-          </div>
-        </div>
-      </div>
+      <AdminTopBar title="User Management" subtitle="Manage admin and staff accounts" />
 
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto flex-1 pb-32 md:pb-6 w-full">

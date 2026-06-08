@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 import Spinner from '../../components/common/Spinner';
 
@@ -89,39 +89,28 @@ export default function SystemHealth() {
 
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col">
-      {/* Header */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/admin/dashboard')} className="text-white/70 hover:text-white">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl font-bold text-white">System Health</h1>
-              <p className="text-xs text-white/70 hidden sm:block">Server · DB · Services · Auto-refreshes 15 s</p>
-            </div>
+      <AdminTopBar
+        title="System Health"
+        subtitle="Server, database, and API status"
+        below={(
+          <div className="flex gap-1 mt-4">
+            {[['health', 'System'], ['logs', 'Login Log']].map(([val, lbl]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setTab(val)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === val ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white'}`}
+              >
+                {lbl}
+              </button>
+            ))}
           </div>
-          <button onClick={exportConfig} className="flex items-center gap-2 text-sm text-white border border-white/30 hover:border-white/60 px-4 py-1.5 rounded-lg transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export Config
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 mt-3">
-          {[['health','System'],['logs','Login Log']].map(([val, lbl]) => (
-            <button key={val} onClick={() => setTab(val)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === val ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white'}`}>
-              {lbl}
-            </button>
-          ))}
-        </div>
-      </div>
+        )}
+      >
+        <button type="button" onClick={exportConfig} className="text-sm text-white border border-white/30 hover:border-white/60 px-3 py-1.5 rounded-lg">
+          Export
+        </button>
+      </AdminTopBar>
 
       <div className="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full pb-24">
 

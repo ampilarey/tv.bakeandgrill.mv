@@ -10,6 +10,7 @@ import Input from '../../components/common/Input';
 import Modal from '../../components/common/Modal';
 import { useToast } from '../../hooks/useToast';
 import Spinner from '../../components/common/Spinner';
+import AdminTopBar from '../../components/AdminTopBar';
 
 function ScheduleManagement() {
   const [schedules, setSchedules] = useState([]);
@@ -193,25 +194,17 @@ function ScheduleManagement() {
   const selectedDisplayObj = displays.find(d => d.id === selectedDisplay);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Schedule Management</h1>
-          <p className="text-gray-600 mt-1">
-            Manage time-based content scheduling for displays
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <Button onClick={() => setShowPresetModal(true)} variant="secondary">
-            Apply Preset
-          </Button>
-          <Button onClick={() => setShowModal(true)}>
-            + Add Schedule
-          </Button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-tv-bg flex flex-col">
+      <AdminTopBar title="Schedule Management" subtitle="Manage time-based content scheduling for displays">
+        <Button size="sm" onClick={() => setShowPresetModal(true)} variant="secondary">
+          Apply Preset
+        </Button>
+        <Button size="sm" onClick={() => setShowModal(true)}>
+          + Add Schedule
+        </Button>
+      </AdminTopBar>
 
+      <div className="flex-1 p-6 max-w-5xl mx-auto w-full pb-24 space-y-6">
       {/* Display Selector */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -505,6 +498,7 @@ function ScheduleManagement() {
           )}
         </div>
       </Modal>
+      </div>
     </div>
   );
 }

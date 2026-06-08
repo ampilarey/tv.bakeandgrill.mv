@@ -1,186 +1,164 @@
 /**
- * Ticker Messages API Routes
- * Scrolling info ticker system
- * Phase 1: Stub implementation
+ * Ticker API — legacy alias for overlay_messages (bottom bar ticker on TVs).
  */
 const express = require('express');
 const router = express.Router();
 const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { getDatabase } = require('../database/init');
+const { asyncHandler } = require('../middleware/errorHandler');
+
+function mapOverlayRow(row) {
+  return {
+    id: row.id,
+    text: row.text,
+    text_dv: null,
+    display_id: row.target_type === 'display' ? row.target_id : null,
+    is_active: !!row.enabled,
+    priority: row.priority || 0,
+    start_date: row.start_at ? String(row.start_at).slice(0, 10) : null,
+    end_date: row.end_at ? String(row.end_at).slice(0, 10) : null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function overlayTarget(displayId) {
+  if (displayId) return { target_type: 'display', target_id: parseInt(displayId, 10) };
+  return { target_type: 'all', target_id: null };
+}
 
 /**
- * GET /api/ticker
- * Get all active ticker messages (optionally filtered by display)
+ * GET /api/ticker — list overlay messages (legacy ticker UI compatibility)
  */
-router.get('/', async (req, res) => {
-  try {
-    const { displayId } = req.query;
-    const db = getDatabase();
-    
-    let query = `
-      SELECT * FROM ticker_messages 
-      WHERE is_active = TRUE 
-      AND (start_date IS NULL OR start_date <= CURDATE())
-      AND (end_date IS NULL OR end_date >= CURDATE())
-    `;
-    const params = [];
+router.get('/', asyncHandler(async (req, res) => {
+  const { displayId } = req.query;
+  const db = getDatabase();
+  const { target_type, target_id } = overlayTarget(displayId);
 
-    if (displayId) {
-      query += ' AND (display_id IS NULL OR display_id = ?)';
-      params.push(displayId);
-    } else {
-      query += ' AND display_id IS NULL';
-    }
+  let query = `
+    SELECT * FROM overlay_messages
+    WHERE enabled = 1
+      AND (start_at IS NULL OR start_at <= NOW())
+      AND (end_at IS NULL OR end_at >= NOW())
+  `;
+  const params = [];
 
-    query += ' ORDER BY priority DESC, created_at DESC';
-
-    const [messages] = await db.query(query, params);
-
-    res.json({
-      success: true,
-      messages
-    });
-  } catch (error) {
-    console.error('Error fetching ticker messages:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch ticker messages'
-    });
+  if (displayId) {
+    query += ` AND ((target_type = 'all') OR (target_type = 'display' AND target_id = ?))`;
+    params.push(target_id);
+  } else {
+    query += ` AND target_type = 'all'`;
   }
-});
+
+  query += ' ORDER BY priority DESC, id DESC';
+
+  const [rows] = await db.query(query, params);
+  res.json({ success: true, messages: rows.map(mapOverlayRow) });
+}));
 
 /**
- * POST /api/ticker
- * Create a new ticker message (admin only)
+ * POST /api/ticker — create overlay message (admin)
  */
-router.post('/', verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const {
-      text,
-      text_dv,
-      display_id,
-      priority,
-      start_date,
-      end_date
-    } = req.body;
-
-    if (!text) {
-      return res.status(400).json({
-        success: false,
-        message: 'text is required'
-      });
-    }
-
-    const db = getDatabase();
-    const [result] = await db.query(
-      `INSERT INTO ticker_messages (
-        text, text_dv, display_id, priority, start_date, end_date, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [text, text_dv, display_id, priority || 0, start_date, end_date, req.user.id]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Ticker message created',
-      messageId: result.insertId
-    });
-  } catch (error) {
-    console.error('Error creating ticker message:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create ticker message'
-    });
+router.post('/', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  const { text, display_id, priority, start_date, end_date } = req.body;
+  if (!text?.trim()) {
+    return res.status(400).json({ success: false, message: 'text is required' });
   }
-});
+
+  const db = getDatabase();
+  const { target_type, target_id } = overlayTarget(display_id);
+  const startAt = start_date ? `${start_date} 00:00:00` : null;
+  const endAt = end_date ? `${end_date} 23:59:59` : null;
+
+  const [result] = await db.query(
+    `INSERT INTO overlay_messages
+       (text, enabled, priority, rotation_seconds, target_type, target_id, start_at, end_at)
+     VALUES (?, 1, ?, 8, ?, ?, ?, ?)`,
+    [text.trim(), priority || 0, target_type, target_id, startAt, endAt]
+  );
+
+  res.status(201).json({
+    success: true,
+    message: 'Ticker message created (Smart Overlays)',
+    messageId: result.insertId,
+  });
+}));
 
 /**
  * PUT /api/ticker/:id
- * Update a ticker message (admin only)
  */
-router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
-    
-    delete updates.id;
-    delete updates.created_at;
-    delete updates.created_by;
+router.put('/:id', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+  const db = getDatabase();
 
-    // Whitelist allowed columns to prevent SQL injection
-    const allowed = ['text', 'text_dv', 'display_id', 'is_active', 'priority', 'start_date', 'end_date'];
-    const setClauses = [];
-    const params = [];
-    for (const key of allowed) {
-      if (updates[key] !== undefined) {
-        setClauses.push(`${key} = ?`);
-        params.push(updates[key]);
-      }
-    }
+  const fieldMap = {
+    text: 'text',
+    is_active: 'enabled',
+    priority: 'priority',
+    display_id: null,
+    start_date: 'start_at',
+    end_date: 'end_at',
+  };
 
-    if (setClauses.length === 0) {
-      return res.status(400).json({ success: false, message: 'No valid fields to update' });
-    }
+  const setClauses = [];
+  const params = [];
 
-    setClauses.push('updated_at = NOW()');
-    params.push(id);
-
-    const db = getDatabase();
-    const [result] = await db.query(
-      `UPDATE ticker_messages SET ${setClauses.join(', ')} WHERE id = ?`,
-      params
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Ticker message not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Ticker message updated'
-    });
-  } catch (error) {
-    console.error('Error updating ticker message:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update ticker message'
-    });
+  if (updates.text !== undefined) {
+    setClauses.push('text = ?');
+    params.push(updates.text);
   }
-});
+  if (updates.is_active !== undefined) {
+    setClauses.push('enabled = ?');
+    params.push(updates.is_active ? 1 : 0);
+  }
+  if (updates.priority !== undefined) {
+    setClauses.push('priority = ?');
+    params.push(updates.priority);
+  }
+  if (updates.start_date !== undefined) {
+    setClauses.push('start_at = ?');
+    params.push(updates.start_date ? `${updates.start_date} 00:00:00` : null);
+  }
+  if (updates.end_date !== undefined) {
+    setClauses.push('end_at = ?');
+    params.push(updates.end_date ? `${updates.end_date} 23:59:59` : null);
+  }
+  if (updates.display_id !== undefined) {
+    const { target_type, target_id } = overlayTarget(updates.display_id);
+    setClauses.push('target_type = ?', 'target_id = ?');
+    params.push(target_type, target_id);
+  }
+
+  if (setClauses.length === 0) {
+    return res.status(400).json({ success: false, message: 'No valid fields to update' });
+  }
+
+  params.push(id);
+  const [result] = await db.query(
+    `UPDATE overlay_messages SET ${setClauses.join(', ')} WHERE id = ?`,
+    params
+  );
+
+  if (result.affectedRows === 0) {
+    return res.status(404).json({ success: false, message: 'Ticker message not found' });
+  }
+
+  res.json({ success: true, message: 'Ticker message updated' });
+}));
 
 /**
  * DELETE /api/ticker/:id
- * Delete a ticker message (admin only)
  */
-router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const db = getDatabase();
-    const [result] = await db.query(
-      'DELETE FROM ticker_messages WHERE id = ?',
-      [req.params.id]
-    );
+router.delete('/:id', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const [result] = await db.query('DELETE FROM overlay_messages WHERE id = ?', [req.params.id]);
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Ticker message not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Ticker message deleted'
-    });
-  } catch (error) {
-    console.error('Error deleting ticker message:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete ticker message'
-    });
+  if (result.affectedRows === 0) {
+    return res.status(404).json({ success: false, message: 'Ticker message not found' });
   }
-});
+
+  res.json({ success: true, message: 'Ticker message deleted' });
+}));
 
 module.exports = router;
-

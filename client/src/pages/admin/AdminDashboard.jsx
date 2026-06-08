@@ -4,8 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import api from '../../services/api';
 import Card from '../../components/common/Card';
-import MobileMenu from '../../components/MobileMenu';
-import NotificationBell from '../../components/NotificationBell';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 import Spinner from '../../components/common/Spinner';
 import Button from '../../components/common/Button';
@@ -48,53 +47,26 @@ export default function AdminDashboard() {
 
   return (
     <div className="h-screen md:min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
-      {/* Top Bar */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="lg:hidden flex items-center gap-2 text-white/70 hover:text-white transition-colors mr-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-white">Admin Dashboard</h1>
-              <p className="text-xs md:text-sm text-white/90 hidden sm:block">Bake and Grill TV Management</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {isDark ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-              )}
-            </button>
-            <div className="hidden md:flex items-center gap-2">
-              <Button variant="ghost" onClick={() => navigate('/dashboard')}>
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-                User View
-              </Button>
-              <Button variant="ghost" onClick={logout}>Logout</Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AdminTopBar title="Admin Dashboard" subtitle="Bake and Grill TV Management">
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDark ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          )}
+        </button>
+        <Button variant="ghost" size="sm" className="hidden md:inline-flex" onClick={() => navigate('/dashboard')}>
+          User View
+        </Button>
+      </AdminTopBar>
 
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto flex-1 pb-32 md:pb-6 w-full">
@@ -182,12 +154,12 @@ export default function AdminDashboard() {
               View Analytics
             </Button>
 
-            {/* Phase 3: Ticker Management */}
-            <Button variant="primary" size="lg" onClick={() => navigate('/admin/ticker')} className="justify-start">
+            {/* Smart Overlays — bottom bar ticker + promo cards */}
+            <Button variant="primary" size="lg" onClick={() => navigate('/admin/overlays')} className="justify-start">
               <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
               </svg>
-              Ticker Messages
+              Smart Overlays
             </Button>
 
             {/* Phase 5: Schedule Management */}

@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 import Spinner from '../../components/common/Spinner';
 import Modal from '../../components/common/Modal';
@@ -138,42 +138,24 @@ export default function MonitoringDashboard() {
 
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col">
-      {/* Header */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/admin/dashboard')} className="text-white/70 hover:text-white">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl font-bold text-white">TV Monitoring</h1>
-              <p className="text-xs text-white/70 hidden sm:block">Live status · refreshes every 15 s</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block" />
-              <span className="text-white/80">{online} online</span>
-              {offline > 0 && <>
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block ml-2" />
-                <span className="text-white/80">{offline} offline</span>
-              </>}
-            </div>
-            <button onClick={fetchDisplays} className="text-white/60 hover:text-white text-xs flex items-center gap-1 border border-white/20 px-3 py-1.5 rounded-lg">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Refresh
-            </button>
-          </div>
+      <AdminTopBar
+        title="TV Monitoring"
+        subtitle={lastRefresh ? `Live display status · updated ${lastRefresh.toLocaleTimeString()}` : 'Live display status and health'}
+      >
+        <div className="hidden sm:flex items-center gap-2 text-sm text-white/80">
+          <span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block" />
+          {online} online
+          {offline > 0 && (
+            <>
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block ml-1" />
+              {offline} offline
+            </>
+          )}
         </div>
-        {lastRefresh && (
-          <p className="text-xs text-white/40 mt-2">Last updated: {lastRefresh.toLocaleTimeString()}</p>
-        )}
-      </div>
+        <button type="button" onClick={fetchDisplays} className="text-white/60 hover:text-white text-xs border border-white/20 px-3 py-1.5 rounded-lg">
+          Refresh
+        </button>
+      </AdminTopBar>
 
       <div className="flex-1 p-4 md:p-6 max-w-6xl mx-auto w-full pb-24">
         {loading ? (

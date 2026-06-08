@@ -7,7 +7,7 @@ import Badge from '../../components/common/Badge';
 import Spinner from '../../components/common/Spinner';
 import SkeletonLoader from '../../components/SkeletonLoader';
 import Footer from '../../components/Footer';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 
 export default function Analytics() {
   const [loading, setLoading] = useState(true);
@@ -202,12 +202,7 @@ export default function Analytics() {
   if (loading) {
     return (
       <div className="min-h-screen bg-tv-bg md:pb-6 overflow-y-auto">
-        <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-white">Analytics</h1>
-            <MobileMenu />
-          </div>
-        </div>
+        <AdminTopBar title="Analytics" subtitle="Loading…" />
         <div className="max-w-7xl mx-auto p-4">
           <SkeletonLoader type="card" count={6} />
         </div>
@@ -217,75 +212,54 @@ export default function Analytics() {
 
   return (
     <div className="min-h-screen bg-tv-bg md:pb-6 overflow-y-auto" style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 40px)' }}>
-      {/* Header */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle p-4 flex-shrink-0">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4 flex-1">
-              <button
-                onClick={() => navigate('/admin/dashboard')}
-                className="flex items-center gap-2 text-white/70 hover:text-white transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                <span className="hidden md:inline">Admin Home</span>
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-white">📊 Analytics Dashboard</h1>
-                <p className="text-white/90 text-sm mt-1">Platform usage and performance metrics</p>
-              </div>
+      <AdminTopBar
+        title="Analytics Dashboard"
+        subtitle="Platform usage and performance metrics"
+        below={(
+          <div className="mt-4 space-y-3">
+            <div className="flex gap-2 border-b border-white/20">
+              {[
+                ['overview', 'Overview'],
+                ['users', 'User Details'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                    activeTab === id
+                      ? 'border-white text-white'
+                      : 'border-transparent text-white/70 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <MobileMenu />
+            <div className="flex gap-2 flex-wrap pb-1">
+              {[
+                { value: '24h', label: 'Last 24 Hours' },
+                { value: '7d', label: 'Last 7 Days' },
+                { value: '30d', label: 'Last 30 Days' },
+                { value: 'all', label: 'All Time' },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTimeRange(value)}
+                  className={`px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition-colors border-2 ${
+                    timeRange === value
+                      ? 'bg-white text-tv-accent border-white shadow-md'
+                      : 'bg-transparent text-white border-white/40 hover:bg-white/10 hover:border-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-
-          {/* Tabs */}
-          <div className="flex gap-2 mb-4 border-b border-white/20">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-                activeTab === 'overview'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-white/70 hover:text-white'
-              }`}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-                activeTab === 'users'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-white/70 hover:text-white'
-              }`}
-            >
-              User Details
-            </button>
-          </div>
-
-          {/* Time Range Filter */}
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { value: '24h', label: 'Last 24 Hours' },
-              { value: '7d', label: 'Last 7 Days' },
-              { value: '30d', label: 'Last 30 Days' },
-              { value: 'all', label: 'All Time' },
-            ].map(({ value, label }) => (
-              <button
-                key={value}
-                onClick={() => setTimeRange(value)}
-                className={`px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition-colors border-2 ${
-                  timeRange === value
-                    ? 'bg-white text-tv-accent border-white shadow-md'
-                    : 'bg-transparent text-white border-white/40 hover:bg-white/10 hover:border-white'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+        )}
+      />
 
       <div className="max-w-7xl mx-auto p-4 pb-32 md:pb-4">
         {/* Overview Tab */}

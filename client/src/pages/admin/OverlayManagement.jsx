@@ -13,7 +13,7 @@ import Card from '../../components/common/Card';
 import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import Spinner from '../../components/common/Spinner';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 
 const TARGET_OPTIONS = [
@@ -399,39 +399,26 @@ export default function OverlayManagement() {
 
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col">
-      {/* Header */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/admin/dashboard')} className="text-white/70 hover:text-white">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl font-bold text-white">Smart Overlays</h1>
-              <p className="text-xs text-white/70 hidden sm:block">Ticker messages and promo cards for your TV displays</p>
-            </div>
+      <AdminTopBar
+        title="Smart Overlays"
+        subtitle="Ticker messages and promo cards for your TV displays"
+        below={(
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            {[['messages', '💬 Messages'], ['cards', '🍽️ Promo Cards']].map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setTab(v)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === v ? 'bg-white text-tv-accent' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+              >
+                {label}
+              </button>
+            ))}
+            <span className="hidden md:inline text-xs text-white/50 bg-white/10 px-3 py-1.5 rounded-full ml-auto">
+              Set overlay mode per display in Display Settings
+            </span>
           </div>
-          {/* Overlay mode tip */}
-          <span className="hidden md:block text-xs text-white/50 bg-white/10 px-3 py-1.5 rounded-full">
-            Set overlay mode per display in Display Settings
-          </span>
-        </div>
-        {/* Tabs */}
-        <div className="flex gap-1 mt-4">
-          {[['messages', '💬 Messages'], ['cards', '🍽️ Promo Cards']].map(([v, label]) => (
-            <button
-              key={v}
-              onClick={() => setTab(v)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === v ? 'bg-white text-tv-accent' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+        )}
+      />
 
       <div className="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full pb-24">
         {tab === 'messages' && <MessagesTab />}

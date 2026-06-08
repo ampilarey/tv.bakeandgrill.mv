@@ -4,8 +4,26 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth');
+const { checkAnyPermission } = require('../middleware/permissions');
 const { getDatabase } = require('../database/init');
 const { asyncHandler } = require('../middleware/errorHandler');
+
+async function canManageDisplay(req, displayId) {
+  if (req.user.role === 'admin') return true;
+  const db = getDatabase();
+  const [displays] = await db.query('SELECT id FROM displays WHERE id = ?', [displayId]);
+  if (displays.length === 0) return false;
+  const [rows] = await db.query(
+    'SELECT id FROM displays WHERE id = ? AND (created_by = ? OR user_id = ?)',
+    [displayId, req.user.id, req.user.id]
+  );
+  if (rows.length > 0) return true;
+  const [perms] = await db.query(
+    'SELECT can_manage_displays, can_control_displays FROM user_permissions WHERE user_id = ?',
+    [req.user.id]
+  );
+  return perms.length > 0 && (perms[0].can_manage_displays || perms[0].can_control_displays);
+}
 
 async function assertDisplayToken(displayId, token) {
   if (!token) return false;
@@ -55,7 +73,7 @@ router.get('/:displayId', asyncHandler(async (req, res) => {
 /**
  * POST /api/announcements
  */
-router.post('/', verifyToken, asyncHandler(async (req, res) => {
+router.post('/', verifyToken, checkAnyPermission(['can_manage_displays', 'can_control_displays']), asyncHandler(async (req, res) => {
   const {
     display_id,
     text,
@@ -66,28 +84,30 @@ router.post('/', verifyToken, asyncHandler(async (req, res) => {
     expires_at
   } = req.body;
 
+  if (!display_id || !text?.trim()) {
+    return res.status(400).json({ success: false, message: 'display_id and text are required' });
+  }
+
   const db = getDatabase();
 
-  const [displays] = await db.query(
-    'SELECT id FROM displays WHERE id = ? AND (created_by = ? OR user_id = ?)',
-    [display_id, req.user.id, req.user.id]
-  );
-
-  if (displays.length === 0) {
+  if (!(await canManageDisplay(req, display_id))) {
     return res.status(403).json({ success: false, message: 'Not authorized for this display' });
   }
+
+  const dur = Math.min(Math.max(parseInt(duration_seconds, 10) || 30, 5), 600);
+  const expiresAt = expires_at || new Date(Date.now() + dur * 1000);
 
   const [result] = await db.query(
     `INSERT INTO announcements (display_id, text, text_dv, duration_seconds, background_color, text_color, expires_at, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       display_id,
-      text,
+      text.trim(),
       text_dv || null,
-      duration_seconds || 30,
+      dur,
       background_color || '#000000',
       text_color || '#FFFFFF',
-      expires_at || null,
+      expiresAt,
       req.user.id
     ]
   );

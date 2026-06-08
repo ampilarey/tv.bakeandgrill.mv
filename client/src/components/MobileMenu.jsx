@@ -72,12 +72,16 @@ export default function MobileMenu() {
   if (user?.role === 'admin') {
     menuItems.push(
       { path: '/admin/dashboard',  icon: '⚙️', label: 'Admin Home' },
-      { path: '/admin/ticker',      icon: '📢', label: 'Ticker Messages' },
-      { path: '/admin/schedules',   icon: '📅', label: 'Schedules' },
-      { path: '/admin/scenes',      icon: '🎬', label: 'Scenes & Modes' },
-      { path: '/admin/templates',   icon: '🎨', label: 'Slide Templates' },
-      { path: '/admin/features',    icon: '🚩', label: 'Feature Flags' },
-      { path: '/admin/settings',    icon: '🔧', label: 'Settings' }
+      { path: '/admin/overlays',   icon: '💬', label: 'Smart Overlays' },
+      { path: '/admin/emergency',  icon: '🚨', label: 'Emergency Override' },
+      { path: '/admin/monitoring', icon: '📡', label: 'TV Monitoring' },
+      { path: '/admin/schedules',  icon: '📅', label: 'Schedules' },
+      { path: '/admin/scenes',     icon: '🎬', label: 'Scenes & Modes' },
+      { path: '/admin/media',      icon: '🖼️', label: 'Media Library' },
+      { path: '/admin/templates',  icon: '🎨', label: 'Slide Templates' },
+      { path: '/admin/channel-health', icon: '📶', label: 'Channel Health' },
+      { path: '/admin/features',   icon: '🚩', label: 'Feature Flags' },
+      { path: '/admin/settings',   icon: '🔧', label: 'Settings' }
     );
   }
   

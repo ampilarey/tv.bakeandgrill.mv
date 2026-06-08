@@ -11,7 +11,8 @@ import Badge from '../../components/common/Badge';
 import LoadingSkeleton from '../../components/common/LoadingSkeleton';
 import EmptyState from '../../components/common/EmptyState';
 import ConfirmModal from '../../components/common/ConfirmModal';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
+import AnnouncementSender from '../../components/AnnouncementSender';
 import PairDisplayModal from '../../components/PairDisplayModal';
 import Footer from '../../components/Footer';
 
@@ -51,6 +52,7 @@ export default function DisplayManagement() {
   const volumeTimeoutRef = useRef(null);
   const [error, setError] = useState('');
   const [showPairModal, setShowPairModal] = useState(false);
+  const [announcementDisplay, setAnnouncementDisplay] = useState(null);
   const [guideExpanded, setGuideExpanded] = useState(false);
   const [userPermissions, setUserPermissions] = useState(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -574,27 +576,15 @@ export default function DisplayManagement() {
 
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col overflow-y-auto">
-      {/* Top Bar */}
-      <div className="bg-tv-accent border-b border-tv-borderSubtle px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-white">Display Management</h1>
-              <p className="text-xs md:text-sm text-white/90 hidden sm:block">
-                Manage cafe TV displays
-                <span className="ml-3 text-xs text-tv-gold animate-pulse">● Auto-refresh (5s)</span>
-              </p>
-            </div>
-          </div>
-          <div className="hidden md:flex gap-3">
-            <Button variant="ghost" onClick={() => navigate('/admin/dashboard')}>
-              ← Admin Home
-            </Button>
-            <Button variant="ghost" onClick={logout}>Logout</Button>
-          </div>
-        </div>
-      </div>
+      <AdminTopBar
+        title="Display Management"
+        subtitle={
+          <>
+            Manage cafe TV displays
+            <span className="ml-3 text-xs text-tv-gold animate-pulse">● Auto-refresh (5s)</span>
+          </>
+        }
+      />
 
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto flex-1 pb-32 md:pb-6 w-full">
@@ -813,6 +803,15 @@ export default function DisplayManagement() {
                   </Button>
                   
                   {/* Schedule button - hidden on mobile for now, will enhance later */}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setAnnouncementDisplay(display)}
+                    className="w-full"
+                  >
+                    📣 Send Announcement
+                  </Button>
+
                   <Button 
                     variant="secondary" 
                     size="sm" 
@@ -1362,6 +1361,15 @@ export default function DisplayManagement() {
           </div>
         </div>
       </Modal>
+
+      {announcementDisplay && (
+        <AnnouncementSender
+          displayId={announcementDisplay.id}
+          displayName={announcementDisplay.name}
+          isOpen={!!announcementDisplay}
+          onClose={() => setAnnouncementDisplay(null)}
+        />
+      )}
 
       {/* Confirm Modal */}
       <ConfirmModal

@@ -10,7 +10,7 @@ import api from '../../services/api';
 import Button from '../../components/common/Button';
 import Modal from '../../components/common/Modal';
 import Spinner from '../../components/common/Spinner';
-import MobileMenu from '../../components/MobileMenu';
+import AdminTopBar from '../../components/AdminTopBar';
 import Footer from '../../components/Footer';
 
 function useCountdown(expiresAt) {
@@ -127,28 +127,13 @@ export default function EmergencyOverride() {
 
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col">
-      {/* Header */}
-      <div className="bg-red-800 border-b border-red-700 px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/admin/dashboard')} className="text-white/70 hover:text-white">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <MobileMenu />
-            <div>
-              <h1 className="text-xl font-bold text-white">🚨 Emergency Override</h1>
-              <p className="text-xs text-red-200 hidden sm:block">Push content to all or specific displays immediately</p>
-            </div>
-          </div>
-          {overrides.length > 0 && (
-            <button onClick={cancelAll} className="text-red-200 hover:text-white text-xs border border-red-400/50 px-3 py-1.5 rounded-lg">
-              Cancel All ({overrides.length})
-            </button>
-          )}
-        </div>
-      </div>
+      <AdminTopBar title="Emergency Override" subtitle="Push urgent messages to all displays">
+        {overrides.length > 0 && (
+          <button type="button" onClick={cancelAll} className="text-red-200 hover:text-white text-xs border border-red-400/50 px-3 py-1.5 rounded-lg">
+            Cancel All ({overrides.length})
+          </button>
+        )}
+      </AdminTopBar>
 
       <div className="flex-1 p-4 md:p-6 max-w-3xl mx-auto w-full pb-24 space-y-6">
         {err && <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm">{err} <button onClick={() => setErr('')} className="underline ml-2">dismiss</button></div>}

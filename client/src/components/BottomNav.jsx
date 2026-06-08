@@ -80,6 +80,11 @@ export default function BottomNav() {
   if (user?.role === 'admin' || permissions?.can_view_analytics === 1) {
     navItems.push({ path: '/admin/analytics', icon: '📊', label: 'Analytics' });
   }
+
+  // Admin home — full admin panel with notifications & all tools
+  if (user?.role === 'admin') {
+    navItems.push({ path: '/admin/dashboard', icon: '⚙️', label: 'Admin' });
+  }
   
   const currentYear = new Date().getFullYear();
   
