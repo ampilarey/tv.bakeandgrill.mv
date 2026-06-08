@@ -1,8 +1,7 @@
 const express = require('express');
-const { URL } = require('url');
-const { fetch, fetchRange, redactUrl } = require('../utils/httpClient');
+const { fetch, streamRange } = require('../utils/httpClient');
 const { verifyToken: verifyStreamToken, issueStreamToken } = require('../utils/streamToken');
-const { rewriteManifest } = require('../utils/hlsManifest');
+const { rewriteManifest, isHlsManifestContent } = require('../utils/hlsManifest');
 const { resolveChannel } = require('../utils/channelResolver');
 const { getDatabase } = require('../database/init');
 const { urlHash } = require('../services/channelDiagnosis');
@@ -12,12 +11,25 @@ const router = express.Router();
 
 const PROXY_TIMEOUT_MS = parseInt(process.env.STREAM_PROXY_TIMEOUT_MS || '15000', 10);
 const SEGMENT_MAX_BYTES = parseInt(process.env.SEGMENT_MAX_BYTES || '10485760', 10);
+const KEY_MAX_BYTES = parseInt(process.env.KEY_MAX_BYTES || '65536', 10);
 
 function buildHeaders(channel) {
   const headers = { 'User-Agent': 'BakeGrillTV/1.0' };
   if (channel.httpUserAgent) headers['User-Agent'] = channel.httpUserAgent;
   if (channel.httpReferrer) headers['Referer'] = channel.httpReferrer;
   return headers;
+}
+
+function buildProxySegUrl(req, channelId, playlistId, urlHashVal, absoluteUrl) {
+  const host = `${req.protocol}://${req.get('host')}`;
+  const segToken = issueStreamToken({
+    channelId,
+    playlistId: parseInt(playlistId, 10),
+    urlHash: urlHashVal,
+    scope: 'segment',
+    subPath: absoluteUrl,
+  });
+  return `${host}/api/stream/${channelId}/seg?token=${encodeURIComponent(segToken)}`;
 }
 
 async function assertChannelAccess(playlistId, channel) {
@@ -31,6 +43,15 @@ async function assertChannelAccess(playlistId, channel) {
     err.status = 403;
     throw err;
   }
+}
+
+function resolveSegmentUrl(payload, u) {
+  if (!payload.subPath) return null;
+  if (u) {
+    const decoded = decodeURIComponent(u);
+    if (decoded !== payload.subPath) return null;
+  }
+  return payload.subPath;
 }
 
 /**
@@ -64,32 +85,23 @@ router.get('/:channelId/master.m3u8', asyncHandler(async (req, res) => {
       maxBytes: 2097152,
     });
   } catch (err) {
-    console.warn(`[StreamProxy] Manifest fetch failed: ${redactUrl(channel.url)}`);
+    console.warn('[StreamProxy] Manifest fetch failed');
     return res.status(502).json({ success: false, error: 'Failed to fetch stream manifest' });
   }
 
   const baseUrl = manifestRes.finalUrl || channel.url;
-  const host = `${req.protocol}://${req.get('host')}`;
+  const rewriteFn = (absoluteUrl) =>
+    buildProxySegUrl(req, channelId, playlistId, payload.urlHash, absoluteUrl);
 
-  const rewritten = rewriteManifest(manifestRes.data, baseUrl, (absoluteUrl) => {
-    const segToken = issueStreamToken({
-      channelId,
-      playlistId: parseInt(playlistId, 10),
-      urlHash: payload.urlHash,
-      scope: 'segment',
-      subPath: absoluteUrl,
-    });
-    const encoded = encodeURIComponent(absoluteUrl);
-    return `${host}/api/stream/${channelId}/seg?token=${encodeURIComponent(segToken)}&u=${encoded}`;
-  });
+  const rewritten = rewriteManifest(manifestRes.data, baseUrl, rewriteFn);
 
   res.set('Content-Type', 'application/vnd.apple.mpegurl');
-  res.set('Cache-Control', 'no-cache');
+  res.set('Cache-Control', 'no-store');
   res.send(rewritten);
 }));
 
 /**
- * GET /api/stream/:channelId/seg?token=...&u=<encoded origin url>
+ * GET /api/stream/:channelId/seg?token=...
  */
 router.get('/:channelId/seg', asyncHandler(async (req, res) => {
   const { channelId } = req.params;
@@ -100,8 +112,10 @@ router.get('/:channelId/seg', asyncHandler(async (req, res) => {
     return res.status(401).json({ success: false, error: 'Invalid segment token' });
   }
 
-  const segmentUrl = payload.subPath || (u ? decodeURIComponent(u) : null);
-  if (!segmentUrl) return res.status(400).json({ success: false, error: 'Missing segment URL' });
+  const segmentUrl = resolveSegmentUrl(payload, u);
+  if (!segmentUrl) {
+    return res.status(403).json({ success: false, error: 'Segment URL does not match token' });
+  }
 
   const resolved = await resolveChannel(payload.playlistId, channelId);
   if (!resolved) return res.status(404).json({ success: false, error: 'Channel not found' });
@@ -117,41 +131,41 @@ router.get('/:channelId/seg', asyncHandler(async (req, res) => {
   const rangeHeader = req.headers.range;
 
   try {
-    if (rangeHeader) {
-      const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-      const start = match ? parseInt(match[1], 10) : 0;
-      const end = match && match[2] ? parseInt(match[2], 10) : start + SEGMENT_MAX_BYTES - 1;
-
-      const segRes = await fetchRange(segmentUrl, {
+    if (isHlsManifestContent(null, segmentUrl)) {
+      const manifestRes = await fetch(segmentUrl, {
         timeout: PROXY_TIMEOUT_MS,
         headers,
-        start,
-        end: Math.min(end, start + SEGMENT_MAX_BYTES - 1),
-        maxBytes: SEGMENT_MAX_BYTES,
+        maxBytes: 2097152,
       });
-
-      res.status(segRes.status === 206 ? 206 : 200);
-      if (segRes.headers['content-range']) res.set('Content-Range', segRes.headers['content-range']);
-      if (segRes.headers['content-type']) res.set('Content-Type', segRes.headers['content-type']);
-      else res.set('Content-Type', 'video/mp2t');
-      res.set('Accept-Ranges', 'bytes');
-      res.send(segRes.data);
-    } else {
-      const segRes = await fetchRange(segmentUrl, {
-        timeout: PROXY_TIMEOUT_MS,
-        headers,
-        start: 0,
-        end: SEGMENT_MAX_BYTES - 1,
-        maxBytes: SEGMENT_MAX_BYTES,
-      });
-      if (segRes.headers['content-type']) res.set('Content-Type', segRes.headers['content-type']);
-      else res.set('Content-Type', 'video/mp2t');
-      res.set('Accept-Ranges', 'bytes');
-      res.send(segRes.data);
+      const baseUrl = manifestRes.finalUrl || segmentUrl;
+      const rewriteFn = (absoluteUrl) =>
+        buildProxySegUrl(req, channelId, payload.playlistId, payload.urlHash, absoluteUrl);
+      const rewritten = rewriteManifest(manifestRes.data, baseUrl, rewriteFn);
+      res.set('Content-Type', 'application/vnd.apple.mpegurl');
+      res.set('Cache-Control', 'no-store');
+      return res.send(rewritten);
     }
+
+    const looksLikeKey = /\.key(\?|$)/i.test(segmentUrl) || (segmentUrl.includes('key') && !/\.(ts|m4s|mp4)(\?|$)/i.test(segmentUrl));
+    const maxBytes = looksLikeKey ? KEY_MAX_BYTES : SEGMENT_MAX_BYTES;
+
+    let upstreamRange = rangeHeader;
+    if (!upstreamRange && !looksLikeKey) {
+      upstreamRange = `bytes=0-${SEGMENT_MAX_BYTES - 1}`;
+    }
+
+    await streamRange(segmentUrl, {
+      headers,
+      rangeHeader: upstreamRange,
+      maxBytes,
+      timeout: PROXY_TIMEOUT_MS,
+      res,
+    });
   } catch (err) {
-    console.warn(`[StreamProxy] Segment fetch failed: ${redactUrl(segmentUrl)}`);
-    res.status(502).json({ success: false, error: 'Failed to fetch segment' });
+    console.warn('[StreamProxy] Segment stream failed');
+    if (!res.headersSent) {
+      res.status(502).json({ success: false, error: 'Failed to fetch segment' });
+    }
   }
 }));
 

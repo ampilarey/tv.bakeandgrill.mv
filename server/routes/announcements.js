@@ -1,185 +1,143 @@
 /**
  * Announcements API Routes
- * Quick full-screen announcements for displays
- * Phase 1: Stub implementation
  */
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth');
 const { getDatabase } = require('../database/init');
+const { asyncHandler } = require('../middleware/errorHandler');
+
+async function assertDisplayToken(displayId, token) {
+  if (!token) return false;
+  const db = getDatabase();
+  const [rows] = await db.query(
+    'SELECT id FROM displays WHERE id = ? AND token = ? AND is_active = 1',
+    [displayId, token]
+  );
+  return rows.length > 0;
+}
+
+function extractDisplayToken(req) {
+  const auth = req.headers.authorization;
+  if (auth?.startsWith('Bearer ')) return auth.substring(7);
+  return req.query.token || null;
+}
 
 /**
  * GET /api/announcements/:displayId
- * Get active announcements for a display
+ * Requires valid display token for the display
  */
-router.get('/:displayId', async (req, res) => {
-  try {
-    const db = getDatabase();
-    const [announcements] = await db.query(
-      `SELECT * FROM announcements 
-       WHERE display_id = ? 
-       AND (expires_at IS NULL OR expires_at > NOW())
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [req.params.displayId]
-    );
+router.get('/:displayId', asyncHandler(async (req, res) => {
+  const displayId = parseInt(req.params.displayId, 10);
+  const token = extractDisplayToken(req);
 
-    res.json({
-      success: true,
-      announcement: announcements.length > 0 ? announcements[0] : null
-    });
-  } catch (error) {
-    console.error('Error fetching announcements:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch announcements'
-    });
+  if (!(await assertDisplayToken(displayId, token))) {
+    return res.status(401).json({ success: false, error: 'Valid display token required' });
   }
-});
+
+  const db = getDatabase();
+  const [announcements] = await db.query(
+    `SELECT text, text_dv, background_color, text_color, duration_seconds, expires_at, created_at
+     FROM announcements
+     WHERE display_id = ?
+     AND (expires_at IS NULL OR expires_at > NOW())
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [displayId]
+  );
+
+  res.json({
+    success: true,
+    announcement: announcements.length > 0 ? announcements[0] : null
+  });
+}));
 
 /**
  * POST /api/announcements
- * Create a new announcement (authenticated users only)
  */
-router.post('/', verifyToken, async (req, res) => {
-  try {
-    const {
+router.post('/', verifyToken, asyncHandler(async (req, res) => {
+  const {
+    display_id,
+    text,
+    text_dv,
+    duration_seconds,
+    background_color,
+    text_color,
+    expires_at
+  } = req.body;
+
+  const db = getDatabase();
+
+  const [displays] = await db.query(
+    'SELECT id FROM displays WHERE id = ? AND (created_by = ? OR user_id = ?)',
+    [display_id, req.user.id, req.user.id]
+  );
+
+  if (displays.length === 0) {
+    return res.status(403).json({ success: false, message: 'Not authorized for this display' });
+  }
+
+  const [result] = await db.query(
+    `INSERT INTO announcements (display_id, text, text_dv, duration_seconds, background_color, text_color, expires_at, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
       display_id,
       text,
-      text_dv,
-      duration_seconds,
-      background_color,
-      text_color,
-      expires_at
-    } = req.body;
+      text_dv || null,
+      duration_seconds || 30,
+      background_color || '#000000',
+      text_color || '#FFFFFF',
+      expires_at || null,
+      req.user.id
+    ]
+  );
 
-    if (!display_id || !text) {
-      return res.status(400).json({
-        success: false,
-        message: 'display_id and text are required'
-      });
-    }
-
-    // Verify user has access to this display
-    const db = getDatabase();
-    const [displays] = await db.query(
-      'SELECT id FROM displays WHERE id = ? AND (created_by = ? OR user_id = ?)',
-      [display_id, req.user.id, req.user.id]
-    );
-
-    if (displays.length === 0) {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized to create announcements for this display'
-      });
-    }
-
-    // Calculate expiry if not provided (default: 1 hour)
-    const expiresAt = expires_at || new Date(Date.now() + 60 * 60 * 1000);
-
-    const [result] = await db.query(
-      `INSERT INTO announcements (
-        display_id, text, text_dv, duration_seconds,
-        background_color, text_color, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        display_id,
-        text,
-        text_dv,
-        duration_seconds || 10,
-        background_color || '#1e293b',
-        text_color || '#ffffff',
-        expiresAt
-      ]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Announcement created',
-      announcementId: result.insertId
-    });
-  } catch (error) {
-    console.error('Error creating announcement:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create announcement'
-    });
-  }
-});
+  res.status(201).json({
+    success: true,
+    announcement: { id: result.insertId, display_id, text }
+  });
+}));
 
 /**
  * DELETE /api/announcements/:id
- * Delete an announcement
  */
-router.delete('/:id', verifyToken, async (req, res) => {
-  try {
-    const db = getDatabase();
-    
-    // Verify user has access to this announcement's display
-    const [announcements] = await db.query(
-      `SELECT a.id FROM announcements a
-       INNER JOIN displays d ON a.display_id = d.id
-       WHERE a.id = ? AND (d.created_by = ? OR d.user_id = ?)`,
-      [req.params.id, req.user.id, req.user.id]
-    );
+router.delete('/:id', verifyToken, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const { id } = req.params;
 
-    if (announcements.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Announcement not found or unauthorized'
-      });
-    }
+  const [announcements] = await db.query(
+    `SELECT a.id FROM announcements a
+     JOIN displays d ON d.id = a.display_id
+     WHERE a.id = ? AND (d.created_by = ? OR d.user_id = ?)`,
+    [id, req.user.id, req.user.id]
+  );
 
-    await db.query('DELETE FROM announcements WHERE id = ?', [req.params.id]);
-
-    res.json({
-      success: true,
-      message: 'Announcement deleted'
-    });
-  } catch (error) {
-    console.error('Error deleting announcement:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete announcement'
-    });
+  if (announcements.length === 0) {
+    return res.status(404).json({ success: false, message: 'Announcement not found' });
   }
-});
+
+  await db.query('DELETE FROM announcements WHERE id = ?', [id]);
+  res.json({ success: true, message: 'Announcement deleted' });
+}));
 
 /**
  * DELETE /api/announcements/display/:displayId/clear
- * Clear all announcements for a display
  */
-router.delete('/display/:displayId/clear', verifyToken, async (req, res) => {
-  try {
-    const db = getDatabase();
-    
-    // Verify user has access to this display
-    const [displays] = await db.query(
-      'SELECT id FROM displays WHERE id = ? AND (created_by = ? OR user_id = ?)',
-      [req.params.displayId, req.user.id, req.user.id]
-    );
+router.delete('/display/:displayId/clear', verifyToken, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const { displayId } = req.params;
 
-    if (displays.length === 0) {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized'
-      });
-    }
+  const [displays] = await db.query(
+    'SELECT id FROM displays WHERE id = ? AND (created_by = ? OR user_id = ?)',
+    [displayId, req.user.id, req.user.id]
+  );
 
-    await db.query('DELETE FROM announcements WHERE display_id = ?', [req.params.displayId]);
-
-    res.json({
-      success: true,
-      message: 'All announcements cleared'
-    });
-  } catch (error) {
-    console.error('Error clearing announcements:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to clear announcements'
-    });
+  if (displays.length === 0) {
+    return res.status(403).json({ success: false, message: 'Not authorized' });
   }
-});
+
+  await db.query('DELETE FROM announcements WHERE display_id = ?', [displayId]);
+  res.json({ success: true, message: 'Announcements cleared' });
+}));
 
 module.exports = router;
-

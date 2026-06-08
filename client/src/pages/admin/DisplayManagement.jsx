@@ -214,6 +214,7 @@ export default function DisplayManagement() {
       auto_reboot_time:    display.auto_reboot_time || '',
       failover_playlist_id:   display.failover_playlist_id   || '',
       failover_after_minutes: display.failover_after_minutes ?? 5,
+      kiosk_debug:          !!display.kiosk_debug,
     });
     fetchMediaPlaylists();
     fetchZones();
@@ -248,6 +249,7 @@ export default function DisplayManagement() {
         auto_reboot_time:        settingsForm.auto_reboot_time        || null,
         failover_playlist_id:    settingsForm.failover_playlist_id    || null,
         failover_after_minutes:  Number(settingsForm.failover_after_minutes) || 5,
+        kiosk_debug:             settingsForm.kiosk_debug ? 1 : 0,
       };
       await api.put(`/displays/${selectedDisplay.id}`, body);
       setShowSettingsModal(false);
@@ -1641,6 +1643,19 @@ export default function DisplayManagement() {
                 </div>
               )}
             </div>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-tv-text mb-2">Kiosk debug</h3>
+            <label className="flex items-center gap-2 text-sm text-tv-textSecondary">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-tv-accent"
+                checked={!!settingsForm.kiosk_debug}
+                onChange={(e) => setSettingsForm((f) => ({ ...f, kiosk_debug: e.target.checked }))}
+              />
+              Show all channels in verify response (does not affect auto-play)
+            </label>
           </section>
 
           <div className="flex gap-3 justify-end pt-2 border-t border-tv-borderSubtle">

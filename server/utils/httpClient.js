@@ -223,83 +223,193 @@ async function fetch(url, options = {}) {
 }
 
 /**
- * Fetch byte range (for HLS segment probes and proxy passthrough).
- */
-async function fetchRange(url, options = {}) {
-  const start = options.start ?? 0;
-  const end = options.end ?? 8191;
-  const headers = {
-    ...options.headers,
-    Range: `bytes=${start}-${end}`,
-  };
-
-  const urlObj = await validateUrl(url);
-  const maxBytes = options.maxBytes ?? (end - start + 1);
-  const method = options.method || 'GET';
-
-  return new Promise((resolve, reject) => {
-    const protocol = urlObj.protocol === 'https:' ? https : http;
-
-    const requestOptions = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
-      path: urlObj.pathname + urlObj.search,
-      method,
-      headers: {
-        'User-Agent': 'BakeGrillTV/1.0',
-        ...headers,
-      },
-      timeout: options.timeout || 10000,
-    };
-
-    const req = protocol.request(requestOptions, (res) => {
-      const chunks = [];
-      let totalBytes = 0;
-
-      res.on('data', (chunk) => {
-        totalBytes += chunk.length;
-        if (totalBytes > maxBytes) {
-          req.destroy();
-          reject(Object.assign(new Error('Range response exceeds max size'), { code: 'MAX_BYTES_EXCEEDED' }));
-          return;
-        }
-        chunks.push(chunk);
-      });
-
-      res.on('end', () => {
-        const data = Buffer.concat(chunks);
-        resolve({
-          status: res.statusCode,
-          statusText: res.statusMessage,
-          headers: res.headers,
-          data,
-          finalUrl: url,
-        });
-      });
-    });
-
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      const error = new Error('Request timeout');
-      error.code = 'ECONNABORTED';
-      reject(error);
-    });
-    req.end();
-  });
-}
-
-/**
  * HEAD request for reachability without body download.
  */
 async function head(url, options = {}) {
   return fetchOnce(url, { ...options, method: 'HEAD', maxBytes: 0 });
 }
 
+/**
+ * Stream upstream response to an Express res with SSRF checks, redirect following, and byte cap.
+ */
+function streamRange(originUrl, options = {}) {
+  const {
+    headers = {},
+    rangeHeader = null,
+    maxBytes = DEFAULT_MAX_BYTES,
+    timeout = 10000,
+    res,
+  } = options;
+
+  let redirectCount = 0;
+  let currentUrl = originUrl;
+
+  const attempt = async () => {
+    const urlObj = await validateUrl(currentUrl);
+    const protocol = urlObj.protocol === 'https:' ? https : http;
+
+    const reqHeaders = {
+      'User-Agent': 'BakeGrillTV/1.0',
+      ...headers,
+    };
+    if (rangeHeader) reqHeaders.Range = rangeHeader;
+
+    return new Promise((resolve, reject) => {
+      const requestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+        path: urlObj.pathname + urlObj.search,
+        method: 'GET',
+        headers: reqHeaders,
+        timeout,
+      };
+
+      const req = protocol.request(requestOptions, (upstream) => {
+        if (isRedirectStatus(upstream.statusCode) && upstream.headers.location) {
+          redirectCount += 1;
+          if (redirectCount > MAX_REDIRECTS) {
+            reject(Object.assign(new Error('Too many redirects'), { code: 'REDIRECT_ERROR' }));
+            return;
+          }
+          currentUrl = new URL(upstream.headers.location, currentUrl).toString();
+          upstream.resume();
+          attempt().then(resolve).catch(reject);
+          return;
+        }
+
+        if (upstream.statusCode < 200 || upstream.statusCode >= 400) {
+          upstream.resume();
+          reject(Object.assign(new Error(`Upstream status ${upstream.statusCode}`), {
+            status: upstream.statusCode,
+          }));
+          return;
+        }
+
+        const contentLength = parseInt(upstream.headers['content-length'] || '0', 10);
+        if (contentLength > maxBytes) {
+          upstream.resume();
+          reject(Object.assign(new Error('Response exceeds max size'), { code: 'MAX_BYTES_EXCEEDED' }));
+          return;
+        }
+
+        res.status(upstream.statusCode);
+        if (upstream.headers['content-type']) res.set('Content-Type', upstream.headers['content-type']);
+        if (upstream.headers['content-range']) res.set('Content-Range', upstream.headers['content-range']);
+        res.set('Accept-Ranges', 'bytes');
+        res.set('Cache-Control', 'no-store');
+
+        let totalBytes = 0;
+        upstream.on('data', (chunk) => {
+          totalBytes += chunk.length;
+          if (totalBytes > maxBytes) {
+            upstream.destroy();
+            req.destroy();
+            if (!res.headersSent) {
+              reject(Object.assign(new Error('Stream exceeds max size'), { code: 'MAX_BYTES_EXCEEDED' }));
+            } else {
+              res.destroy();
+            }
+            return;
+          }
+        });
+
+        upstream.pipe(res);
+        upstream.on('end', () => resolve({ status: upstream.statusCode, finalUrl: currentUrl }));
+        upstream.on('error', reject);
+      });
+
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(Object.assign(new Error('Request timeout'), { code: 'ECONNABORTED' }));
+      });
+      req.end();
+    });
+  };
+
+  return attempt();
+}
+
+/**
+ * Fetch byte range with redirect following (for probes).
+ */
+async function fetchRange(url, options = {}) {
+  const start = options.start ?? 0;
+  const end = options.end ?? 8191;
+  const maxBytes = options.maxBytes ?? (end - start + 1);
+  let currentUrl = url;
+  let redirectCount = 0;
+
+  while (true) {
+    const urlObj = await validateUrl(currentUrl);
+    const headers = {
+      ...options.headers,
+      Range: `bytes=${start}-${end}`,
+    };
+
+    const res = await new Promise((resolve, reject) => {
+      const protocol = urlObj.protocol === 'https:' ? https : http;
+      const requestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+        path: urlObj.pathname + urlObj.search,
+        method: 'GET',
+        headers: { 'User-Agent': 'BakeGrillTV/1.0', ...headers },
+        timeout: options.timeout || 10000,
+      };
+
+      const req = protocol.request(requestOptions, (upstream) => {
+        if (isRedirectStatus(upstream.statusCode) && upstream.headers.location) {
+          upstream.resume();
+          resolve({ isRedirect: true, location: upstream.headers.location });
+          return;
+        }
+
+        const chunks = [];
+        let totalBytes = 0;
+        upstream.on('data', (chunk) => {
+          totalBytes += chunk.length;
+          if (totalBytes > maxBytes) {
+            req.destroy();
+            reject(Object.assign(new Error('Range response exceeds max size'), { code: 'MAX_BYTES_EXCEEDED' }));
+          }
+          chunks.push(chunk);
+        });
+        upstream.on('end', () => {
+          resolve({
+            status: upstream.statusCode,
+            headers: upstream.headers,
+            data: Buffer.concat(chunks),
+            finalUrl: currentUrl,
+          });
+        });
+        upstream.on('error', reject);
+      });
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(Object.assign(new Error('Request timeout'), { code: 'ECONNABORTED' }));
+      });
+      req.end();
+    });
+
+    if (res.isRedirect) {
+      redirectCount += 1;
+      if (redirectCount > MAX_REDIRECTS) {
+        throw Object.assign(new Error('Too many redirects'), { code: 'REDIRECT_ERROR' });
+      }
+      currentUrl = new URL(res.location, currentUrl).toString();
+      continue;
+    }
+    return res;
+  }
+}
+
 module.exports = {
   fetch,
   fetchOnce,
   fetchRange,
+  streamRange,
   head,
   validateUrl,
   isPrivateIp,

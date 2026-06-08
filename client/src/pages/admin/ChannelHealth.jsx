@@ -23,6 +23,39 @@ const STATUS = {
   null: { label: 'Unknown', cls: 'bg-gray-500/20 text-gray-400 border-gray-500/30', dot: 'bg-gray-500' },
 };
 
+const REASON_LABELS = {
+  OFFLINE: 'Stream offline',
+  TIMEOUT: 'Probe timed out',
+  HTTP_ERROR: 'HTTP error',
+  REDIRECT_ERROR: 'Too many redirects',
+  MIXED_CONTENT_HTTP: 'HTTP blocked (mixed content)',
+  MANIFEST_INVALID: 'Invalid manifest',
+  MANIFEST_OK_SEGMENT_FAIL: 'Segment fetch failed',
+  MEDIA_PLAYLIST_FAILED: 'Media playlist failed',
+  INIT_MAP_FAILED: 'Init map failed',
+  ENCRYPTED_KEY_FETCH_FAILED: 'Encrypted key fetch failed',
+  UNSUPPORTED_CODEC: 'Unsupported codec',
+  UNSUPPORTED_AUDIO: 'Unsupported audio',
+  GEO_BLOCKED_OR_FORBIDDEN: 'Blocked / forbidden',
+  EXPIRED_URL: 'Expired URL',
+  DRM_OR_PROTECTED_STREAM: 'DRM / protected',
+  PROXY_REQUIRED: 'Proxy required',
+  RATE_LIMITED: 'Upstream rate limited',
+  UNKNOWN_ERROR: 'Unknown error',
+};
+
+const STAGE_LABELS = {
+  manifest: 'Manifest',
+  media_playlist: 'Media playlist',
+  init_map: 'Init map',
+  key_fetch: 'Encryption key',
+  segment: 'Segment',
+  codec: 'Codec',
+  http_blocked: 'HTTP blocked',
+  proxy_required: 'Proxy required',
+  rate_limited: 'Rate limited',
+};
+
 function DeviceIcons({ row }) {
   const devices = [
     { key: 'playable_ios', icon: '📱', title: 'iPhone/Safari' },
@@ -252,7 +285,7 @@ export default function ChannelHealth() {
                   className="bg-tv-bgSoft border border-tv-borderSubtle text-tv-text rounded-lg px-2 py-1 text-xs"
                 >
                   <option value="">All failure reasons</option>
-                  {reasonCodes.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {reasonCodes.map((c) => <option key={c} value={c}>{REASON_LABELS[c] || c}</option>)}
                 </select>
               )}
               <input
@@ -284,9 +317,12 @@ export default function ChannelHealth() {
                       <div className="flex-1 min-w-0">
                         <p className="text-tv-text text-sm font-medium truncate">{r.channel_name || 'Unnamed'}</p>
                         <p className="text-tv-textMuted text-xs truncate">{r.url ? `${r.url.slice(0, 60)}…` : '—'}</p>
-                        {r.failure_reason_code && (
+                        {(r.failure_stage || r.failure_reason_code) && (
                           <p className="text-xs text-red-400 mt-1">
-                            {r.failure_reason_code}
+                            {r.failure_stage && (
+                              <span className="text-red-300/80">{STAGE_LABELS[r.failure_stage] || r.failure_stage}: </span>
+                            )}
+                            {REASON_LABELS[r.failure_reason_code] || r.failure_reason_code}
                             {r.failure_message ? ` — ${r.failure_message}` : ''}
                           </p>
                         )}

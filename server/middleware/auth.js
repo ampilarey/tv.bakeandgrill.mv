@@ -7,7 +7,7 @@ const { getDatabase } = require('../database/init');
 async function verifyToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -15,30 +15,14 @@ async function verifyToken(req, res, next) {
         code: 'AUTH_NO_TOKEN'
       });
     }
-    
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    
-    // Try strict verification first; fall back for legacy tokens without iss/aud.
-    // DEPRECATION: The legacy fallback will be removed in a future release.
-    // All clients must re-login to receive properly-scoped tokens.
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET, {
-        issuer:   'bakeandgrill-tv',
-        audience: 'bakeandgrill-tv-client'
-      });
-    } catch (strictErr) {
-      if (strictErr.name === 'JsonWebTokenError') {
-        // Legacy token — accept but log deprecation so we know when traffic is
-        // still using old tokens.  Remove this fallback once all sessions expire.
-        console.warn('[AUTH] DEPRECATION: legacy token accepted without iss/aud — user should re-login');
-        decoded = jwt.verify(token, process.env.JWT_SECRET);
-      } else {
-        throw strictErr;
-      }
-    }
 
-    // Enforce token_version — invalidate JWTs after password change
+    const token = authHeader.substring(7);
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      issuer: 'bakeandgrill-tv',
+      audience: 'bakeandgrill-tv-client',
+    });
+
     try {
       const db = getDatabase();
       const [users] = await db.query(
@@ -54,17 +38,21 @@ async function verifyToken(req, res, next) {
       }
     } catch (dbErr) {
       console.error('[AUTH] token_version check failed:', dbErr.message);
+      return res.status(503).json({
+        success: false,
+        error: 'Authentication verification unavailable',
+        code: 'AUTH_VERIFICATION_UNAVAILABLE',
+      });
     }
 
     req.user = {
-      id:           decoded.id,
-      email:        decoded.email,
-      role:         decoded.role,
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role,
       tokenVersion: decoded.tv || 0,
     };
 
     next();
-    
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
@@ -73,7 +61,7 @@ async function verifyToken(req, res, next) {
         code: 'AUTH_TOKEN_EXPIRED'
       });
     }
-    
+
     return res.status(401).json({
       success: false,
       error: 'Invalid token',
@@ -84,7 +72,6 @@ async function verifyToken(req, res, next) {
 
 /**
  * Require specific role(s)
- * @param {string|Array} roles - Required role(s)
  */
 function requireRole(roles) {
   return (req, res, next) => {
@@ -95,9 +82,9 @@ function requireRole(roles) {
         code: 'AUTH_REQUIRED'
       });
     }
-    
+
     const allowedRoles = Array.isArray(roles) ? roles : [roles];
-    
+
     if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
@@ -105,14 +92,11 @@ function requireRole(roles) {
         code: 'AUTH_INSUFFICIENT_PERMISSIONS'
       });
     }
-    
+
     next();
   };
 }
 
-/**
- * Require admin role
- */
 const requireAdmin = requireRole('admin');
 
 /**
@@ -121,7 +105,7 @@ const requireAdmin = requireRole('admin');
 function verifyDisplayToken(req, res, next) {
   try {
     const { token } = req.body;
-    
+
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -129,11 +113,9 @@ function verifyDisplayToken(req, res, next) {
         code: 'DISPLAY_TOKEN_REQUIRED'
       });
     }
-    
-    // Token verification happens in route (check against database)
+
     req.displayToken = token;
     next();
-    
   } catch (error) {
     return res.status(401).json({
       success: false,
@@ -149,4 +131,3 @@ module.exports = {
   requireAdmin,
   verifyDisplayToken
 };
-

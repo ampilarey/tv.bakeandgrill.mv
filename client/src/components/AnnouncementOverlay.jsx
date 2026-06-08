@@ -8,7 +8,7 @@ import PropTypes from 'prop-types';
 import api from '../services/api';
 import useFeatureFlag from '../hooks/useFeatureFlag';
 
-function AnnouncementOverlay({ displayId, onDismiss }) {
+function AnnouncementOverlay({ displayId, displayToken, onDismiss }) {
   const [announcement, setAnnouncement] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const announcementsEnabled = useFeatureFlag('announcements');
@@ -16,14 +16,14 @@ function AnnouncementOverlay({ displayId, onDismiss }) {
   useEffect(() => { onDismissRef.current = onDismiss; }, [onDismiss]);
 
   useEffect(() => {
-    if (!announcementsEnabled || !displayId) return;
+    if (!announcementsEnabled || !displayId || !displayToken) return;
 
     checkForAnnouncements();
 
     // Check for new announcements every 10 seconds
     const interval = setInterval(checkForAnnouncements, 10000);
     return () => clearInterval(interval);
-  }, [displayId, announcementsEnabled]);
+  }, [displayId, displayToken, announcementsEnabled]);
 
   useEffect(() => {
     if (!announcement) return;
@@ -47,7 +47,9 @@ function AnnouncementOverlay({ displayId, onDismiss }) {
 
   const checkForAnnouncements = async () => {
     try {
-      const response = await api.get(`/announcements/${displayId}`);
+      const response = await api.get(`/announcements/${displayId}`, {
+        params: { token: displayToken },
+      });
       
       if (response.data.success && response.data.announcement) {
         setAnnouncement(response.data.announcement);
@@ -148,6 +150,7 @@ function AnnouncementOverlay({ displayId, onDismiss }) {
 
 AnnouncementOverlay.propTypes = {
   displayId: PropTypes.number.isRequired,
+  displayToken: PropTypes.string,
   onDismiss: PropTypes.func
 };
 

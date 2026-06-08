@@ -262,7 +262,16 @@ export default function MonitoringDashboard() {
                   setTimeout(async () => {
                     try {
                       const { data } = await api.get(`/displays/${selected.id}/screenshot`);
-                      if (data.success && data.url) setScreenshot(data);
+                      if (data.success && data.url) {
+                        const { data: blob } = await api.get(
+                          `/displays/${selected.id}/screenshot/file`,
+                          { responseType: 'blob' }
+                        );
+                        setScreenshot({
+                          ...data,
+                          blobUrl: URL.createObjectURL(blob),
+                        });
+                      }
                     } catch { /* ignore */ }
                     setScreenshotLoading(false);
                   }, 4000);
@@ -272,18 +281,16 @@ export default function MonitoringDashboard() {
               >
                 {screenshotLoading ? '⏳ Capturing…' : '📷 Capture Screenshot'}
               </button>
-              {screenshot?.url && (
+              {screenshot?.blobUrl && (
                 <div className="mt-2 rounded-lg overflow-hidden border border-tv-borderSubtle">
                   <img
-                    src={screenshot.url}
+                    src={screenshot.blobUrl}
                     alt="Screenshot"
                     className="w-full object-contain max-h-48 bg-black"
                     onError={e => { e.target.style.display = 'none'; }}
                   />
                   <p className="text-xs text-tv-textMuted text-center py-1">
                     Taken {new Date(screenshot.taken_at).toLocaleTimeString()}
-                    {' · '}
-                    <a href={screenshot.url} target="_blank" rel="noreferrer" className="text-tv-accent underline">Open full</a>
                   </p>
                 </div>
               )}

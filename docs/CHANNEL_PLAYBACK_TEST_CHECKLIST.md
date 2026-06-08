@@ -20,7 +20,13 @@ Use after deploying channel reliability fixes. Test on **iPhone/Safari**, **Andr
 
 - [ ] `/admin/channel-health` → **Test all channels** updates statuses
 - [ ] Per-row **Recheck** updates single channel
-- [ ] **Playable only** filter on watch page hides failed channels
+- [ ] **Playable only** filter on watch page hides failed channels (default on Watch page)
+- [ ] Kiosk auto-plays only `play_status === playable` channels
+- [ ] Kiosk shows "No playable channels. Run channel test in admin." when none are playable
+- [ ] 30+ minutes HLS playback does not hit global API rate limit (`/api/stream` uses separate limiter)
+- [ ] Display remote command executes once; SSE delivers without waiting for poll
+- [ ] Reconnect check requires `checkSecret`; approved response has no display token
+- [ ] Announcements require display token on GET
 - [ ] **Show all** / **Failed** filters work in channel sidebar
 - [ ] Admin sees failure reason code and device compatibility icons
 - [ ] **Hide** / **Untrust** override actions work

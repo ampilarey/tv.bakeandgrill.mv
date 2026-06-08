@@ -51,6 +51,9 @@ const REASON_MESSAGES = {
   CORS_RISK: 'Stream blocked',
   MANIFEST_INVALID: 'Stream offline',
   MANIFEST_OK_SEGMENT_FAIL: 'Manifest loaded but video segments failed',
+  MEDIA_PLAYLIST_FAILED: 'Stream offline',
+  INIT_MAP_FAILED: 'Stream incompatible with this device',
+  ENCRYPTED_KEY_FETCH_FAILED: 'Encrypted stream not supported',
   UNSUPPORTED_CODEC: 'Unsupported codec',
   UNSUPPORTED_AUDIO: 'Unsupported codec',
   GEO_BLOCKED_OR_FORBIDDEN: 'Stream blocked',
@@ -58,6 +61,8 @@ const REASON_MESSAGES = {
   REQUIRES_REFERRER: 'Stream blocked',
   REQUIRES_USER_AGENT: 'Stream blocked',
   DRM_OR_PROTECTED_STREAM: 'Stream blocked',
+  PROXY_REQUIRED: 'HTTP stream blocked',
+  RATE_LIMITED: 'Stream offline',
   UNKNOWN_ERROR: 'Stream offline',
 };
 

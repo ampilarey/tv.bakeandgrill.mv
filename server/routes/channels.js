@@ -109,7 +109,7 @@ router.get('/', asyncHandler(async (req, res) => {
     }
 
     if (playableOnly === '1') {
-      channels = channels.filter(isVisibleInPlayableFilter);
+      channels = channels.filter(isVisibleInPlayableFilter); // soft playable filter for Watch page
     } else {
       channels = channels.filter((c) => c.is_hidden !== 1);
       channels.sort((a, b) => {
@@ -230,7 +230,7 @@ router.get('/health-report', requireAdmin, asyncHandler(async (req, res) => {
   const [rows] = await db.query(
     `SELECT url_hash, channel_name, url, is_live, last_checked,
             consecutive_failures, last_seen_live,
-            failure_reason_code, failure_message,
+            failure_reason_code, failure_message, failure_stage,
             playable_ios, playable_android_chrome, playable_desktop_chrome, playable_tv_browser,
             manifest_reachable, first_segment_reachable, needs_proxy, is_drm,
             status_code, content_type, codec_video, codec_audio

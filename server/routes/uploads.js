@@ -254,7 +254,7 @@ router.post('/', verifyToken, requireAdmin, unifiedUpload.single('file'), asyncH
 /**
  * GET /api/uploads  — list media assets
  */
-router.get('/', verifyToken, asyncHandler(async (req, res) => {
+router.get('/', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
   const db   = getDatabase();
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const limit = Math.min(100, parseInt(req.query.limit || '50', 10));

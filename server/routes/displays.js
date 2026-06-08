@@ -1,6 +1,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
+const crypto  = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const rateLimit = require('express-rate-limit');
 const { getDatabase } = require('../database/init');
@@ -56,7 +57,8 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
   // Get assigned playlist and fetch channels
   let playlist = null;
   let channels = [];
-  
+  let allEnriched = null;
+
   if (display.playlist_id) {
     const [playlists] = await db.query('SELECT * FROM playlists WHERE id = ?', [display.playlist_id]);
     playlist = playlists[0] || null;
@@ -69,9 +71,13 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
           headers: { 'User-Agent': 'BakeGrillTV/1.0' }
         });
         const parsed = parseM3U(m3uResponse.data, playlistBaseUrl(playlist.m3u_url));
-        channels = await enrichChannelsForPlaylist(parsed, playlist, req, {
+        allEnriched = await enrichChannelsForPlaylist(parsed, playlist, req, {
           hideHidden: true,
           playableOnly: false,
+        });
+        channels = await enrichChannelsForPlaylist(parsed, playlist, req, {
+          hideHidden: true,
+          playableOnly: 'strict',
         });
       } catch (error) {
         console.error('Error fetching M3U for display:', error.message);
@@ -169,9 +175,12 @@ router.post('/verify', verifyDisplayToken, asyncHandler(async (req, res) => {
       autoRebootTime:       display.auto_reboot_time   || null,
       failoverPlaylistId:   display.failover_playlist_id   || null,
       failoverAfterMinutes: display.failover_after_minutes ?? 5,
+      kioskDebug:           display.kiosk_debug === 1,
     },
     playlist,
-    channels
+    channels,
+    playableCount: channels.length,
+    allChannels: display.kiosk_debug === 1 && allEnriched ? allEnriched : undefined,
   });
 }));
 
@@ -236,22 +245,27 @@ router.post('/screenshot', displayLimiter, verifyDisplayToken, asyncHandler(asyn
   const screenshotsDir = path.join(__dirname, '../uploads/screenshots');
   fs.mkdirSync(screenshotsDir, { recursive: true });
 
-  const filename  = `display-${displayId}.jpg`;
-  const filepath  = path.join(screenshotsDir, filename);
   const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
-  fs.writeFileSync(filepath, Buffer.from(base64Data, 'base64'));
+  const buf = Buffer.from(base64Data, 'base64');
+  if (buf.length < 3 || buf[0] !== 0xff || buf[1] !== 0xd8 || buf[2] !== 0xff) {
+    return res.status(400).json({ success: false, error: 'Invalid JPEG image data' });
+  }
 
-  const url = `/uploads/screenshots/${filename}`;
+  const filename = `screenshot-${displayId}-${crypto.randomBytes(8).toString('hex')}.jpg`;
+  const filepath = path.join(screenshotsDir, filename);
+  fs.writeFileSync(filepath, buf);
+
+  const apiUrl = `/api/displays/${displayId}/screenshot/file`;
   await db.query(
-    'UPDATE displays SET last_screenshot_url = ?, last_screenshot_at = NOW() WHERE id = ?',
-    [url, displayId]
+    'UPDATE displays SET last_screenshot_url = ?, last_screenshot_filename = ?, last_screenshot_at = NOW() WHERE id = ?',
+    [apiUrl, filename, displayId]
   );
-  res.json({ success: true, url });
+  res.json({ success: true, url: apiUrl });
 }));
 
 /**
  * GET /api/displays/:id/screenshot
- * Returns latest screenshot info for a display
+ * Returns latest screenshot metadata (admin)
  */
 router.get('/:id/screenshot', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
   const db = getDatabase();
@@ -261,6 +275,28 @@ router.get('/:id/screenshot', verifyToken, requireAdmin, asyncHandler(async (req
   );
   if (!rows.length) return res.status(404).json({ success: false });
   res.json({ success: true, url: rows[0].last_screenshot_url, taken_at: rows[0].last_screenshot_at });
+}));
+
+/**
+ * GET /api/displays/:id/screenshot/file
+ * Stream screenshot image (admin only)
+ */
+router.get('/:id/screenshot/file', verifyToken, requireAdmin, asyncHandler(async (req, res) => {
+  const db = getDatabase();
+  const [rows] = await db.query(
+    'SELECT last_screenshot_filename FROM displays WHERE id = ?',
+    [req.params.id]
+  );
+  if (!rows.length || !rows[0].last_screenshot_filename) {
+    return res.status(404).json({ success: false, error: 'No screenshot' });
+  }
+  const filepath = path.join(__dirname, '../uploads/screenshots', rows[0].last_screenshot_filename);
+  if (!fs.existsSync(filepath)) {
+    return res.status(404).json({ success: false, error: 'Screenshot file missing' });
+  }
+  res.set('Content-Type', 'image/jpeg');
+  res.set('Cache-Control', 'no-store');
+  fs.createReadStream(filepath).pipe(res);
 }));
 
 /**
@@ -606,6 +642,7 @@ router.put('/:id', checkPermission('can_manage_displays'), asyncHandler(async (r
   // Auto-failover
   if (req.body.failover_playlist_id   !== undefined) { updates.push('failover_playlist_id = ?');   params.push(req.body.failover_playlist_id   || null); }
   if (req.body.failover_after_minutes !== undefined) { updates.push('failover_after_minutes = ?'); params.push(req.body.failover_after_minutes ?? 5); }
+  if (req.body.kiosk_debug !== undefined) { updates.push('kiosk_debug = ?'); params.push(req.body.kiosk_debug ? 1 : 0); }
   if (is_active !== undefined) {
     updates.push('is_active = ?');
     params.push(is_active ? 1 : 0);
@@ -763,7 +800,13 @@ router.post('/:id/control',
   );
   
   const [commands] = await db.query('SELECT * FROM display_commands WHERE id = ?', [result.insertId]);
-  
+
+  const [displayRows] = await db.query('SELECT token FROM displays WHERE id = ?', [id]);
+  if (displayRows.length && commands[0]) {
+    pushCommandToSSE(displayRows[0].token, [commands[0]]);
+    console.log(`[DisplayControl] SSE push displayId=${id} commandId=${commands[0].id} action=${action}`);
+  }
+
   res.status(201).json({
     success: true,
     command: commands[0],

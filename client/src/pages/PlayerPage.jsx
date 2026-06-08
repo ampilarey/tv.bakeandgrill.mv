@@ -72,7 +72,7 @@ export default function PlayerPage() {
     return window.innerWidth < 1024;
   });
   const [isChannelDrawerOpen, setIsChannelDrawerOpen] = useState(false);
-  const [playStatusFilter, setPlayStatusFilter] = useState('all');
+  const [playStatusFilter, setPlayStatusFilter] = useState('playable');
   
   // Now Playing overlay state
   const [showNowPlaying, setShowNowPlaying] = useState(false);

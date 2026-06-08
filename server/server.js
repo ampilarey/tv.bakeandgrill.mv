@@ -113,11 +113,19 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
+const streamLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: parseInt(process.env.STREAM_RATE_LIMIT || '30000', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: parseInt(process.env.API_RATE_LIMIT || '600', 10),
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: (req) => req.path.startsWith('/stream'),
 });
 
 const authLimiter = rateLimit({
@@ -127,14 +135,21 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
+const streamRoutes = require('./routes/stream');
+const { verifyToken, requireAdmin } = require('./middleware/auth');
+
 app.use('/api/auth', authLimiter);
+app.use('/api/stream', streamLimiter, streamRoutes);
 app.use('/api/', apiLimiter);
 
 // Feature flags are public but still subject to the global API rate limiter above
 const featuresRoutes = require('./routes/features');
 app.use('/api/features', featuresRoutes);
 
-// Serve uploaded files
+// Block public access to kiosk screenshots (served via authenticated API only)
+app.use('/uploads/screenshots', (req, res) => res.status(404).end());
+
+// Serve uploaded media files (non-sensitive assets)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // API Routes
@@ -162,20 +177,9 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Admin: manually trigger a channel health check run
-app.post('/api/admin/check-channels', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const { verifyToken: verify } = require('./middleware/auth');
-    // Quick inline token check
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    channelChecker.triggerRun();
-    res.json({ success: true, message: 'Channel health check triggered' });
-  } catch {
-    res.status(401).json({ error: 'Invalid token' });
-  }
+app.post('/api/admin/check-channels', verifyToken, requireAdmin, (req, res) => {
+  channelChecker.triggerRun();
+  res.json({ success: true, message: 'Channel health check triggered' });
 });
 
 app.get('/api/version', (req, res) => {
@@ -191,8 +195,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/playlists', playlistsRoutes);
 app.use('/api/channels', channelsRoutes);
-const streamRoutes = require('./routes/stream');
-app.use('/api/stream', streamRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/displays', displaysRoutes);

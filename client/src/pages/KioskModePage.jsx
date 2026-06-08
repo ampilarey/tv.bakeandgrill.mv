@@ -210,8 +210,8 @@ export default function KioskModePage() {
       setChannels(data.channels);
       normalPlaylistRef.current = data.channels;
       if (data.channels.length) {
-        const first = data.channels.find((c) => c.playback_url || c.play_status === 'playable') || data.channels[0];
-        setCurrentChannel(first);
+        const first = data.channels.find((c) => c.play_status === 'playable');
+        if (first) setCurrentChannel(first);
       }
       return true;
     } catch { return false; }
@@ -252,14 +252,21 @@ export default function KioskModePage() {
     if (verifyDisplayRef.current?._inProgress) return;
     try {
       const { data } = await displayApi.post('/displays/verify', { token: displayToken });
-      const { display: d, channels: ch } = data;
+      const { display: d, channels: ch, playableCount } = data;
       setDisplay(d);
       setChannels(ch || []);
       normalPlaylistRef.current = ch || [];
       if (d?.muteAudio) setIsMuted(true);
-      if (ch && ch.length && d?.displayType !== 'media') {
-        const firstPlayable = ch.find((c) => c.playback_url || c.play_status === 'playable') || ch[0];
-        setCurrentChannel(firstPlayable);
+      if (d?.displayType !== 'media') {
+        const count = playableCount ?? (ch || []).filter((c) => c.play_status === 'playable').length;
+        if (count === 0) {
+          setCurrentChannel(null);
+          setFallbackMsg('No playable channels. Run channel test in admin.');
+          setShowFallback(true);
+        } else {
+          const firstPlayable = (ch || []).find((c) => c.play_status === 'playable');
+          if (firstPlayable) setCurrentChannel(firstPlayable);
+        }
       }
       saveToCache(d, ch || []);
       setShowFallback(false);
@@ -512,8 +519,8 @@ export default function KioskModePage() {
     };
 
     const advanceToNextChannel = () => {
-      const list = channelsRef.current;
-      if (!list?.length || !currentChannel) return;
+      const list = (channelsRef.current || []).filter((c) => c.play_status === 'playable');
+      if (!list.length || !currentChannel) return;
       const idx = list.findIndex((c) => c.id === currentChannel.id);
       const next = list[(idx + 1) % list.length];
       if (next && next.id !== currentChannel.id) setCurrentChannel(next);
@@ -714,7 +721,10 @@ export default function KioskModePage() {
             controls={false}
           />
         ) : (
-          <FallbackScreen retryIn={retryIn} message={fallbackMsg || 'No channel assigned'} />
+          <FallbackScreen
+            retryIn={retryIn}
+            message={fallbackMsg || 'No playable channels. Run channel test in admin.'}
+          />
         );
 
         // split_right gets its own layout

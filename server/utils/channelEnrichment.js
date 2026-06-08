@@ -2,7 +2,13 @@ const { urlHash, computePlayStatus } = require('../services/channelDiagnosis');
 const { buildPlaybackProxyUrl } = require('./streamToken');
 const { getDatabase } = require('../database/init');
 
-/** Channels worth showing in "Playable only" — includes undiagnosed streams users can still try. */
+/** Kiosk auto-play: only health-checked playable channels. */
+function isStrictlyPlayable(channel) {
+  if (!channel || channel.is_hidden === 1) return false;
+  return channel.play_status === 'playable';
+}
+
+/** Watch page "Playable only" — includes undiagnosed streams users can still try. */
 function isVisibleInPlayableFilter(channel) {
   if (!channel || channel.is_hidden === 1) return false;
   if (channel.play_status === 'playable') return true;
@@ -111,7 +117,11 @@ async function enrichChannelsForPlaylist(channels, playlist, req, { hideHidden =
   if (hideHidden) {
     enriched = enriched.filter((c) => c.is_hidden !== 1);
   }
-  if (playableOnly) {
+
+  const mode = playableOnly === true ? 'soft' : playableOnly;
+  if (mode === 'strict') {
+    enriched = enriched.filter(isStrictlyPlayable);
+  } else if (mode === 'soft') {
     enriched = enriched.filter(isVisibleInPlayableFilter);
   } else {
     enriched.sort((a, b) => {
@@ -127,5 +137,6 @@ module.exports = {
   enrichChannel,
   enrichChannelsForPlaylist,
   loadHealthAndOverrides,
+  isStrictlyPlayable,
   isVisibleInPlayableFilter,
 };

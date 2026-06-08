@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { URL } = require('url');
 const { fetch, fetchRange, redactUrl } = require('../utils/httpClient');
-const { parseManifest, pickVariant, isHevcCodec, isUnsupportedAudio } = require('../utils/hlsManifest');
+const { parseManifest, pickVariant, isHevcCodec, isUnsupportedAudio, isDrmKeyMethod } = require('../utils/hlsManifest');
 const { getDatabase } = require('../database/init');
 
 const DIAGNOSIS_VERSION = 1;
@@ -10,10 +10,18 @@ const MANIFEST_MAX_BYTES = parseInt(process.env.MANIFEST_MAX_BYTES || '2097152',
 
 const REASON_CODES = new Set([
   'OFFLINE', 'TIMEOUT', 'HTTP_ERROR', 'REDIRECT_ERROR', 'MIXED_CONTENT_HTTP',
-  'CORS_RISK', 'MANIFEST_INVALID', 'MANIFEST_OK_SEGMENT_FAIL', 'UNSUPPORTED_CODEC',
+  'CORS_RISK', 'MANIFEST_INVALID', 'MANIFEST_OK_SEGMENT_FAIL', 'MEDIA_PLAYLIST_FAILED',
+  'INIT_MAP_FAILED', 'ENCRYPTED_KEY_FETCH_FAILED', 'UNSUPPORTED_CODEC',
   'UNSUPPORTED_AUDIO', 'GEO_BLOCKED_OR_FORBIDDEN', 'EXPIRED_URL', 'REQUIRES_REFERRER',
-  'REQUIRES_USER_AGENT', 'DRM_OR_PROTECTED_STREAM', 'UNKNOWN_ERROR',
+  'REQUIRES_USER_AGENT', 'DRM_OR_PROTECTED_STREAM', 'PROXY_REQUIRED', 'RATE_LIMITED',
+  'UNKNOWN_ERROR',
 ]);
+
+function setFailure(d, stage, code, message) {
+  d.failure_stage = stage;
+  d.failure_reason_code = code;
+  d.failure_message = message;
+}
 
 function urlHash(url) {
   return crypto.createHash('md5').update(url).digest('hex');
@@ -60,6 +68,7 @@ function emptyDiagnosis(channel, playlistId) {
     playable_tv_browser: null,
     failure_reason_code: null,
     failure_message: null,
+    failure_stage: null,
     needs_proxy: 0,
     is_drm: 0,
     is_live: null,
@@ -71,6 +80,7 @@ function computePlayability(d) {
   const blocked =
     d.is_drm ||
     d.failure_reason_code === 'DRM_OR_PROTECTED_STREAM' ||
+    d.failure_reason_code === 'ENCRYPTED_KEY_FETCH_FAILED' ||
     d.failure_reason_code === 'MANIFEST_INVALID' ||
     d.failure_reason_code === 'OFFLINE' ||
     d.failure_reason_code === 'TIMEOUT';
@@ -102,7 +112,8 @@ function computePlayability(d) {
       d.failure_reason_code = 'UNSUPPORTED_AUDIO';
       d.failure_message = 'Audio codec not supported in browsers';
     } else if (httpBlocked) {
-      d.failure_reason_code = 'MIXED_CONTENT_HTTP';
+      d.failure_stage = d.failure_stage || 'proxy_required';
+      d.failure_reason_code = 'PROXY_REQUIRED';
       d.failure_message = 'HTTP stream requires HTTPS proxy on this site';
     } else if (manifestOk && !segmentOk) {
       d.failure_reason_code = 'MANIFEST_OK_SEGMENT_FAIL';
@@ -206,32 +217,91 @@ async function diagnoseChannel(channel, playlistId) {
       if (parsed.isMaster && parsed.variants.length > 0) {
         const variant = pickVariant(parsed.variants);
         mediaUrl = variant.uri;
-        const mediaRes = await fetch(mediaUrl, {
-          timeout: PROBE_TIMEOUT_MS,
-          headers,
-          maxBytes: MANIFEST_MAX_BYTES,
-        });
-        mediaBody = mediaRes.data;
+        try {
+          const mediaRes = await fetch(mediaUrl, {
+            timeout: PROBE_TIMEOUT_MS,
+            headers,
+            maxBytes: MANIFEST_MAX_BYTES,
+          });
+          mediaBody = mediaRes.data;
+          mediaUrl = mediaRes.finalUrl || mediaUrl;
+        } catch (mediaErr) {
+          setFailure(d, 'media_playlist', 'MEDIA_PLAYLIST_FAILED', 'Media playlist fetch failed');
+          d.manifest_reachable = 1;
+          d.is_live = 0;
+          return computePlayability(d);
+        }
         const mediaParsed = parseManifest(mediaBody, mediaUrl);
         if (mediaParsed.codecs.video) d.codec_video = mediaParsed.codecs.video;
         if (mediaParsed.codecs.audio) d.codec_audio = mediaParsed.codecs.audio;
         if (mediaParsed.hasDrm) {
           d.is_drm = 1;
-          d.failure_reason_code = 'DRM_OR_PROTECTED_STREAM';
-          d.failure_message = 'Protected/DRM stream cannot be proxied';
+          setFailure(d, 'key_fetch', 'DRM_OR_PROTECTED_STREAM', 'Protected/DRM stream cannot be proxied');
           d.is_live = 0;
           return computePlayability(d);
         }
         parsed.segments = mediaParsed.segments;
+        parsed.maps = mediaParsed.maps;
+        parsed.keys = mediaParsed.keys;
+
+        for (const key of mediaParsed.keys || []) {
+          if (isDrmKeyMethod(key.method)) {
+            d.is_drm = 1;
+            setFailure(d, 'key_fetch', 'DRM_OR_PROTECTED_STREAM', `DRM key method: ${key.method}`);
+            d.is_live = 0;
+            return computePlayability(d);
+          }
+          if (key.method === 'AES-128' && key.uri) {
+            try {
+              const keyRes = await fetchRange(key.uri, {
+                timeout: PROBE_TIMEOUT_MS,
+                headers,
+                start: 0,
+                end: 4095,
+                maxBytes: 4096,
+              });
+              if (keyRes.status < 200 || keyRes.status >= 400) {
+                setFailure(d, 'key_fetch', 'ENCRYPTED_KEY_FETCH_FAILED', `Key URL returned HTTP ${keyRes.status}`);
+                d.is_live = 0;
+                return computePlayability(d);
+              }
+            } catch {
+              setFailure(d, 'key_fetch', 'ENCRYPTED_KEY_FETCH_FAILED', 'AES-128 key fetch failed');
+              d.is_live = 0;
+              return computePlayability(d);
+            }
+          }
+        }
+
+        if (mediaParsed.maps?.length) {
+          try {
+            const mapRes = await fetchRange(mediaParsed.maps[0], {
+              timeout: PROBE_TIMEOUT_MS,
+              headers,
+              start: 0,
+              end: 8191,
+            });
+            if (mapRes.status < 200 || mapRes.status >= 400) {
+              setFailure(d, 'init_map', 'INIT_MAP_FAILED', `Init map returned HTTP ${mapRes.status}`);
+              d.is_live = 0;
+              return computePlayability(d);
+            }
+          } catch {
+            setFailure(d, 'init_map', 'INIT_MAP_FAILED', 'Init map segment fetch failed');
+            d.is_live = 0;
+            return computePlayability(d);
+          }
+        }
       } else {
         parsed.segments = parsed.segments.length ? parsed.segments : [];
+        parsed.maps = parsed.maps || [];
+        parsed.keys = parsed.keys || [];
       }
 
       const segmentUrl = parsed.segments[0];
       if (!segmentUrl) {
         d.first_segment_reachable = 0;
-        d.failure_reason_code = 'MANIFEST_OK_SEGMENT_FAIL';
-        d.failure_message = 'No segments found in media playlist';
+        setFailure(d, 'segment', 'MANIFEST_OK_SEGMENT_FAIL', 'No segments found in media playlist');
         d.is_live = 0;
         return computePlayability(d);
       }
@@ -246,14 +316,12 @@ async function diagnoseChannel(channel, playlistId) {
         d.first_segment_reachable = segRes.status >= 200 && segRes.status < 400 ? 1 : 0;
         d.segment_content_type = segRes.headers['content-type'] || null;
         if (!d.first_segment_reachable) {
-          d.failure_reason_code = 'MANIFEST_OK_SEGMENT_FAIL';
-          d.failure_message = `First segment returned HTTP ${segRes.status}`;
+          setFailure(d, 'segment', 'MANIFEST_OK_SEGMENT_FAIL', `First segment returned HTTP ${segRes.status}`);
           d.is_live = 0;
         }
       } catch (segErr) {
         d.first_segment_reachable = 0;
-        d.failure_reason_code = 'MANIFEST_OK_SEGMENT_FAIL';
-        d.failure_message = 'First segment fetch failed';
+        setFailure(d, 'segment', 'MANIFEST_OK_SEGMENT_FAIL', 'First segment fetch failed');
         d.is_live = 0;
       }
     } else {
@@ -288,13 +356,14 @@ async function diagnoseChannel(channel, playlistId) {
       d.failure_reason_code = status === 410 ? 'EXPIRED_URL' : 'GEO_BLOCKED_OR_FORBIDDEN';
       d.failure_message = `Stream returned HTTP ${status}`;
       d.status_code = status;
+    } else if (status === 429) {
+      setFailure(d, 'rate_limited', 'RATE_LIMITED', 'Upstream rate limited (HTTP 429)');
+      d.status_code = status;
     } else if (status) {
-      d.failure_reason_code = 'HTTP_ERROR';
-      d.failure_message = `Stream returned HTTP ${status}`;
+      setFailure(d, 'manifest', 'HTTP_ERROR', `Stream returned HTTP ${status}`);
       d.status_code = status;
     } else {
-      d.failure_reason_code = 'OFFLINE';
-      d.failure_message = 'Stream unreachable';
+      setFailure(d, 'manifest', 'OFFLINE', 'Stream unreachable');
     }
 
     d.manifest_reachable = 0;
@@ -327,7 +396,7 @@ async function persistDiagnosis(d) {
       segment_content_type, codec_video, codec_audio,
       requires_referrer, requires_user_agent,
       playable_ios, playable_android_chrome, playable_desktop_chrome, playable_tv_browser,
-      failure_reason_code, failure_message, needs_proxy, is_drm, diagnosis_version
+      failure_reason_code, failure_message, failure_stage, needs_proxy, is_drm, diagnosis_version
     ) VALUES (
       ?, ?, ?, ?, ?, NOW(),
       ?, IF(? = 1, NOW(), NULL),
@@ -336,7 +405,7 @@ async function persistDiagnosis(d) {
       ?, ?, ?,
       ?, ?,
       ?, ?, ?, ?,
-      ?, ?, ?, ?, ?
+      ?, ?, ?, ?, ?, ?
     )
     ON DUPLICATE KEY UPDATE
       channel_name = VALUES(channel_name),
@@ -364,6 +433,7 @@ async function persistDiagnosis(d) {
       playable_tv_browser = VALUES(playable_tv_browser),
       failure_reason_code = VALUES(failure_reason_code),
       failure_message = VALUES(failure_message),
+      failure_stage = VALUES(failure_stage),
       needs_proxy = VALUES(needs_proxy),
       is_drm = VALUES(is_drm),
       diagnosis_version = VALUES(diagnosis_version)`,
@@ -375,7 +445,7 @@ async function persistDiagnosis(d) {
       d.segment_content_type, d.codec_video, d.codec_audio,
       d.requires_referrer, d.requires_user_agent,
       d.playable_ios, d.playable_android_chrome, d.playable_desktop_chrome, d.playable_tv_browser,
-      d.failure_reason_code, d.failure_message, d.needs_proxy, d.is_drm, d.diagnosis_version,
+      d.failure_reason_code, d.failure_message, d.failure_stage, d.needs_proxy, d.is_drm, d.diagnosis_version,
     ]
   );
 
