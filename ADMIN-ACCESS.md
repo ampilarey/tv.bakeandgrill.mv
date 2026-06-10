@@ -8,8 +8,8 @@
 
 Based on your database, you have an admin user:
 
-**Email:** `7820288@gamil.com`  
-**Phone:** `7820288`  
+**Email:** `admin@example.com`  
+**Phone:** `+960-XXXX-XXXX`  
 **Role:** `admin`
 
 **Password:** (Use the password you set when creating this account)
@@ -26,12 +26,12 @@ http://localhost:5173
 ### **Step 2: Login**
 1. Go to: `http://localhost:5173/login`
 2. Enter your credentials:
-   - **Email:** `7820288@gamil.com`
+   - **Email:** `admin@example.com`
    - **Password:** (your password)
    
    OR
    
-   - **Phone:** `7820288`
+   - **Phone:** `+960-XXXX-XXXX`
    - **Password:** (your password)
 
 ### **Step 3: Go to Admin Dashboard**
@@ -103,7 +103,7 @@ mysql -u root -p bakegrill_tv
 # Then run:
 UPDATE users 
 SET password_hash = '$2b$10$YourNewHashHere' 
-WHERE email = '7820288@gamil.com';
+WHERE email = 'admin@example.com';
 ```
 
 **Or create new admin:**
