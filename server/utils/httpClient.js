@@ -75,7 +75,39 @@ async function validateUrl(urlStr) {
     }
   }
 
-  return urlObj;
+  return { urlObj, addresses };
+}
+
+function pinnedLookup(addresses) {
+  const primary = addresses[0];
+  const address = primary.address;
+  const family = primary.family ?? (net.isIPv6(address) ? 6 : 4);
+  return (hostname, options, callback) => {
+    if (typeof options === 'function') {
+      callback = options;
+    }
+    callback(null, address, family);
+  };
+}
+
+function buildPinnedRequestOptions(urlObj, addresses, baseOptions = {}) {
+  const options = {
+    hostname: urlObj.hostname,
+    port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+    path: urlObj.pathname + urlObj.search,
+    lookup: pinnedLookup(addresses),
+    ...baseOptions,
+  };
+  if (urlObj.protocol === 'https:') {
+    options.servername = urlObj.hostname;
+  }
+  if (!options.headers) {
+    options.headers = {};
+  }
+  if (!options.headers.Host) {
+    options.headers.Host = urlObj.host;
+  }
+  return options;
 }
 
 function isRedirectStatus(code) {
@@ -86,24 +118,21 @@ function isRedirectStatus(code) {
  * Core HTTP request with SSRF validation, size limits, optional redirects.
  */
 async function fetchOnce(url, options = {}) {
-  const urlObj = await validateUrl(url);
+  const { urlObj, addresses } = await validateUrl(url);
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   const method = options.method || 'GET';
 
   return new Promise((resolve, reject) => {
     const protocol = urlObj.protocol === 'https:' ? https : http;
 
-    const requestOptions = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
-      path: urlObj.pathname + urlObj.search,
+    const requestOptions = buildPinnedRequestOptions(urlObj, addresses, {
       method,
       headers: {
         'User-Agent': 'BakeGrillTV/1.0',
         ...options.headers,
       },
       timeout: options.timeout || 10000,
-    };
+    });
 
     const req = protocol.request(requestOptions, (res) => {
       const chunks = [];
@@ -247,7 +276,7 @@ function streamRange(originUrl, options = {}) {
   let currentUrl = originUrl;
 
   const attempt = async () => {
-    const urlObj = await validateUrl(currentUrl);
+    const { urlObj, addresses } = await validateUrl(currentUrl);
     const protocol = urlObj.protocol === 'https:' ? https : http;
 
     const reqHeaders = {
@@ -257,14 +286,11 @@ function streamRange(originUrl, options = {}) {
     if (rangeHeader) reqHeaders.Range = rangeHeader;
 
     return new Promise((resolve, reject) => {
-      const requestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
-        path: urlObj.pathname + urlObj.search,
+      const requestOptions = buildPinnedRequestOptions(urlObj, addresses, {
         method: 'GET',
         headers: reqHeaders,
         timeout,
-      };
+      });
 
       const req = protocol.request(requestOptions, (upstream) => {
         if (isRedirectStatus(upstream.statusCode) && upstream.headers.location) {
@@ -364,7 +390,7 @@ async function fetchRange(url, options = {}) {
   let redirectCount = 0;
 
   while (true) {
-    const urlObj = await validateUrl(currentUrl);
+    const { urlObj, addresses } = await validateUrl(currentUrl);
     const headers = {
       ...options.headers,
       Range: `bytes=${start}-${end}`,
@@ -372,14 +398,11 @@ async function fetchRange(url, options = {}) {
 
     const res = await new Promise((resolve, reject) => {
       const protocol = urlObj.protocol === 'https:' ? https : http;
-      const requestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
-        path: urlObj.pathname + urlObj.search,
+      const requestOptions = buildPinnedRequestOptions(urlObj, addresses, {
         method: 'GET',
         headers: { 'User-Agent': 'BakeGrillTV/1.0', ...headers },
         timeout: options.timeout || 10000,
-      };
+      });
 
       const req = protocol.request(requestOptions, (upstream) => {
         if (isRedirectStatus(upstream.statusCode) && upstream.headers.location) {

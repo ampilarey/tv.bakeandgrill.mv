@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth');
+const { checkAnyPermission } = require('../middleware/permissions');
 const { getDatabase } = require('../database/init');
 
 const ALLOWED_COLUMNS = ['name', 'template_type', 'layout_config', 'background_color', 'primary_color', 'secondary_color', 'font_family', 'preview_url'];
@@ -57,7 +58,7 @@ router.get('/:id', verifyToken, async (req, res) => {
  * POST /api/templates
  * Create a new template
  */
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', verifyToken, checkAnyPermission(['can_manage_displays', 'can_control_displays']), async (req, res) => {
   try {
     const { name, template_type, layout_config, background_color, primary_color, secondary_color, font_family, preview_url } = req.body;
 
@@ -95,7 +96,7 @@ router.post('/', verifyToken, async (req, res) => {
  * PUT /api/templates/:id
  * Update a template (owner only, non-system)
  */
-router.put('/:id', verifyToken, async (req, res) => {
+router.put('/:id', verifyToken, checkAnyPermission(['can_manage_displays', 'can_control_displays']), async (req, res) => {
   try {
     const { id } = req.params;
     const body = req.body;
@@ -141,7 +142,7 @@ router.put('/:id', verifyToken, async (req, res) => {
  * DELETE /api/templates/:id
  * Delete a template (owner only, non-system)
  */
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', verifyToken, checkAnyPermission(['can_manage_displays', 'can_control_displays']), async (req, res) => {
   try {
     const db = getDatabase();
     const [result] = await db.query(

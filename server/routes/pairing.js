@@ -86,7 +86,7 @@ router.post('/request-pin', pinRequestLimiter, asyncHandler(async (req, res) => 
   const db = getDatabase();
   await purgeExpired(db);
 
-  const pin = Math.floor(100000 + Math.random() * 900000).toString();
+  const pin = crypto.randomInt(100000, 1000000).toString();
   await createSession(db, 'pin', pin, null, 5 * 60 * 1000);
 
   logger.debug('✅ Generated PIN (stored in DB)');

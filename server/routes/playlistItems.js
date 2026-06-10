@@ -6,7 +6,22 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 const { getDatabase } = require('../database/init');
+
+async function assertPlaylistModifyAccess(req, playlistId, action = 'edit') {
+  if (req.user.role === 'admin') return true;
+  const db = getDatabase();
+  const [rows] = await db.query('SELECT created_by FROM playlists WHERE id = ?', [playlistId]);
+  if (!rows.length) return false;
+  if (rows[0].created_by === req.user.id) return true;
+  const col = action === 'delete' ? 'can_delete' : 'can_edit';
+  const [access] = await db.query(
+    `SELECT 1 FROM user_assigned_playlists WHERE user_id = ? AND playlist_id = ? AND ${col} = 1`,
+    [req.user.id, playlistId]
+  );
+  return access.length > 0;
+}
 
 /**
  * GET /api/playlist-items/:playlistId
@@ -64,7 +79,7 @@ router.get('/:playlistId', verifyToken, async (req, res) => {
  * POST /api/playlist-items
  * Create a new playlist item
  */
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', verifyToken, checkPermission('can_edit_own_playlists'), async (req, res) => {
   try {
     const {
       playlist_id,
@@ -91,6 +106,13 @@ router.post('/', verifyToken, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'playlist_id, title, and url are required'
+      });
+    }
+
+    if (!(await assertPlaylistModifyAccess(req, playlist_id, 'edit'))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this playlist'
       });
     }
 
@@ -128,7 +150,7 @@ router.post('/', verifyToken, async (req, res) => {
  * PUT /api/playlist-items/:id
  * Update a playlist item
  */
-router.put('/:id', verifyToken, async (req, res) => {
+router.put('/:id', verifyToken, checkPermission('can_edit_own_playlists'), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -138,6 +160,30 @@ router.put('/:id', verifyToken, async (req, res) => {
     delete updates.created_at;
 
     const db = getDatabase();
+
+    const [existing] = await db.query('SELECT playlist_id FROM playlist_items WHERE id = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Playlist item not found'
+      });
+    }
+
+    if (!(await assertPlaylistModifyAccess(req, existing[0].playlist_id, 'edit'))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this playlist'
+      });
+    }
+
+    if (updates.playlist_id !== undefined && updates.playlist_id !== existing[0].playlist_id) {
+      if (!(await assertPlaylistModifyAccess(req, updates.playlist_id, 'edit'))) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied to this playlist'
+        });
+      }
+    }
     const [result] = await db.query(
       'UPDATE playlist_items SET ?, updated_at = NOW() WHERE id = ?',
       [updates, id]
@@ -167,9 +213,25 @@ router.put('/:id', verifyToken, async (req, res) => {
  * DELETE /api/playlist-items/:id
  * Delete a playlist item
  */
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', verifyToken, checkPermission('can_delete_own_playlists'), async (req, res) => {
   try {
     const db = getDatabase();
+
+    const [existing] = await db.query('SELECT playlist_id FROM playlist_items WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Playlist item not found'
+      });
+    }
+
+    if (!(await assertPlaylistModifyAccess(req, existing[0].playlist_id, 'delete'))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this playlist'
+      });
+    }
+
     const [result] = await db.query(
       'DELETE FROM playlist_items WHERE id = ?',
       [req.params.id]

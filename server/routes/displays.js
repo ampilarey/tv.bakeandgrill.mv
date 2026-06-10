@@ -57,6 +57,7 @@ const sseLimiter = createDisplayLimiter(30);
 
 const router = express.Router();
 
+// Display tokens are device credentials; path-based routes expose them in access logs.
 async function findDisplayByToken(db, token, { activeOnly = false } = {}) {
   const sql = activeOnly
     ? 'SELECT * FROM displays WHERE token = ? AND is_active = TRUE'
@@ -402,7 +403,7 @@ router.get('/:id/screenshot/file', verifyToken, requireAdmin, asyncHandler(async
  * Poll for pending commands + active override (public endpoint for displays)
  */
 router.get('/commands/:token', commandsPollLimiter, asyncHandler(async (req, res) => {
-  const { token } = req.params;
+  const token = req.get('X-Display-Token') || req.params.token;
   const db = getDatabase();
 
   const display = await findDisplayByToken(db, token, { activeOnly: true });
@@ -473,7 +474,7 @@ router.get('/commands/:token', commandsPollLimiter, asyncHandler(async (req, res
 const sseClients = new Map(); // token → Set<res>
 
 router.get('/events/:token', sseLimiter, asyncHandler(async (req, res) => {
-  const { token } = req.params;
+  const token = req.get('X-Display-Token') || req.params.token;
   const db = getDatabase();
 
   const display = await findDisplayByToken(db, token, { activeOnly: true });
@@ -643,6 +644,7 @@ router.post('/',
   }
 
   // Generate unique token
+  // TODO(security): migrate to crypto.randomBytes tokens, hashed at rest
   const token = uuidv4();
   
   // Insert display
@@ -750,6 +752,7 @@ router.post('/:id/rotate-token', checkPermission('can_manage_displays'), asyncHa
   if (!existing.length) {
     return res.status(404).json({ success: false, error: 'Display not found' });
   }
+  // TODO(security): migrate to crypto.randomBytes tokens, hashed at rest
   const newToken = uuidv4();
   await db.query('UPDATE displays SET token = ? WHERE id = ?', [newToken, id]);
   res.json({
