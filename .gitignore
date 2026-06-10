@@ -13,8 +13,7 @@ ADMIN-PASSWORD.md
 node_modules/
 */node_modules/
 
-# Build outputs
-client/dist/
+# Build outputs (client/dist is committed — built locally, deployed via cp to docroot)
 client/dist-ssr/
 *.zip
 

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Bake and Grill TV - IPTV Streaming Platform" />
+    <meta name="theme-color" content="#B03A48" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    
+    <!-- 🚨 CRITICAL: Prevent caching to ensure fresh code loads -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    
+    <!-- iOS PWA Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="B&G TV" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
+    
+    <title>Bake and Grill TV</title>
+    <script type="module" crossorigin src="/assets/index-bz2bzqQ3.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/react-vendor-CNVnMW7m.js">
+    <link rel="modulepreload" crossorigin href="/assets/hls-vendor-DhDiShiw.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-BIjhkntT.css">
+  <link rel="manifest" href="/manifest.webmanifest"></head>
+  <body>
+    <div id="root"></div>
+    <!-- Recover when cached HTML references JS chunks removed by a new deploy -->
+    <script>
+      (function () {
+        var p = window.location.pathname || '';
+        if (p.startsWith('/display') || p.startsWith('/pair')) return;
+
+        var RECOVERY_KEY = 'asset_recovery_once';
+
+        function recoverFromStaleAssets() {
+          if (sessionStorage.getItem(RECOVERY_KEY)) return;
+          sessionStorage.setItem(RECOVERY_KEY, '1');
+
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (r) { r.unregister(); });
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function (names) {
+              names.forEach(function (name) { caches.delete(name); });
+            });
+          }
+
+          var url = new URL(window.location.href);
+          url.searchParams.set('fresh', String(Date.now()));
+          window.location.replace(url.toString());
+        }
+
+        window.addEventListener('error', function (event) {
+          var tag = event.target && event.target.tagName;
+          if (tag === 'SCRIPT' || tag === 'LINK') recoverFromStaleAssets();
+        }, true);
+      })();
+    </script>
+  </body>
+</html>
+
