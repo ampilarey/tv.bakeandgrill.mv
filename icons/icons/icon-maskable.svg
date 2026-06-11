@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#111827"/>
+  <g transform="translate(102.4, 102.4)">
+    <rect x="46.08" y="61.44" width="215.04" height="153.6" rx="15.36" fill="none" stroke="#F59E0B" stroke-width="9.216"/>
+    <rect x="122.88" y="215.04" width="61.44" height="15.36" fill="#F59E0B"/>
+    <rect x="107.52" y="230.4" width="92.16" height="9.216" fill="#F59E0B"/>
+    <text x="153.6" y="147.456" font-family="Arial, sans-serif" font-size="46.08" font-weight="bold" fill="#F59E0B" text-anchor="middle">B&amp;G</text>
+    <text x="153.6" y="184.32" font-family="Arial, sans-serif" font-size="24.576" font-weight="normal" fill="#F59E0B" text-anchor="middle">TV</text>
+  </g>
+</svg>

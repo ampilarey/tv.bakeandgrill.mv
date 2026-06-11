@@ -7,6 +7,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
+const fs = require('fs');
 const path = require('path');
 const { initDatabase, getDatabase } = require('./database/init');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
@@ -168,7 +169,18 @@ app.use('/uploads/screenshots', (req, res) => res.status(404).end());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // API Routes
+function readPublishedClientVersion() {
+  try {
+    const versionPath = path.join(__dirname, '..', 'version.json');
+    const data = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
+    return data.version || null;
+  } catch {
+    return null;
+  }
+}
+
 app.get('/api/health', async (req, res) => {
+  const clientVersion = readPublishedClientVersion();
   try {
     const db = getDatabase();
     // Confirm DB is reachable without leaking platform stats to anonymous callers
@@ -178,6 +190,7 @@ app.get('/api/health', async (req, res) => {
       status: 'ok',
       timestamp: new Date().toISOString(),
       version: '1.0.8',
+      clientVersion,
       database: 'connected'
     });
   } catch (error) {
@@ -186,6 +199,7 @@ app.get('/api/health', async (req, res) => {
       status: 'error',
       timestamp: new Date().toISOString(),
       version: '1.0.8',
+      clientVersion,
       database: 'unavailable'
     });
   }

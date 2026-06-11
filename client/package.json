@@ -5,7 +5,7 @@
   "description": "Frontend for Bake & Grill TV - IPTV streaming platform",
   "scripts": {
     "dev": "vite",
-    "build": "NODE_OPTIONS='--max-old-space-size=2048' vite build",
+    "build": "NODE_OPTIONS='--max-old-space-size=2048' vite build && bash ../scripts/publish-frontend.sh",
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "test": "vitest",
