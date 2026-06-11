@@ -47,6 +47,10 @@ function isVisibleInPlayableFilter(channel) {
   if (channel.play_status === 'unknown' || channel.play_status === 'needs_recheck') {
     return !!(channel.playback_url || channel.url);
   }
+  // Server probe may fail from the host while the stream works in the user's browser.
+  if (channel.play_status === 'offline' && (channel.playback_url || channel.url) && channel.is_drm !== 1) {
+    return true;
+  }
   return false;
 }
 
@@ -93,12 +97,9 @@ function enrichChannel(ch, health, override, playlist, req) {
   let playback_url = null;
   if (!diagnosis.is_drm && play_status !== 'blocked' && ch.url) {
     const useProxy = shouldUsePlaybackProxy(ch, diagnosis);
-
-    if (useProxy && play_status !== 'offline') {
-      playback_url = buildPlaybackProxyUrl(ch.id, playlist.id, hash, req);
-    } else if (play_status === 'playable' || play_status === 'unknown' || play_status === 'needs_recheck') {
-      playback_url = ch.url;
-    }
+    playback_url = useProxy
+      ? buildPlaybackProxyUrl(ch.id, playlist.id, hash, req)
+      : ch.url;
   }
 
   return {

@@ -12,7 +12,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const { fetchRange, streamRange, redactUrl } = require('../utils/httpClient');
 const { rewriteManifest, isHlsManifestContent, isHlsManifestBody } = require('../utils/hlsManifest');
-const { shouldUsePlaybackProxy } = require('../utils/channelEnrichment');
+const { shouldUsePlaybackProxy, enrichChannel } = require('../utils/channelEnrichment');
 const { issueStreamToken } = require('../utils/streamToken');
 
 let passed = 0;
@@ -132,6 +132,18 @@ function testPlaybackProxyEligibility() {
       { url: 'https://cdn.example.com/live.m3u8', requires_referrer: 1 },
       { is_hls: 1, is_http: 0, needs_proxy: 0 }
     ) === true
+  );
+  const offlineEnriched = enrichChannel(
+    { id: 'tvm', url: 'https://cdn.example.com/live/tvm', name: 'TVM' },
+    { is_live: 0, is_hls: 1, is_http: 0, needs_proxy: 1, failure_reason_code: 'OFFLINE', last_checked: '2026-01-01' },
+    null,
+    { id: 1 },
+    { protocol: 'https', get: () => 'tv.example.com' }
+  );
+  assert(
+    'offline probe still gets direct playback_url for HTTPS HLS',
+    offlineEnriched.play_status === 'offline' &&
+      offlineEnriched.playback_url === 'https://cdn.example.com/live/tvm'
   );
 }
 

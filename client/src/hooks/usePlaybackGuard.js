@@ -11,15 +11,25 @@ export function getStreamUrl(channel) {
   return channel.playback_url || channel.url || null;
 }
 
+export function isProgressiveVideoUrl(url) {
+  if (!url) return false;
+  return /\.(mp4|webm|mov|m4v|mkv|avi)(\?|#|$)/i.test(url);
+}
+
 export function isHlsStream(url, channel = null) {
   if (!url) return false;
   if (isProxyStreamUrl(url)) return true;
   if (channel?.is_hls === 1 || channel?.is_hls === true) return true;
+  const lower = String(url).toLowerCase();
+  if (/[?&](format|type|output)=m3u8/.test(lower)) return true;
+  if (lower.includes('.m3u8') || lower.includes('.m3u')) return true;
   try {
-    return new URL(url).pathname.toLowerCase().endsWith('.m3u8');
+    const path = new URL(url).pathname.toLowerCase();
+    if (path.endsWith('.m3u8') || path.endsWith('.m3u')) return true;
   } catch {
-    return url.toLowerCase().includes('.m3u8');
+    // ignore
   }
+  return false;
 }
 
 export function isProxyStreamUrl(url) {
@@ -27,25 +37,33 @@ export function isProxyStreamUrl(url) {
   return url.includes('/api/stream/');
 }
 
+function healthProbeConfirmed(channel) {
+  return channel?.manifest_reachable === 1 || channel?.manifest_reachable === true;
+}
+
 export function getPrePlayError(channel, isIOS) {
   if (!channel) return null;
   if (channel.unsupported_protocol) return 'Stream incompatible with this device';
   if (channel.is_drm) return 'Stream blocked';
   if (channel.play_status === 'blocked') return 'Stream blocked';
-  if (channel.play_status === 'offline') {
-    return channel.failure_message || 'Stream offline';
-  }
   if (channel.play_status === 'unsupported') {
     return 'Unsupported codec';
   }
-  if (isIOS && channel.playable_ios === 0) {
-    return 'Stream incompatible with this device';
-  }
-  if (!isIOS && channel.playable_android_chrome === 0 && channel.playable_desktop_chrome === 0) {
-    return 'Stream incompatible with this device';
-  }
   if (!getStreamUrl(channel)) {
-    return channel.failure_message || 'Stream offline';
+    if (channel.play_status === 'offline') {
+      return channel.failure_message || 'Stream offline';
+    }
+    return 'This channel has no stream URL.';
+  }
+  // Server-side probes run from the host, not the user's browser — don't block playback
+  // when the probe failed but we still have a stream URL to try.
+  if (healthProbeConfirmed(channel)) {
+    if (isIOS && channel.playable_ios === 0) {
+      return 'Stream incompatible with this device';
+    }
+    if (!isIOS && channel.playable_android_chrome === 0 && channel.playable_desktop_chrome === 0) {
+      return 'Stream incompatible with this device';
+    }
   }
   return null;
 }
@@ -81,13 +99,6 @@ const REASON_MESSAGES = {
 export function mapPlaybackError({ reasonCode, mediaError, hlsError, timedOut, channel }) {
   if (timedOut) return REASON_MESSAGES.PLAYBACK_START_TIMEOUT;
   if (reasonCode && REASON_MESSAGES[reasonCode]) return REASON_MESSAGES[reasonCode];
-
-  if (channel?.play_status === 'offline' && channel?.failure_reason_code === 'OFFLINE') {
-    return channel.failure_message || REASON_MESSAGES.OFFLINE;
-  }
-  if (channel?.failure_reason_code && REASON_MESSAGES[channel.failure_reason_code]) {
-    return REASON_MESSAGES[channel.failure_reason_code];
-  }
 
   if (hlsError?.fatal) {
     if (hlsError.details === 'manifestLoadError' || hlsError.details === 'manifestParsingError') {

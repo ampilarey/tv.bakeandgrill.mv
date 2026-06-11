@@ -85,7 +85,8 @@ router.get('/', asyncHandler(async (req, res) => {
       const [healthRows] = await db.query(
         `SELECT url_hash, is_live, last_checked, failure_reason_code, failure_message, failure_stage,
                 last_device_type, playable_ios, playable_android_chrome, playable_desktop_chrome,
-                playable_tv_browser, needs_proxy, is_drm, manifest_reachable, first_segment_reachable, is_http
+                playable_tv_browser, needs_proxy, is_drm, is_hls, manifest_reachable,
+                first_segment_reachable, is_http
          FROM channel_health WHERE playlist_id = ?`,
         [playlistId]
       );

@@ -15,6 +15,7 @@ import { usePlayerKeyboardShortcuts } from '../hooks/usePlayerKeyboardShortcuts'
 import {
   getStreamUrl,
   isHlsStream,
+  isProgressiveVideoUrl,
   getPrePlayError,
   mapPlaybackError,
   reportPlaybackFailure,
@@ -273,8 +274,7 @@ export default function PlayerPage() {
     dimensionCheckTimerRef.current = null;
 
     const video = videoRef.current;
-    const isHLS = isHlsStream(streamUrl, currentChannel);
-    
+
     // 🚨 CRITICAL: Use iOS detection from top level (already calculated)
     // Re-check iOS detection to be absolutely sure
     const currentUserAgent = navigator.userAgent || '';
@@ -282,6 +282,10 @@ export default function PlayerPage() {
                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const isAndroid = /Android/.test(currentUserAgent);
     const isMobile = isIOS || isAndroid;
+
+    const isHLS =
+      isHlsStream(streamUrl, currentChannel) ||
+      ((isIOS || checkIOS) && !isProgressiveVideoUrl(streamUrl));
     
     // 🚨 FINAL CHECK: If iOS detected, NEVER use HLS.js - abort immediately
     if (checkIOS && isHLS) {
