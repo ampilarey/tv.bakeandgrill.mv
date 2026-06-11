@@ -20,6 +20,7 @@ import {
   mapPlaybackError,
   reportPlaybackFailure,
   PLAYBACK_TIMEOUT_MS,
+  MAX_PLAYER_RETRIES,
 } from '../hooks/usePlaybackGuard';
 import PlayerDebugOverlay from '../components/PlayerDebugOverlay';
 
@@ -665,50 +666,53 @@ export default function PlayerPage() {
       // Also try immediate play (might work on some iOS versions/situations)
       tryPlayWithFallback();
       
-      // Handle video errors
+      // Handle video errors — auto-retry transient live HLS glitches before showing overlay
       const handleError = (e) => {
         console.error('Video error:', e);
-        console.error('Video error details:', {
-          error: video.error,
-          networkState: video.networkState,
-          readyState: video.readyState,
-          src: video.src,
-          currentSrc: video.currentSrc,
-          videoWidth: video.videoWidth,
-          videoHeight: video.videoHeight
-        });
-        
-        // Clear timeout on error - we know what happened
-        clearPlaybackTimeout();
-        
-        if (video.error) {
-          const errorCode = video.error.code;
-          const errorMessage = video.error.message || 'Unknown error';
-          console.error(`Video error code: ${errorCode}, message: ${errorMessage}`);
-          
-          // Ensure controls are visible for manual play
-          video.controls = true;
-          
-          const mapped = mapPlaybackError({ mediaError: video.error, channel: currentChannel });
-          setVideoError(errorCode === video.error.MEDIA_ERR_ABORTED
-            ? 'Playback aborted. Tap the play button to try again.'
-            : mapped);
-          setVideoLoading(false);
+        if (!video.error) return;
 
-          if (currentChannel?.url && playlistId && errorCode !== video.error.MEDIA_ERR_ABORTED) {
-            const reasonCode = errorCode === video.error.MEDIA_ERR_DECODE
-              ? 'UNSUPPORTED_CODEC'
-              : errorCode === video.error.MEDIA_ERR_NETWORK
-                ? 'SEGMENT_FETCH_FAILED'
-                : 'PLAYBACK_STALLED';
-            reportPlaybackFailure({
-              url: currentChannel.url,
-              playlistId: parseInt(playlistId, 10),
-              channelName: currentChannel.name,
-              reasonCode,
-              failureStage: `media_error_${errorCode}`,
-            });
-          }
+        const errorCode = video.error.code;
+        const retriable =
+          errorCode === video.error.MEDIA_ERR_NETWORK ||
+          errorCode === video.error.MEDIA_ERR_DECODE;
+
+        if (errorCode !== video.error.MEDIA_ERR_ABORTED && retriable && mediaErrorRetries < MAX_PLAYER_RETRIES) {
+          mediaErrorRetries += 1;
+          console.warn(`iOS HLS media error ${errorCode} — retry ${mediaErrorRetries}/${MAX_PLAYER_RETRIES}`);
+          setReconnecting(true);
+          setVideoError(null);
+          setVideoLoading(false);
+          video.controls = true;
+          setTimeout(() => {
+            video.src = streamUrl;
+            video.load();
+            video.play().catch(() => {});
+          }, 1200);
+          return;
+        }
+
+        clearPlaybackTimeout();
+        video.controls = true;
+        const mapped = mapPlaybackError({ mediaError: video.error, channel: currentChannel });
+        setReconnecting(false);
+        setVideoError(errorCode === video.error.MEDIA_ERR_ABORTED
+          ? 'Playback aborted. Tap the play button to try again.'
+          : mapped);
+        setVideoLoading(false);
+
+        if (currentChannel?.url && playlistId && errorCode !== video.error.MEDIA_ERR_ABORTED) {
+          const reasonCode = errorCode === video.error.MEDIA_ERR_DECODE
+            ? 'UNSUPPORTED_CODEC'
+            : errorCode === video.error.MEDIA_ERR_NETWORK
+              ? 'SEGMENT_FETCH_FAILED'
+              : 'PLAYBACK_STALLED';
+          reportPlaybackFailure({
+            url: currentChannel.url,
+            playlistId: parseInt(playlistId, 10),
+            channelName: currentChannel.name,
+            reasonCode,
+            failureStage: `media_error_${errorCode}`,
+          });
         }
       };
       
@@ -766,6 +770,7 @@ export default function PlayerPage() {
       };
       
       let stallRetries = 0;
+      let mediaErrorRetries = 0;
       let stallRecoveryTimer = null;
 
       const clearStallRecovery = () => {
@@ -776,7 +781,7 @@ export default function PlayerPage() {
       };
 
       const tryReconnectSource = () => {
-        if (stallRetries >= 2) {
+        if (stallRetries >= MAX_PLAYER_RETRIES) {
           setReconnecting(false);
           const msg = mapPlaybackError({ reasonCode: 'PLAYBACK_STALLED', channel: currentChannel });
           setVideoError(msg);
@@ -793,6 +798,7 @@ export default function PlayerPage() {
         stallRetries += 1;
         setReconnecting(true);
         setVideoError(null);
+        setVideoLoading(false);
         video.controls = true;
         video.src = streamUrl;
         video.load();
@@ -838,6 +844,7 @@ export default function PlayerPage() {
         clearStallRecovery();
         setReconnecting(false);
         stallRetries = 0;
+        mediaErrorRetries = 0;
         if (bufferingTimerRef.current) {
           clearTimeout(bufferingTimerRef.current);
           bufferingTimerRef.current = null;
@@ -1198,17 +1205,19 @@ export default function PlayerPage() {
 
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              if (retryCountRef.current < 3) {
+              if (retryCountRef.current < MAX_PLAYER_RETRIES) {
                 retryCountRef.current += 1;
-                setVideoError('Network error. Retrying...');
+                setReconnecting(true);
+                setVideoError(null);
                 setTimeout(() => {
                   if (hlsRef.current) {
                     hlsRef.current.startLoad();
-                    setVideoError(null);
+                    setReconnecting(false);
                     startPlaybackTimeout();
                   }
                 }, 1000);
               } else {
+                setReconnecting(false);
                 setVideoError(mapPlaybackError({ hlsError: data, reasonCode, channel: currentChannel }));
                 reportPlaybackFailure({
                   url: currentChannel.url,
@@ -1220,17 +1229,19 @@ export default function PlayerPage() {
               }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              if (retryCountRef.current < 3) {
+              if (retryCountRef.current < MAX_PLAYER_RETRIES) {
                 retryCountRef.current += 1;
-                setVideoError('Media error. Retrying...');
+                setReconnecting(true);
+                setVideoError(null);
                 setTimeout(() => {
                   if (hlsRef.current) {
                     hlsRef.current.recoverMediaError();
-                    setVideoError(null);
+                    setReconnecting(false);
                     startPlaybackTimeout();
                   }
                 }, 1000);
               } else {
+                setReconnecting(false);
                 setVideoError(mapPlaybackError({ hlsError: data, reasonCode: 'UNSUPPORTED_CODEC', channel: currentChannel }));
                 reportPlaybackFailure({
                   url: currentChannel.url,

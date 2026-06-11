@@ -10,12 +10,20 @@ import Badge from './common/Badge';
 
 function PlayStatusBadge({ channel, isIOS }) {
   let status = channel.play_status;
+  if (
+    status === 'offline' &&
+    (channel.playback_url || channel.url) &&
+    channel.is_drm !== 1
+  ) {
+    status = 'unverified';
+  }
   if (isIOS && channel.playable_ios === 0 && status === 'playable') {
     status = 'unsupported';
   }
 
   const map = {
     playable: { label: 'Playable', color: 'success' },
+    unverified: { label: 'Unverified', color: 'warning' },
     offline: { label: 'Offline', color: 'danger' },
     unsupported: { label: 'Unsupported', color: 'warning' },
     needs_recheck: { label: 'Recheck', color: 'default' },

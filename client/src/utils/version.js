@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.3.1'; // Frontend published to repo docroot; probe-offline no longer blocks play
+export const APP_VERSION = '1.3.2'; // Silent HLS retry/reconnect; unverified badge for probe-failed channels
 
 export function checkVersion() {
   try {

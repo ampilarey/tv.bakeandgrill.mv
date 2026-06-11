@@ -5,6 +5,7 @@ import api from '../services/api';
 
 export const PLAYBACK_TIMEOUT_MS = 20000;
 export const PLAYBACK_STALL_RETRY_MS = 8000;
+export const MAX_PLAYER_RETRIES = 5;
 
 export function getStreamUrl(channel) {
   if (!channel) return null;
