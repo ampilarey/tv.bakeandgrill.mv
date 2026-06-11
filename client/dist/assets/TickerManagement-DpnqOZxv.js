@@ -1,1 +1,0 @@
-import{j as e,S as s}from"./index-BqM3QpPc.js";import{u as r,r as t}from"./react-vendor-CNVnMW7m.js";import"./hls-vendor-DhDiShiw.js";function a(){const a=r();return t.useEffect(()=>{a("/admin/overlays",{replace:!0})},[a]),e.jsx("div",{className:"h-screen flex items-center justify-center bg-tv-bg",children:e.jsx(s,{size:"xl"})})}export{a as default};

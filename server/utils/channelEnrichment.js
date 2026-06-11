@@ -6,6 +6,34 @@ function urlIsHttpScheme(url) {
   return /^http:/i.test(String(url || ''));
 }
 
+function channelNeedsReferrerOrUa(ch) {
+  return !!(ch.requires_referrer || ch.requires_user_agent || ch.httpReferrer || ch.httpUserAgent);
+}
+
+/** Proxy only when required — HTTPS HLS plays direct in Safari / many CDNs. */
+function shouldUsePlaybackProxy(ch, diagnosis) {
+  if (diagnosis.is_http === 1 || urlIsHttpScheme(ch.url)) return true;
+  if (channelNeedsReferrerOrUa(ch)) return true;
+  if (diagnosis.needs_proxy !== 1) return false;
+  const isHls =
+    diagnosis.is_hls === 1 || (ch.url && isHlsUrl(ch.url));
+  if (isHls && diagnosis.is_http !== 1 && !channelNeedsReferrerOrUa(ch)) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeStoredNeedsProxy(stored, ch, health) {
+  const inferred =
+    (health?.is_http === 1 || urlIsHttpScheme(ch.url) || channelNeedsReferrerOrUa(ch)) ? 1 : 0;
+  if (stored == null) return inferred;
+  if (stored === 1) {
+    const isHls = health?.is_hls === 1 || (ch.url && isHlsUrl(ch.url));
+    if (isHls && health?.is_http !== 1 && !channelNeedsReferrerOrUa(ch)) return inferred;
+  }
+  return stored;
+}
+
 /** Kiosk auto-play: only health-checked playable channels. */
 function isStrictlyPlayable(channel) {
   if (!channel || channel.is_hidden === 1) return false;
@@ -31,7 +59,7 @@ function enrichChannel(ch, health, override, playlist, req) {
   const urlIsHls = ch.url ? isHlsUrl(ch.url) : false;
   const healthIsHls = h.is_hls === 1;
   const inferredNeedsProxy =
-    urlIsHttp || ch.requires_referrer || ch.requires_user_agent || urlIsHls || healthIsHls ? 1 : 0;
+    urlIsHttp || channelNeedsReferrerOrUa(ch) ? 1 : 0;
 
   const diagnosis = {
     is_live: h.is_live ?? null,
@@ -47,7 +75,7 @@ function enrichChannel(ch, health, override, playlist, req) {
     playable_android_chrome: h.playable_android_chrome ?? null,
     playable_desktop_chrome: h.playable_desktop_chrome ?? null,
     playable_tv_browser: h.playable_tv_browser ?? null,
-    needs_proxy: h.needs_proxy ?? inferredNeedsProxy,
+    needs_proxy: normalizeStoredNeedsProxy(h.needs_proxy, ch, h) ?? inferredNeedsProxy,
     is_drm: h.is_drm ?? 0,
     is_hls: h.is_hls ?? (urlIsHls ? 1 : 0),
     is_http: urlIsHttp ? 1 : 0,
@@ -64,14 +92,7 @@ function enrichChannel(ch, health, override, playlist, req) {
 
   let playback_url = null;
   if (!diagnosis.is_drm && play_status !== 'blocked' && ch.url) {
-    const useProxy =
-      diagnosis.needs_proxy ||
-      diagnosis.is_http === 1 ||
-      urlIsHttpScheme(ch.url) ||
-      ch.requires_referrer ||
-      ch.requires_user_agent ||
-      urlIsHls ||
-      healthIsHls;
+    const useProxy = shouldUsePlaybackProxy(ch, diagnosis);
 
     if (useProxy && play_status !== 'offline') {
       playback_url = buildPlaybackProxyUrl(ch.id, playlist.id, hash, req);
@@ -160,4 +181,5 @@ module.exports = {
   loadHealthAndOverrides,
   isStrictlyPlayable,
   isVisibleInPlayableFilter,
+  shouldUsePlaybackProxy,
 };

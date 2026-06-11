@@ -12,6 +12,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const { fetchRange, streamRange, redactUrl } = require('../utils/httpClient');
 const { rewriteManifest, isHlsManifestContent, isHlsManifestBody } = require('../utils/hlsManifest');
+const { shouldUsePlaybackProxy } = require('../utils/channelEnrichment');
 const { issueStreamToken } = require('../utils/streamToken');
 
 let passed = 0;
@@ -113,6 +114,27 @@ function testHlsDetection() {
   );
 }
 
+function testPlaybackProxyEligibility() {
+  console.log('\nplayback proxy eligibility\n');
+  const tvmChannel = { url: 'https://cdn.example.com/live/tvm', requires_referrer: 0, requires_user_agent: 0 };
+  const tvmDiag = { is_hls: 1, is_http: 0, needs_proxy: 1 };
+  assert(
+    'HTTPS HLS without headers uses direct URL (not proxy)',
+    shouldUsePlaybackProxy(tvmChannel, tvmDiag) === false
+  );
+  assert(
+    'HTTP stream still uses proxy',
+    shouldUsePlaybackProxy({ url: 'http://cdn.example.com/live.m3u8' }, { is_hls: 1, is_http: 1, needs_proxy: 1 }) === true
+  );
+  assert(
+    'referrer-required stream uses proxy',
+    shouldUsePlaybackProxy(
+      { url: 'https://cdn.example.com/live.m3u8', requires_referrer: 1 },
+      { is_hls: 1, is_http: 0, needs_proxy: 0 }
+    ) === true
+  );
+}
+
 async function testStreamRangeSecurity() {
   console.log('\nstreamRange security');
   const { PassThrough } = require('stream');
@@ -200,6 +222,7 @@ async function run() {
   testHttpClientExports();
   testManifestRewrite();
   testHlsDetection();
+  testPlaybackProxyEligibility();
   testStreamTokenIssue();
   await testStreamRangeSecurity();
   await testIntegrationOptional();

@@ -129,6 +129,14 @@ export default defineConfig({
             handler: 'NetworkOnly'
           },
           {
+            // Stream proxy + channel lists — never cache (stale playback_url breaks private/incognito)
+            urlPattern: /^https?:\/\/.*\/api\/(?:stream|channels|playlists).*/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'api-stream-channels-bypass-v1'
+            }
+          },
+          {
             // API calls - Network first, fallback to cache
             urlPattern: /^https?:\/\/.*\/api\/.*/i,
             handler: 'NetworkFirst',

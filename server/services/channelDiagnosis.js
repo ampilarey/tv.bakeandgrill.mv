@@ -160,7 +160,6 @@ function computePlayability(d) {
 }
 
 function computeNeedsProxy(d, channel) {
-  if (d.is_hls) d.needs_proxy = 1;
   if (d.is_http) d.needs_proxy = 1;
   if (channel.httpReferrer || channel.requires_referrer) d.needs_proxy = 1;
   if (channel.httpUserAgent || channel.requires_user_agent) d.needs_proxy = 1;

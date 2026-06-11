@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.2.8'; // Extensionless HLS sub-playlist proxy, short segment tokens, playback timeout
+export const APP_VERSION = '1.2.9'; // Direct HTTPS HLS playback, no SW cache for stream/channel API
 
 export function checkVersion() {
   try {
