@@ -11,7 +11,24 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
   const [assignedPlaylists, setAssignedPlaylists] = useState([]);
   const [availablePlaylists, setAvailablePlaylists] = useState([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
-  
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const toPayload = (perms) => ({
+    can_add_playlists: !!perms?.can_add_playlists,
+    can_edit_own_playlists: !!perms?.can_edit_own_playlists,
+    can_delete_own_playlists: !!perms?.can_delete_own_playlists,
+    can_manage_displays: !!perms?.can_manage_displays,
+    can_control_displays: !!perms?.can_control_displays,
+    can_create_users: !!perms?.can_create_users,
+    can_view_analytics: !!perms?.can_view_analytics,
+    can_manage_schedules: !!perms?.can_manage_schedules,
+    max_playlists: parseInt(perms?.max_playlists ?? -1, 10),
+    max_displays: parseInt(perms?.max_displays ?? -1, 10),
+  });
+
+  const isChecked = (value) => value === true || value === 1;
+
   useEffect(() => {
     fetchPermissions();
     fetchPlaylists();
@@ -54,19 +71,18 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
   
   const handleSave = async () => {
     setSaving(true);
+    setError('');
+    setSuccessMessage('');
     try {
-      await api.put(`/permissions/${userId}`, permissions);
-      
-      // Dispatch event to notify other components
+      await api.put(`/permissions/${userId}`, toPayload(permissions));
+
       window.dispatchEvent(new Event('permissionsUpdated'));
-      
-      setSuccessMessage('✅ Permissions updated successfully!\n\nℹ️ The user should refresh their browser to see the changes.');
-      setTimeout(() => setSuccessMessage(''), 5000);
+
+      setSuccessMessage('Permissions saved. The user may need to refresh to see menu changes.');
       if (onUpdate) onUpdate();
-      onClose(); // Close modal after save
-    } catch (error) {
-      setError(error.response?.data?.error || 'Failed to update permissions');
-      setTimeout(() => setError(''), 3000);
+      setTimeout(() => onClose(), 1200);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update permissions');
     } finally {
       setSaving(false);
     }
@@ -127,7 +143,18 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
     <>
       <Modal isOpen={true} onClose={onClose} title={`Manage Permissions: ${userName}`} size="xl">
         <div className="space-y-4 md:space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-          
+
+          {error && (
+            <div className="rounded-lg border border-tv-error/40 bg-tv-error/10 px-4 py-3 text-sm text-tv-error">
+              {error}
+            </div>
+          )}
+          {successMessage && (
+            <div className="rounded-lg border border-green-500/40 bg-green-500/10 px-4 py-3 text-sm text-green-400">
+              {successMessage}
+            </div>
+          )}
+
           {/* Playlist Permissions */}
           <div className="bg-tv-bgSoft rounded-lg p-4 border border-tv-borderSubtle">
             <h3 className="text-lg font-semibold text-tv-text mb-3">📋 Playlist Permissions</h3>
@@ -136,7 +163,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
               <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
-                  checked={permissions.can_add_playlists}
+                  checked={isChecked(permissions.can_add_playlists)}
                   onChange={(e) => setPermissions({...permissions, can_add_playlists: e.target.checked})}
                   className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
@@ -149,7 +176,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
               <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
-                  checked={permissions.can_edit_own_playlists}
+                  checked={isChecked(permissions.can_edit_own_playlists)}
                   onChange={(e) => setPermissions({...permissions, can_edit_own_playlists: e.target.checked})}
                   className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
@@ -162,7 +189,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
               <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
-                  checked={permissions.can_delete_own_playlists}
+                  checked={isChecked(permissions.can_delete_own_playlists)}
                   onChange={(e) => setPermissions({...permissions, can_delete_own_playlists: e.target.checked})}
                   className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
@@ -200,7 +227,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
               <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
-                  checked={permissions.can_manage_displays}
+                  checked={isChecked(permissions.can_manage_displays)}
                   onChange={(e) => setPermissions({...permissions, can_manage_displays: e.target.checked})}
                   className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
@@ -213,7 +240,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
               <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
-                  checked={permissions.can_control_displays}
+                  checked={isChecked(permissions.can_control_displays)}
                   onChange={(e) => setPermissions({...permissions, can_control_displays: e.target.checked})}
                   className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
@@ -251,7 +278,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
               <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
-                  checked={permissions.can_create_users}
+                  checked={isChecked(permissions.can_create_users)}
                   onChange={(e) => setPermissions({...permissions, can_create_users: e.target.checked})}
                   className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
@@ -264,7 +291,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
               <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
-                  checked={permissions.can_view_analytics}
+                  checked={isChecked(permissions.can_view_analytics)}
                   onChange={(e) => setPermissions({...permissions, can_view_analytics: e.target.checked})}
                   className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
@@ -277,7 +304,7 @@ export default function PermissionManager({ userId, userName, onClose, onUpdate 
               <label className="flex items-center gap-3 cursor-pointer py-2 px-3 hover:bg-tv-bgElevated rounded-lg transition-colors">
                 <input
                   type="checkbox"
-                  checked={permissions.can_manage_schedules}
+                  checked={isChecked(permissions.can_manage_schedules)}
                   onChange={(e) => setPermissions({...permissions, can_manage_schedules: e.target.checked})}
                   className="w-6 h-6 min-w-[24px] min-h-[24px] rounded bg-tv-bgElevated text-tv-accent focus:ring-2 focus:ring-tv-accent cursor-pointer"
                 />
