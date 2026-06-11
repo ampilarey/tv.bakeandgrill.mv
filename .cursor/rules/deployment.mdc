@@ -13,7 +13,10 @@ alwaysApply: true
 ─────────────────────────────────────────
  1. SSH into cPanel, then run:
 
- cd ~/tv.bakeandgrill.mv && GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git pull origin main
+ bash ~/tv.bakeandgrill.mv/scripts/server-pull-deploy.sh
+
+ (If pull fails with "untracked working tree files would be overwritten", run that script —
+  it removes old manual docroot copies then pulls.)
 
  2. cPanel → Setup Node.js App → RESTART
 
