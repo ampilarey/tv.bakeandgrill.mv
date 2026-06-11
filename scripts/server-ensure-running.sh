@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the API if port 4000 is down. Safe to run after frontend-only git pull.
-set -euo pipefail
+set -eo pipefail
 
 APP_ROOT=~/tv.bakeandgrill.mv
 LOG=~/tv-server.log
@@ -28,12 +28,19 @@ if pgrep -f "tv.bakeandgrill.mv/server/server.js" >/dev/null 2>&1; then
 fi
 
 cd "$APP_ROOT/server"
-if [[ -f "$VENV" ]]; then
+
+NODE_BIN=node
+if [[ -x ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/node ]]; then
+  NODE_BIN=~/nodevenv/tv.bakeandgrill.mv/server/18/bin/node
+elif [[ -f "$VENV" ]]; then
+  # cPanel activate scripts break under `set -u` — use node path directly when possible
+  set +u
   # shellcheck disable=SC1090
   source "$VENV"
+  set -u
 fi
 
-nohup node server.js >>"$LOG" 2>&1 &
+nohup "$NODE_BIN" server.js >>"$LOG" 2>&1 &
 echo "   pid $! — logging to $LOG"
 sleep 5
 

@@ -44,11 +44,11 @@ fi
 
 if [[ "$SERVER_CHANGED" -eq 1 ]]; then
   echo "🔧  Server code changed — syntax check..."
-  if [[ -f ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate ]]; then
-    # shellcheck disable=SC1090
-    source ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate
+  NODE_BIN=node
+  if [[ -x ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/node ]]; then
+    NODE_BIN=~/nodevenv/tv.bakeandgrill.mv/server/18/bin/node
   fi
-  node -c server/server.js
+  "$NODE_BIN" -c server/server.js
   echo "⚠️  Server files updated — run: bash scripts/server-ensure-running.sh"
   echo "    (or cPanel → Setup Node.js App → RESTART only when server/ changed)"
 else
