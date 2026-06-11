@@ -30,12 +30,26 @@ rm -f workbox-*.js 2>/dev/null || true
 echo "📥  Pulling..."
 git pull origin main
 
+echo "🔍  Syntax-checking server..."
+node -c server/server.js
+
 mkdir -p server/tmp
 touch server/tmp/restart.txt
 
 echo ""
-echo "✅  Deploy complete. Verify:"
-echo "   curl -s https://tv.bakeandgrill.mv/version.json"
-echo "   curl -s https://tv.bakeandgrill.mv/ | grep index-"
+echo "✅  Files updated."
 echo ""
-echo "Then restart Node.js in cPanel → Setup Node.js App → RESTART"
+echo "⚠️  REQUIRED: cPanel → Setup Node.js App → tv.bakeandgrill.mv → RESTART"
+echo "    (touching tmp/restart.txt alone is not always enough)"
+echo ""
+echo "Verify frontend:"
+echo "   curl -s https://tv.bakeandgrill.mv/version.json"
+echo ""
+echo "Verify backend (must return JSON, not HTML 503):"
+echo "   curl -s http://127.0.0.1:4000/api/health"
+echo ""
+echo "If still 503 after RESTART, check startup error:"
+echo "   cd ~/tv.bakeandgrill.mv/server"
+echo "   source ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate"
+echo "   node server.js"
+echo "   (Ctrl+C after you see the error — then fix .env / DB / JWT_SECRET)"
