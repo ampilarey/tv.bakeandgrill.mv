@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.2.7'; // CDN DNS fallback, extensionless HLS proxy, segment key heuristic fix
+export const APP_VERSION = '1.2.8'; // Extensionless HLS sub-playlist proxy, short segment tokens, playback timeout
 
 export function checkVersion() {
   try {

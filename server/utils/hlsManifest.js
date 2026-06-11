@@ -240,14 +240,24 @@ function rewriteManifest(body, baseUrl, rewriteFn) {
   return out.join('\n');
 }
 
+function isHlsManifestBody(body) {
+  if (body == null) return false;
+  const text = Buffer.isBuffer(body) ? body.toString('utf8', 0, Math.min(body.length, 512)) : String(body);
+  return text.trimStart().startsWith('#EXTM3U');
+}
+
 function isHlsManifestContent(contentType, url) {
   const ct = (contentType || '').toLowerCase();
   if (ct.includes('mpegurl') || ct.includes('m3u8')) return true;
   try {
-    const p = new URL(url).pathname.toLowerCase();
-    return p.endsWith('.m3u8') || p.endsWith('.m3u');
+    const u = new URL(url);
+    const p = u.pathname.toLowerCase();
+    if (p.endsWith('.m3u8') || p.endsWith('.m3u')) return true;
+    const q = u.search.toLowerCase();
+    return q.includes('m3u8') || q.includes('.m3u');
   } catch {
-    return (url || '').toLowerCase().includes('.m3u8');
+    const lower = (url || '').toLowerCase();
+    return lower.includes('.m3u8') || lower.includes('.m3u');
   }
 }
 
@@ -261,4 +271,5 @@ module.exports = {
   parseAttributes,
   isDrmKeyMethod,
   isHlsManifestContent,
+  isHlsManifestBody,
 };

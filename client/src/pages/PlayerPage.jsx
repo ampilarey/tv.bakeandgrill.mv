@@ -240,7 +240,7 @@ export default function PlayerPage() {
       }
       if (Date.now() - startedAt > PLAYBACK_TIMEOUT_MS + 1500) {
         setVideoLoading(false);
-        setVideoError((prev) => prev || mapPlaybackError({ reasonCode: 'PLAYBACK_START_TIMEOUT', channel: currentChannel }));
+        setVideoError((prev) => prev || mapPlaybackError({ reasonCode: 'PLAYBACK_START_TIMEOUT', timedOut: true, channel: currentChannel }));
       }
     }, 1000);
     return () => clearInterval(checkInterval);
@@ -588,6 +588,10 @@ export default function PlayerPage() {
         
         // Double-check video dimensions when playing starts
         if (video.videoWidth === 0 && video.videoHeight === 0) {
+          if (video.duration === Infinity && video.readyState >= 3 && !video.paused) {
+            console.log('✅ iOS: Live HLS playing — confirming while video track initializes');
+            confirmPlayback();
+          }
           console.error('❌ iOS: Video is playing but has no dimensions - checking if audio-only...');
           
           // For HLS live streams, dimensions might not be available immediately
@@ -599,6 +603,7 @@ export default function PlayerPage() {
                 height: video.videoHeight
               });
               setVideoError(null);
+              confirmPlayback();
               return;
             }
             
@@ -625,6 +630,7 @@ export default function PlayerPage() {
           });
           // Clear any previous audio-only errors
           setVideoError(null);
+          confirmPlayback();
         }
       };
       

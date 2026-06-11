@@ -3,7 +3,7 @@
  */
 import api from '../services/api';
 
-export const PLAYBACK_TIMEOUT_MS = 13000;
+export const PLAYBACK_TIMEOUT_MS = 20000;
 export const PLAYBACK_STALL_RETRY_MS = 8000;
 
 export function getStreamUrl(channel) {

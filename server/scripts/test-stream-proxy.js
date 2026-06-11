@@ -11,7 +11,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const { fetchRange, streamRange, redactUrl } = require('../utils/httpClient');
-const { rewriteManifest, isHlsManifestContent } = require('../utils/hlsManifest');
+const { rewriteManifest, isHlsManifestContent, isHlsManifestBody } = require('../utils/hlsManifest');
 const { issueStreamToken } = require('../utils/streamToken');
 
 let passed = 0;
@@ -102,6 +102,14 @@ function testHlsDetection() {
   assert(
     'isHlsManifestContent detects .m3u8 path',
     isHlsManifestContent(null, 'https://cdn.example.com/stream.m3u8')
+  );
+  assert(
+    'isHlsManifestContent detects extensionless IPTV path with m3u8 query',
+    isHlsManifestContent(null, 'https://cdn.example.com/live/user/pass/1?format=m3u8')
+  );
+  assert(
+    'isHlsManifestBody detects EXTM3U',
+    isHlsManifestBody('#EXTM3U\n#EXTINF:6,\nseg.ts\n')
   );
 }
 

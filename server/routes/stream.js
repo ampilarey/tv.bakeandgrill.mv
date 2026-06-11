@@ -1,7 +1,8 @@
+const crypto = require('crypto');
 const express = require('express');
-const { fetch, streamRange, redactUrl } = require('../utils/httpClient');
+const { fetch, fetchRange, streamRange, redactUrl } = require('../utils/httpClient');
 const { verifyToken: verifyStreamToken, issueStreamToken } = require('../utils/streamToken');
-const { rewriteManifest, isHlsManifestContent } = require('../utils/hlsManifest');
+const { rewriteManifest, isHlsManifestContent, isHlsManifestBody } = require('../utils/hlsManifest');
 const { resolveChannel } = require('../utils/channelResolver');
 const { getDatabase } = require('../database/init');
 const { urlHash } = require('../services/channelDiagnosis');
@@ -12,6 +13,10 @@ const router = express.Router();
 const PROXY_TIMEOUT_MS = parseInt(process.env.STREAM_PROXY_TIMEOUT_MS || '15000', 10);
 const SEGMENT_MAX_BYTES = parseInt(process.env.SEGMENT_MAX_BYTES || '52428800', 10);
 const KEY_MAX_BYTES = parseInt(process.env.KEY_MAX_BYTES || '65536', 10);
+
+function segmentUrlHash(absoluteUrl) {
+  return crypto.createHash('sha256').update(absoluteUrl).digest('hex').slice(0, 32);
+}
 
 function buildHeaders(channel) {
   const headers = { 'User-Agent': 'BakeGrillTV/1.0' };
@@ -27,9 +32,10 @@ function buildProxySegUrl(req, channelId, playlistId, urlHashVal, absoluteUrl) {
     playlistId: parseInt(playlistId, 10),
     urlHash: urlHashVal,
     scope: 'segment',
-    subPath: absoluteUrl,
+    segUrlHash: segmentUrlHash(absoluteUrl),
   });
-  return `${host}/api/stream/${channelId}/seg?token=${encodeURIComponent(segToken)}`;
+  const u = encodeURIComponent(absoluteUrl);
+  return `${host}/api/stream/${channelId}/seg?token=${encodeURIComponent(segToken)}&u=${u}`;
 }
 
 async function assertChannelAccess(playlistId, channel) {
@@ -46,12 +52,72 @@ async function assertChannelAccess(playlistId, channel) {
 }
 
 function resolveSegmentUrl(payload, u) {
-  if (!payload.subPath) return null;
+  if (payload.scope !== 'segment') return null;
+
   if (u) {
-    const decoded = decodeURIComponent(u);
-    if (decoded !== payload.subPath) return null;
+    let decoded;
+    try {
+      decoded = decodeURIComponent(u);
+    } catch {
+      return null;
+    }
+    if (payload.segUrlHash) {
+      return segmentUrlHash(decoded) === payload.segUrlHash ? decoded : null;
+    }
+    if (payload.subPath) {
+      return decoded === payload.subPath ? decoded : null;
+    }
+    return decoded;
   }
-  return payload.subPath;
+
+  return payload.subPath || null;
+}
+
+function isOkStatus(status) {
+  return status === 206 || (status >= 200 && status < 300);
+}
+
+async function shouldTreatSegAsManifest(segmentUrl, headers, rangeHeader) {
+  if (isHlsManifestContent(null, segmentUrl)) return true;
+  if (rangeHeader) return false;
+  try {
+    const peek = await fetchRange(segmentUrl, {
+      headers,
+      start: 0,
+      end: 511,
+      maxBytes: 512,
+      timeout: PROXY_TIMEOUT_MS,
+    });
+    if (!isOkStatus(peek.statusCode ?? peek.status)) return false;
+    return isHlsManifestBody(peek.data);
+  } catch {
+    return false;
+  }
+}
+
+async function sendProxiedManifest(req, res, { channelId, playlistId, urlHashVal, manifestUrl, headers }) {
+  const manifestRes = await fetch(manifestUrl, {
+    timeout: PROXY_TIMEOUT_MS,
+    headers,
+    maxBytes: 2097152,
+  });
+
+  if (!isHlsManifestBody(manifestRes.data)) {
+    return res.status(502).json({
+      success: false,
+      error: 'Invalid stream manifest',
+      code: 'MANIFEST_INVALID',
+    });
+  }
+
+  const baseUrl = manifestRes.finalUrl || manifestUrl;
+  const rewriteFn = (absoluteUrl) =>
+    buildProxySegUrl(req, channelId, playlistId, urlHashVal, absoluteUrl);
+  const rewritten = rewriteManifest(manifestRes.data, baseUrl, rewriteFn);
+
+  res.set('Content-Type', 'application/vnd.apple.mpegurl');
+  res.set('Cache-Control', 'no-store');
+  return res.send(rewritten);
 }
 
 /**
@@ -77,31 +143,22 @@ router.get('/:channelId/master.m3u8', asyncHandler(async (req, res) => {
   await assertChannelAccess(playlistId, channel);
 
   const headers = buildHeaders(channel);
-  let manifestRes;
   try {
-    manifestRes = await fetch(channel.url, {
-      timeout: PROXY_TIMEOUT_MS,
+    return await sendProxiedManifest(req, res, {
+      channelId,
+      playlistId,
+      urlHashVal: payload.urlHash,
+      manifestUrl: channel.url,
       headers,
-      maxBytes: 2097152,
     });
   } catch (err) {
-    console.warn('[StreamProxy] Manifest fetch failed');
-    return res.status(502).json({ success: false, error: 'Failed to fetch stream manifest' });
+    console.warn('[StreamProxy] Manifest fetch failed', { url: redactUrl(channel.url), code: err.code });
+    return res.status(502).json({ success: false, error: 'Failed to fetch stream manifest', code: 'MANIFEST_FETCH_FAILED' });
   }
-
-  const baseUrl = manifestRes.finalUrl || channel.url;
-  const rewriteFn = (absoluteUrl) =>
-    buildProxySegUrl(req, channelId, playlistId, payload.urlHash, absoluteUrl);
-
-  const rewritten = rewriteManifest(manifestRes.data, baseUrl, rewriteFn);
-
-  res.set('Content-Type', 'application/vnd.apple.mpegurl');
-  res.set('Cache-Control', 'no-store');
-  res.send(rewritten);
 }));
 
 /**
- * GET /api/stream/:channelId/seg?token=...
+ * GET /api/stream/:channelId/seg?token=...&u=...
  */
 router.get('/:channelId/seg', asyncHandler(async (req, res) => {
   const { channelId } = req.params;
@@ -131,19 +188,14 @@ router.get('/:channelId/seg', asyncHandler(async (req, res) => {
   const rangeHeader = req.headers.range;
 
   try {
-    if (isHlsManifestContent(null, segmentUrl)) {
-      const manifestRes = await fetch(segmentUrl, {
-        timeout: PROXY_TIMEOUT_MS,
+    if (await shouldTreatSegAsManifest(segmentUrl, headers, rangeHeader)) {
+      return await sendProxiedManifest(req, res, {
+        channelId,
+        playlistId: payload.playlistId,
+        urlHashVal: payload.urlHash,
+        manifestUrl: segmentUrl,
         headers,
-        maxBytes: 2097152,
       });
-      const baseUrl = manifestRes.finalUrl || segmentUrl;
-      const rewriteFn = (absoluteUrl) =>
-        buildProxySegUrl(req, channelId, payload.playlistId, payload.urlHash, absoluteUrl);
-      const rewritten = rewriteManifest(manifestRes.data, baseUrl, rewriteFn);
-      res.set('Content-Type', 'application/vnd.apple.mpegurl');
-      res.set('Cache-Control', 'no-store');
-      return res.send(rewritten);
     }
 
     const looksLikeKey = /\.key(\?|$)/i.test(segmentUrl);

@@ -40,9 +40,16 @@ function verifyToken(token) {
 /**
  * Issue a short-lived stream access token.
  */
-function issueStreamToken({ channelId, playlistId, urlHash, scope = 'master', subPath = '' }) {
+function issueStreamToken({ channelId, playlistId, urlHash, scope = 'master', subPath = '', segUrlHash = '' }) {
   const exp = Math.floor(Date.now() / 1000) + TTL_SEC;
-  return signPayload({ channelId, playlistId, urlHash, scope, subPath, exp });
+  const payload = { channelId, playlistId, urlHash, scope, exp };
+  if (scope === 'segment') {
+    if (segUrlHash) payload.segUrlHash = segUrlHash;
+    else if (subPath) payload.subPath = subPath;
+  } else if (subPath) {
+    payload.subPath = subPath;
+  }
+  return signPayload(payload);
 }
 
 function buildPlaybackProxyUrl(channelId, playlistId, urlHash, req) {
