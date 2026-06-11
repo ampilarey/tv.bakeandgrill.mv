@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Run on cPanel after pushing from Mac. Handles untracked docroot files from old `cp client/dist` deploys.
+# Run on cPanel after pushing from Mac.
+# Frontend-only pulls do NOT restart Node (that was causing repeated 503/login failures).
 set -euo pipefail
 
 cd ~/tv.bakeandgrill.mv || exit 1
 
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes}"
+
+BEFORE_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
 
 echo "📥  Fetching latest main..."
 git fetch origin main
@@ -30,26 +33,31 @@ rm -f workbox-*.js 2>/dev/null || true
 echo "📥  Pulling..."
 git pull origin main
 
-echo "🔍  Syntax-checking server..."
-node -c server/server.js
+SERVER_CHANGED=0
+if [[ -n "$BEFORE_HEAD" ]]; then
+  if git diff --name-only "$BEFORE_HEAD" HEAD -- server/ | grep -q .; then
+    SERVER_CHANGED=1
+  fi
+else
+  SERVER_CHANGED=1
+fi
 
-mkdir -p server/tmp
-touch server/tmp/restart.txt
+if [[ "$SERVER_CHANGED" -eq 1 ]]; then
+  echo "🔧  Server code changed — syntax check..."
+  if [[ -f ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate ]]; then
+    # shellcheck disable=SC1090
+    source ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate
+  fi
+  node -c server/server.js
+  echo "⚠️  Server files updated — run: bash scripts/server-ensure-running.sh"
+  echo "    (or cPanel → Setup Node.js App → RESTART only when server/ changed)"
+else
+  echo "📦  Frontend-only update — skipping Node restart (do NOT click RESTART in cPanel)"
+fi
 
-echo ""
-echo "✅  Files updated."
-echo ""
-echo "⚠️  REQUIRED: cPanel → Setup Node.js App → tv.bakeandgrill.mv → RESTART"
-echo "    (touching tmp/restart.txt alone is not always enough)"
 echo ""
 echo "Verify frontend:"
 echo "   curl -s https://tv.bakeandgrill.mv/version.json"
 echo ""
-echo "Verify backend (must return JSON, not HTML 503):"
+echo "Verify API (if 503, run: bash ~/tv.bakeandgrill.mv/scripts/server-ensure-running.sh):"
 echo "   curl -s http://127.0.0.1:4000/api/health"
-echo ""
-echo "If still 503 after RESTART, check startup error:"
-echo "   cd ~/tv.bakeandgrill.mv/server"
-echo "   source ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate"
-echo "   node server.js"
-echo "   (Ctrl+C after you see the error — then fix .env / DB / JWT_SECRET)"

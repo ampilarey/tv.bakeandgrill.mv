@@ -15,23 +15,25 @@ alwaysApply: true
 
  bash ~/tv.bakeandgrill.mv/scripts/server-pull-deploy.sh
 
- (If pull fails with "untracked working tree files would be overwritten", run that script —
-  it removes old manual docroot copies then pulls.)
+ 2. If login returns 503, start the API (do NOT use cPanel RESTART for frontend-only deploys):
 
- 2. cPanel → Setup Node.js App → RESTART
+ bash ~/tv.bakeandgrill.mv/scripts/server-ensure-running.sh
 
- 3. Verify frontend actually updated (must show 1.3.x, NOT 1.2.7):
+ 3. Verify:
  curl -s https://tv.bakeandgrill.mv/version.json
- curl -s https://tv.bakeandgrill.mv/api/health
+ curl -s http://127.0.0.1:4000/api/health
 
- 4. Hard-refresh browser or use private window. Footer must match version.json.
+ Only use cPanel → Setup Node.js App → RESTART when server/ code changed.
 ─────────────────────────────────────────
 ```
 
-**Important:** `index.html` and `assets/` live at the **git repo root** (docroot). `git pull` alone deploys the frontend — no `cp` step needed if root files are committed.
+---
 
-If `version.json` is missing or stale after pull, run on server:
-`bash scripts/publish-frontend.sh` (only works if `client/dist` exists from pull).
+## Why 503 keeps happening
+
+- **Frontend deploys** (assets, index.html) do **not** need Node restarted.
+- Clicking **RESTART** in cPanel or `touch server/tmp/restart.txt` after every pull often **kills the API** and it fails to come back.
+- **Fix:** `git pull` only for frontend updates. Use `server-ensure-running.sh` if API is down.
 
 ---
 
@@ -50,21 +52,11 @@ If `version.json` is missing or stale after pull, run on server:
 
 ---
 
-## If you need to run npm install on the server
-
-```bash
-source ~/nodevenv/tv.bakeandgrill.mv/server/18/bin/activate
-npm install --prefix ~/tv.bakeandgrill.mv/server --omit=dev
-```
-
----
-
 ## NEVER do these on the cPanel server
+- **RESTART Node in cPanel after every frontend-only pull** — causes 503
+- `touch server/tmp/restart.txt` after frontend deploys
 - `npm run build` — vite is not installed on the server
-- `cd /home/bakegril/tv.bakeandgrill.mv` — wrong path, use `~/tv.bakeandgrill.mv`
-- `git pull origin main` alone (without `GIT_SSH_COMMAND`) — will fail with "Repository not found"
-- `source ~/nodevenv/tv.bakeandgrill.mv/server/20/bin/activate` — Node 20 is not installed, use 18
-- Assuming deploy worked without checking `curl …/version.json` — old `index-HwyNGss9.js` means frontend was never updated
+- `git pull` without `GIT_SSH_COMMAND` — will fail with "Repository not found"
 
 ---
 
@@ -76,6 +68,4 @@ cd /Users/vigani/Website/tv
 git add -A && git commit -m "your message" && git push origin main
 ```
 
-`npm run build` runs Vite and `scripts/publish-frontend.sh` (copies to repo root + writes `version.json`).
-
-Then run the cPanel pull command above.
+Then run `server-pull-deploy.sh` on cPanel.
