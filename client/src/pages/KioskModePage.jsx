@@ -746,7 +746,7 @@ export default function KioskModePage() {
     const ua = navigator.userAgent || '';
     const isIOS = (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) ||
                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isHLS = isHlsStream(streamUrl);
+    const isHLS = isHlsStream(streamUrl, currentChannel);
 
     let retryCount = 0;
     const maxRetries = 5;

@@ -11,8 +11,10 @@ export function getStreamUrl(channel) {
   return channel.playback_url || channel.url || null;
 }
 
-export function isHlsStream(url) {
+export function isHlsStream(url, channel = null) {
   if (!url) return false;
+  if (isProxyStreamUrl(url)) return true;
+  if (channel?.is_hls === 1 || channel?.is_hls === true) return true;
   try {
     return new URL(url).pathname.toLowerCase().endsWith('.m3u8');
   } catch {

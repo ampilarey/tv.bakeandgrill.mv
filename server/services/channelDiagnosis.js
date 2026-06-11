@@ -1,7 +1,9 @@
 const crypto = require('crypto');
 const { URL } = require('url');
 const { fetch, fetchRange, redactUrl } = require('../utils/httpClient');
-const { parseManifest, pickVariant, isHevcCodec, isUnsupportedAudio, isDrmKeyMethod } = require('../utils/hlsManifest');
+const {
+  parseManifest, pickVariant, isHevcCodec, isUnsupportedAudio, isDrmKeyMethod, isHlsManifestContent,
+} = require('../utils/hlsManifest');
 const { getDatabase } = require('../database/init');
 
 const DIAGNOSIS_VERSION = 1;
@@ -158,11 +160,23 @@ function computePlayability(d) {
 }
 
 function computeNeedsProxy(d, channel) {
+  if (d.is_hls) d.needs_proxy = 1;
   if (d.is_http) d.needs_proxy = 1;
   if (channel.httpReferrer || channel.requires_referrer) d.needs_proxy = 1;
   if (channel.httpUserAgent || channel.requires_user_agent) d.needs_proxy = 1;
   if (d.is_http && d.is_https === 0) d.needs_proxy = 1;
   return d;
+}
+
+function detectHlsFromProbe(d, url, body) {
+  if (d.is_hls) return;
+  if (isHlsManifestContent(d.content_type, url)) {
+    d.is_hls = 1;
+    return;
+  }
+  if (typeof body === 'string' && body.trim().startsWith('#EXTM3U')) {
+    d.is_hls = 1;
+  }
 }
 
 function computePlayStatus(d, override = {}) {
@@ -220,6 +234,9 @@ async function diagnoseChannel(channel, playlistId) {
     d.final_url = res.finalUrl || channel.url;
     d.status_code = res.status;
     d.content_type = res.headers['content-type'] || null;
+
+    detectHlsFromProbe(d, channel.url, res.data);
+    if (d.is_hls) computeNeedsProxy(d, channel);
 
     if (d.is_hls) {
       const parsed = parseManifest(res.data, d.final_url);

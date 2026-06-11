@@ -78,24 +78,44 @@ async function validateUrl(urlStr) {
   return { urlObj, addresses };
 }
 
-function pinnedLookup(addresses) {
-  const primary = addresses[0];
-  const address = primary.address;
-  const family = primary.family ?? (net.isIPv6(address) ? 6 : 4);
+function normalizeAddress(entry) {
+  const address = entry.address || entry;
+  const family = entry.family ?? (net.isIPv6(address) ? 6 : 4);
+  return { address, family };
+}
+
+/** Prefer IPv4 edges first — many IPTV CDNs have flaky AAAA records. */
+function orderAddresses(addresses) {
+  const seen = new Set();
+  const ordered = [];
+  for (const entry of addresses) {
+    const addr = normalizeAddress(entry);
+    const key = `${addr.family}:${addr.address}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ordered.push(addr);
+  }
+  const v4 = ordered.filter((a) => a.family === 4);
+  const v6 = ordered.filter((a) => a.family !== 4);
+  return v4.length || v6.length ? [...v4, ...v6] : ordered;
+}
+
+function pinnedLookupFor(addr) {
   return (hostname, options, callback) => {
     if (typeof options === 'function') {
       callback = options;
     }
-    callback(null, address, family);
+    callback(null, addr.address, addr.family);
   };
 }
 
-function buildPinnedRequestOptions(urlObj, addresses, baseOptions = {}) {
+function buildPinnedRequestOptions(urlObj, addr, baseOptions = {}) {
+  const normalized = normalizeAddress(addr);
   const options = {
     hostname: urlObj.hostname,
     port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
     path: urlObj.pathname + urlObj.search,
-    lookup: pinnedLookup(addresses),
+    lookup: pinnedLookupFor(normalized),
     ...baseOptions,
   };
   if (urlObj.protocol === 'https:') {
@@ -110,6 +130,33 @@ function buildPinnedRequestOptions(urlObj, addresses, baseOptions = {}) {
   return options;
 }
 
+const RETRYABLE_REQUEST_CODES = new Set([
+  'ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH',
+  'ETIMEDOUT', 'EPIPE', 'EAI_AGAIN', 'ECONNABORTED',
+]);
+
+function isRetryableRequestError(err) {
+  if (!err) return false;
+  if (err.response || err.status) return false;
+  return RETRYABLE_REQUEST_CODES.has(err.code);
+}
+
+async function withAddressFallback(urlObj, addresses, run) {
+  const ordered = orderAddresses(addresses);
+  let lastErr;
+  for (const addr of ordered) {
+    try {
+      return await run(addr);
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryableRequestError(err)) throw err;
+    }
+  }
+  const error = lastErr || new Error('All resolved addresses failed');
+  error.code = error.code || 'PROXY_RUNTIME_ERROR';
+  throw error;
+}
+
 function isRedirectStatus(code) {
   return code >= 300 && code < 400;
 }
@@ -117,15 +164,14 @@ function isRedirectStatus(code) {
 /**
  * Core HTTP request with SSRF validation, size limits, optional redirects.
  */
-async function fetchOnce(url, options = {}) {
-  const { urlObj, addresses } = await validateUrl(url);
+function fetchOncePinned(url, urlObj, addr, options = {}) {
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   const method = options.method || 'GET';
 
   return new Promise((resolve, reject) => {
     const protocol = urlObj.protocol === 'https:' ? https : http;
 
-    const requestOptions = buildPinnedRequestOptions(urlObj, addresses, {
+    const requestOptions = buildPinnedRequestOptions(urlObj, addr, {
       method,
       headers: {
         'User-Agent': 'BakeGrillTV/1.0',
@@ -207,6 +253,11 @@ async function fetchOnce(url, options = {}) {
   });
 }
 
+async function fetchOnce(url, options = {}) {
+  const { urlObj, addresses } = await validateUrl(url);
+  return withAddressFallback(urlObj, addresses, (addr) => fetchOncePinned(url, urlObj, addr, options));
+}
+
 /**
  * Fetch with redirect following (max 5 hops).
  */
@@ -285,8 +336,8 @@ function streamRange(originUrl, options = {}) {
     };
     if (rangeHeader) reqHeaders.Range = rangeHeader;
 
-    return new Promise((resolve, reject) => {
-      const requestOptions = buildPinnedRequestOptions(urlObj, addresses, {
+    return withAddressFallback(urlObj, addresses, (addr) => new Promise((resolve, reject) => {
+      const requestOptions = buildPinnedRequestOptions(urlObj, addr, {
         method: 'GET',
         headers: reqHeaders,
         timeout,
@@ -373,7 +424,7 @@ function streamRange(originUrl, options = {}) {
         reject(Object.assign(new Error('Request timeout'), { code: 'ECONNABORTED' }));
       });
       req.end();
-    });
+    }));
   };
 
   return attempt();
@@ -396,9 +447,9 @@ async function fetchRange(url, options = {}) {
       Range: `bytes=${start}-${end}`,
     };
 
-    const res = await new Promise((resolve, reject) => {
+    const res = await withAddressFallback(urlObj, addresses, (addr) => new Promise((resolve, reject) => {
       const protocol = urlObj.protocol === 'https:' ? https : http;
-      const requestOptions = buildPinnedRequestOptions(urlObj, addresses, {
+      const requestOptions = buildPinnedRequestOptions(urlObj, addr, {
         method: 'GET',
         headers: { 'User-Agent': 'BakeGrillTV/1.0', ...headers },
         timeout: options.timeout || 10000,
@@ -438,7 +489,7 @@ async function fetchRange(url, options = {}) {
         reject(Object.assign(new Error('Request timeout'), { code: 'ECONNABORTED' }));
       });
       req.end();
-    });
+    }));
 
     if (res.isRedirect) {
       redirectCount += 1;

@@ -11,7 +11,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const { fetchRange, streamRange, redactUrl } = require('../utils/httpClient');
-const { rewriteManifest } = require('../utils/hlsManifest');
+const { rewriteManifest, isHlsManifestContent } = require('../utils/hlsManifest');
 const { issueStreamToken } = require('../utils/streamToken');
 
 let passed = 0;
@@ -87,6 +87,22 @@ function testManifestRewrite() {
   ].join('\n');
   const iframeOut = rewriteManifest(withIframe, 'https://cdn.example.com/live/master.m3u8', rewriteFn);
   assert('EXT-X-I-FRAME-STREAM-INF next-line URI rewritten', iframeOut.includes(encodeURIComponent('https://cdn.example.com/live/iframe.m3u8')));
+}
+
+function testHlsDetection() {
+  console.log('\nHLS detection');
+  assert(
+    'isHlsManifestContent detects apple mpegurl',
+    isHlsManifestContent('application/vnd.apple.mpegurl', 'https://cdn.example.com/live/user/pass/1')
+  );
+  assert(
+    'isHlsManifestContent ignores plain HTML',
+    !isHlsManifestContent('text/html', 'https://cdn.example.com/live/user/pass/1')
+  );
+  assert(
+    'isHlsManifestContent detects .m3u8 path',
+    isHlsManifestContent(null, 'https://cdn.example.com/stream.m3u8')
+  );
 }
 
 async function testStreamRangeSecurity() {
@@ -175,6 +191,7 @@ async function run() {
   console.log('\n🔍  Stream proxy tests\n');
   testHttpClientExports();
   testManifestRewrite();
+  testHlsDetection();
   testStreamTokenIssue();
   await testStreamRangeSecurity();
   await testIntegrationOptional();

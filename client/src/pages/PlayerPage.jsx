@@ -273,7 +273,7 @@ export default function PlayerPage() {
     dimensionCheckTimerRef.current = null;
 
     const video = videoRef.current;
-    const isHLS = isHlsStream(streamUrl);
+    const isHLS = isHlsStream(streamUrl, currentChannel);
     
     // 🚨 CRITICAL: Use iOS detection from top level (already calculated)
     // Re-check iOS detection to be absolutely sure

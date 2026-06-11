@@ -146,7 +146,7 @@ router.get('/:channelId/seg', asyncHandler(async (req, res) => {
       return res.send(rewritten);
     }
 
-    const looksLikeKey = /\.key(\?|$)/i.test(segmentUrl) || (segmentUrl.includes('key') && !/\.(ts|m4s|mp4)(\?|$)/i.test(segmentUrl));
+    const looksLikeKey = /\.key(\?|$)/i.test(segmentUrl);
     const maxBytes = looksLikeKey ? KEY_MAX_BYTES : SEGMENT_MAX_BYTES;
 
     await streamRange(segmentUrl, {

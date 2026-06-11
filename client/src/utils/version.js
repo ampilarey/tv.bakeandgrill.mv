@@ -1,6 +1,6 @@
 // Version check - only reload on actual version change
 // Update this manually when deploying major changes
-export const APP_VERSION = '1.2.6'; // Playback stall fix — proxy segments, iOS recovery, client failure separation
+export const APP_VERSION = '1.2.7'; // CDN DNS fallback, extensionless HLS proxy, segment key heuristic fix
 
 export function checkVersion() {
   try {

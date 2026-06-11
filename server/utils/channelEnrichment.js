@@ -29,8 +29,9 @@ function enrichChannel(ch, health, override, playlist, req) {
 
   const urlIsHttp = h.is_http === 1 || (h.is_http == null && urlIsHttpScheme(ch.url));
   const urlIsHls = ch.url ? isHlsUrl(ch.url) : false;
+  const healthIsHls = h.is_hls === 1;
   const inferredNeedsProxy =
-    urlIsHttp || ch.requires_referrer || ch.requires_user_agent || urlIsHls ? 1 : 0;
+    urlIsHttp || ch.requires_referrer || ch.requires_user_agent || urlIsHls || healthIsHls ? 1 : 0;
 
   const diagnosis = {
     is_live: h.is_live ?? null,
@@ -48,6 +49,7 @@ function enrichChannel(ch, health, override, playlist, req) {
     playable_tv_browser: h.playable_tv_browser ?? null,
     needs_proxy: h.needs_proxy ?? inferredNeedsProxy,
     is_drm: h.is_drm ?? 0,
+    is_hls: h.is_hls ?? (urlIsHls ? 1 : 0),
     is_http: urlIsHttp ? 1 : 0,
     manifest_reachable: h.manifest_reachable ?? null,
     first_segment_reachable: h.first_segment_reachable ?? null,
@@ -68,7 +70,8 @@ function enrichChannel(ch, health, override, playlist, req) {
       urlIsHttpScheme(ch.url) ||
       ch.requires_referrer ||
       ch.requires_user_agent ||
-      urlIsHls;
+      urlIsHls ||
+      healthIsHls;
 
     if (useProxy && play_status !== 'offline') {
       playback_url = buildPlaybackProxyUrl(ch.id, playlist.id, hash, req);
@@ -95,7 +98,7 @@ async function loadHealthAndOverrides(playlistId) {
       `SELECT url_hash, is_live, last_checked, failure_reason_code, failure_message, failure_stage,
               last_device_type, last_client_failure_reason, last_client_failure_stage, client_failure_count,
               playable_ios, playable_android_chrome, playable_desktop_chrome,
-              playable_tv_browser, needs_proxy, is_drm, manifest_reachable, first_segment_reachable, is_http
+              playable_tv_browser, needs_proxy, is_drm, is_hls, manifest_reachable, first_segment_reachable, is_http
        FROM channel_health WHERE playlist_id = ?`,
       [playlistId]
     );
