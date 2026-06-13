@@ -154,6 +154,28 @@ function testEnrichmentAutoMode() {
   assert('playback_url starts direct', ch.playback_url === ch.direct_url);
 }
 
+function testDirectChannelIdEnrichment() {
+  console.log('\ndirect channel id direct-N');
+  const ch = enrichChannel(
+    {
+      id: 'direct-99',
+      url: 'https://cdn.example.com/single.m3u8',
+      name: 'Single HLS',
+      source_type: 'direct_stream',
+      stream_type: 'hls',
+      playback_mode: 'auto',
+      source_playlist_id: 3,
+    },
+    { is_hls: 1, is_live: 1 },
+    null,
+    { id: 3 },
+    { protocol: 'https', get: () => 'tv.bakeandgrill.mv' }
+  );
+  assert('direct-N id preserved', ch.id === 'direct-99');
+  assert('proxy URL uses direct-N channel id', ch.proxy_url && ch.proxy_url.includes('/api/stream/direct-99'));
+  assert('source_type on enriched channel', ch.source_type === 'direct_stream');
+}
+
 function testTokenExpiry() {
   console.log('\nproxy token expiry');
   const token = issueStreamToken({
@@ -191,6 +213,7 @@ function testExplicitProxyMode() {
 async function run() {
   console.log('\n🔍  HLS transport tests\n');
   testEnrichmentAutoMode();
+  testDirectChannelIdEnrichment();
   testExplicitProxyMode();
   testTokenExpiry();
   await testRumbleLikeOrigin();

@@ -1,7 +1,7 @@
 const express = require('express');
 const { getDatabase } = require('../database/init');
 const { verifyToken } = require('../middleware/auth');
-const { validatePlaylistCreate, isValidM3UUrl } = require('../middleware/validation');
+const { validatePlaylistCreate, isValidM3UUrl, probePlaylistUrl } = require('../middleware/validation');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { checkPermission, checkResourceLimit, getAssignedPlaylists } = require('../middleware/permissions');
 
@@ -81,6 +81,24 @@ router.post('/',
   asyncHandler(async (req, res) => {
   const { name, m3u_url, description } = req.body;
   const db = getDatabase();
+
+  if (m3u_url && isValidM3UUrl(m3u_url)) {
+    try {
+      const probe = await probePlaylistUrl(m3u_url);
+      if (probe.isDirectHls) {
+        return res.status(409).json({
+          success: false,
+          code: 'DIRECT_HLS_NOT_IPTV',
+          error: 'This URL is a direct HLS stream, not a multi-channel M3U playlist.',
+          detected_type: probe.detected_type,
+          suggest_direct: true,
+          stream_url: probe.stream_url,
+        });
+      }
+    } catch (probeErr) {
+      console.warn('[playlists] URL probe failed:', probeErr.message);
+    }
+  }
   
   // Check max playlists limit per user (optional)
   const [settings] = await db.query('SELECT setting_value FROM app_settings WHERE setting_key = ?', ['max_playlists_per_user']);
@@ -224,12 +242,29 @@ router.put('/:id',
   }
   
   if (m3u_url !== undefined) {
-    if (!isValidM3UUrl(m3u_url)) {
+    if (m3u_url && !isValidM3UUrl(m3u_url)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid M3U URL format',
         code: 'VALIDATION_ERROR'
       });
+    }
+    if (m3u_url) {
+      try {
+        const probe = await probePlaylistUrl(m3u_url);
+        if (probe.isDirectHls) {
+          return res.status(409).json({
+            success: false,
+            code: 'DIRECT_HLS_NOT_IPTV',
+            error: 'This URL is a direct HLS stream, not a multi-channel M3U playlist.',
+            detected_type: probe.detected_type,
+            suggest_direct: true,
+            stream_url: probe.stream_url,
+          });
+        }
+      } catch (probeErr) {
+        console.warn('[playlists] URL probe failed:', probeErr.message);
+      }
     }
     updates.push('m3u_url = ?');
     params.push(m3u_url);

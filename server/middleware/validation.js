@@ -2,6 +2,11 @@
  * Validation middleware functions
  */
 
+const { fetch } = require('../utils/httpClient');
+const { classifyPlaylistContent, isHlsPlaylistType } = require('../utils/playlistClassifier');
+
+const PLAYLIST_PROBE_MAX_BYTES = parseInt(process.env.PLAYLIST_PROBE_MAX_BYTES || '8192', 10);
+
 /**
  * Validate email format
  */
@@ -23,6 +28,26 @@ function isValidPassword(password) {
  */
 function isValidPhoneNumber(phone) {
   return phone && /^\d{7}$/.test(phone);
+}
+
+/**
+ * Fetch playlist URL and detect if it is a direct HLS stream rather than IPTV M3U.
+ */
+async function probePlaylistUrl(m3uUrl) {
+  const res = await fetch(m3uUrl, {
+    timeout: 12000,
+    maxBytes: PLAYLIST_PROBE_MAX_BYTES,
+    headers: { 'User-Agent': 'BakeGrillTV/1.0' },
+  });
+  const body = typeof res.data === 'string' ? res.data : String(res.data || '');
+  const classification = classifyPlaylistContent(body, res.finalUrl || m3uUrl);
+  return {
+    status: res.status,
+    classification,
+    isDirectHls: isHlsPlaylistType(classification.type),
+    detected_type: classification.type,
+    stream_url: res.finalUrl || m3uUrl,
+  };
 }
 
 /**
@@ -221,6 +246,7 @@ module.exports = {
   validateUserCreate,
   validatePlaylistCreate,
   validateDisplayCreate,
-  validateScheduleCreate
+  validateScheduleCreate,
+  probePlaylistUrl,
 };
 

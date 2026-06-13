@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null, variant: 'danger' });
   const [addLoading, setAddLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
+  const [hlsDirectPrompt, setHlsDirectPrompt] = useState({ open: false, streamUrl: '', detectedType: '' });
   
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -77,7 +78,16 @@ export default function DashboardPage() {
       setNewPlaylist({ name: '', m3u_url: '', description: '' });
       fetchPlaylists();
     } catch (error) {
-      setError(error.response?.data?.error || 'Failed to add playlist');
+      if (error.response?.data?.code === 'DIRECT_HLS_NOT_IPTV') {
+        setHlsDirectPrompt({
+          open: true,
+          streamUrl: error.response.data.stream_url || newPlaylist.m3u_url,
+          detectedType: error.response.data.detected_type || 'hls',
+        });
+        setError('');
+      } else {
+        setError(error.response?.data?.error || 'Failed to add playlist');
+      }
     } finally {
       setAddLoading(false);
     }
@@ -102,7 +112,16 @@ export default function DashboardPage() {
       setEditPlaylist({ name: '', m3u_url: '', description: '' });
       fetchPlaylists();
     } catch (error) {
-      setEditError(error.response?.data?.error || 'Failed to update playlist');
+      if (error.response?.data?.code === 'DIRECT_HLS_NOT_IPTV') {
+        setHlsDirectPrompt({
+          open: true,
+          streamUrl: error.response.data.stream_url || editPlaylist.m3u_url,
+          detectedType: error.response.data.detected_type || 'hls',
+        });
+        setEditError('');
+      } else {
+        setEditError(error.response?.data?.error || 'Failed to update playlist');
+      }
     } finally {
       setEditLoading(false);
     }
@@ -418,6 +437,42 @@ export default function DashboardPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={hlsDirectPrompt.open}
+        onClose={() => setHlsDirectPrompt({ open: false, streamUrl: '', detectedType: '' })}
+        title="Direct HLS stream detected"
+      >
+        <p className="text-tv-textMuted text-sm mb-4">
+          This URL is a direct HLS stream ({hlsDirectPrompt.detectedType}), not a multi-channel M3U playlist.
+          Adding it as a playlist would create invalid &quot;Unknown Channel&quot; entries. Add it as one direct stream channel instead?
+        </p>
+        <p className="text-xs text-tv-textMuted break-all mb-5 font-mono">{hlsDirectPrompt.streamUrl}</p>
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex-1"
+            onClick={() => setHlsDirectPrompt({ open: false, streamUrl: '', detectedType: '' })}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            className="flex-1"
+            onClick={() => {
+              const url = encodeURIComponent(hlsDirectPrompt.streamUrl);
+              setHlsDirectPrompt({ open: false, streamUrl: '', detectedType: '' });
+              setShowAddModal(false);
+              setShowEditModal(false);
+              navigate(`/admin/direct-channels?url=${url}&tab=add`);
+            }}
+          >
+            Add as Direct Stream
+          </Button>
+        </div>
       </Modal>
       
       {/* Confirm Modal */}

@@ -1,0 +1,5 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="news1" tvg-name="News One" group-title="News",News One
+https://cdn.example.com/news1/index.m3u8
+#EXTINF:-1 tvg-id="sports1" tvg-name="Sports HD" group-title="Sports",Sports HD
+https://cdn.example.com/sports/index.m3u8

@@ -196,6 +196,13 @@ export default function ChannelHealth() {
   return (
     <div className="min-h-screen bg-tv-bg flex flex-col">
       <AdminTopBar title="Channel Health" subtitle="Deep diagnosis and playability">
+        <button
+          type="button"
+          onClick={() => navigate('/admin/direct-channels')}
+          className="text-sm text-white border border-white/30 hover:border-white/60 px-3 py-1.5 rounded-lg transition-colors mr-2"
+        >
+          Direct Streams
+        </button>
         {selectedPl && (
           <button
             type="button"

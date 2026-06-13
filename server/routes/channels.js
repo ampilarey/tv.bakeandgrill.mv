@@ -1,29 +1,27 @@
 const express = require('express');
-const { fetch } = require('../utils/httpClient');
 const { getDatabase } = require('../database/init');
-const { verifyToken, requireAdmin } = require('../middleware/auth');
 const {
-  parseM3U,
   extractGroups,
   searchChannels,
   filterByGroup,
   sortChannels,
-  playlistBaseUrl,
 } = require('../utils/m3uParser');
-const { asyncHandler } = require('../middleware/errorHandler');
-const m3uCache = require('../utils/m3uCache');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
+const { getPlaylistChannelsMerged, findChannelInMerged } = require('../utils/playlistChannelMerge');
 const {
   urlHash,
   diagnoseAndPersist,
   REASON_CODES,
   REASON_MESSAGES,
 } = require('../services/channelDiagnosis');
-const { enrichChannel, isVisibleInPlayableFilter } = require('../utils/channelEnrichment');
+const { asyncHandler } = require('../middleware/errorHandler');
 const channelChecker = require('../services/channelChecker');
+const directChannelsRouter = require('./directChannels');
 
 const router = express.Router();
 
 router.use(verifyToken);
+router.use('/direct', directChannelsRouter);
 
 async function assertPlaylistAccess(req, playlistId) {
   if (req.user.role === 'admin') return true;
@@ -59,61 +57,25 @@ router.get('/', asyncHandler(async (req, res) => {
   }
 
   try {
-    let channels = m3uCache.get(playlistId, playlist.m3u_url);
+    const { playlist, channels: merged } = await getPlaylistChannelsMerged(playlistId, req, {
+      hideHidden: playableOnly !== '1',
+      playableOnly: playableOnly === '1' ? 'soft' : false,
+    });
 
-    if (!channels) {
-      const response = await fetch(playlist.m3u_url, {
-        timeout: 10000,
-        headers: { 'User-Agent': 'BakeGrillTV/1.0' },
+    if (!merged?.length) {
+      return res.status(404).json({
+        success: false,
+        error: 'No channels found in this playlist',
+        code: 'NO_CHANNELS',
       });
-      channels = parseM3U(response.data, playlistBaseUrl(playlist.m3u_url));
-      if (channels?.length) m3uCache.set(playlistId, playlist.m3u_url, channels);
     }
 
-    if (!channels?.length) {
-      return res.status(500).json({ success: false, error: 'Failed to parse M3U file or no channels found', code: 'M3U_PARSE_ERROR' });
-    }
-
+    let channels = merged;
     if (search) channels = searchChannels(channels, search);
     if (group) channels = filterByGroup(channels, group);
     channels = sortChannels(channels, sort || 'name');
 
-    let healthMap = new Map();
-    let overrideMap = new Map();
-
-    try {
-      const [healthRows] = await db.query(
-        `SELECT url_hash, is_live, last_checked, failure_reason_code, failure_message, failure_stage,
-                last_device_type, playable_ios, playable_android_chrome, playable_desktop_chrome,
-                playable_tv_browser, needs_proxy, is_drm, is_hls, manifest_reachable,
-                first_segment_reachable, is_http
-         FROM channel_health WHERE playlist_id = ?`,
-        [playlistId]
-      );
-      healthMap = new Map(healthRows.map((r) => [r.url_hash, r]));
-
-      const [overrideRows] = await db.query(
-        'SELECT url_hash, is_hidden, is_trusted FROM channel_overrides WHERE playlist_id = ?',
-        [playlistId]
-      );
-      overrideMap = new Map(overrideRows.map((r) => [r.url_hash, r]));
-    } catch (healthErr) {
-      console.warn('[channels] Could not load health/override data:', healthErr.message);
-    }
-
-    channels = channels.map((ch) => {
-      const hash = ch.url ? urlHash(ch.url) : null;
-      return enrichChannel(ch, hash ? healthMap.get(hash) : null, hash ? overrideMap.get(hash) : null, playlist, req);
-    });
-
-    if (playlist.trusted_streams_only) {
-      channels = channels.filter((c) => c.is_trusted !== 0);
-    }
-
-    if (playableOnly === '1') {
-      channels = channels.filter(isVisibleInPlayableFilter); // soft playable filter for Watch page
-    } else {
-      channels = channels.filter((c) => c.is_hidden !== 1);
+    if (playableOnly !== '1') {
       channels.sort((a, b) => {
         const order = { playable: 0, unknown: 1, needs_recheck: 2, unsupported: 3, offline: 4, blocked: 5 };
         return (order[a.play_status] ?? 9) - (order[b.play_status] ?? 9) || a.name.localeCompare(b.name);
@@ -360,22 +322,12 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const [playlists] = await db.query('SELECT * FROM playlists WHERE id = ? AND is_active = TRUE', [playlistId]);
   if (!playlists.length) return res.status(404).json({ success: false, error: 'Playlist not found' });
 
-  let channels = m3uCache.get(playlistId, playlists[0].m3u_url);
-  if (!channels) {
-    const response = await fetch(playlists[0].m3u_url, { timeout: 10000, headers: { 'User-Agent': 'BakeGrillTV/1.0' } });
-    channels = parseM3U(response.data, playlistBaseUrl(playlists[0].m3u_url));
-  }
-
-  const ch = channels.find((c) => c.id === id);
-  if (!ch) return res.status(404).json({ success: false, error: 'Channel not found' });
-
-  const hash = urlHash(ch.url);
-  const [healthRows] = await db.query('SELECT * FROM channel_health WHERE url_hash = ? AND playlist_id = ?', [hash, playlistId]);
-  const [overrideRows] = await db.query('SELECT * FROM channel_overrides WHERE url_hash = ? AND playlist_id = ?', [hash, playlistId]);
+  const found = await findChannelInMerged(playlistId, id, req);
+  if (!found) return res.status(404).json({ success: false, error: 'Channel not found' });
 
   res.json({
     success: true,
-    channel: enrichChannel(ch, healthRows[0], overrideRows[0], playlists[0], req),
+    channel: found.channel,
   });
 }));
 

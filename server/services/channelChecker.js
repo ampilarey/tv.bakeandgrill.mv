@@ -6,8 +6,6 @@
  */
 
 const { getDatabase } = require('../database/init');
-const { parseM3U, playlistBaseUrl } = require('../utils/m3uParser');
-const { fetch } = require('../utils/httpClient');
 const { diagnoseAndPersist, urlHash } = require('./channelDiagnosis');
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;
@@ -50,12 +48,12 @@ async function ensureTable() {
   }
 }
 
+const { parseM3U, playlistBaseUrl } = require('../utils/m3uParser');
+const { getRawMergedChannels } = require('../utils/playlistChannelMerge');
+
 async function fetchChannelsForPlaylist(playlist) {
-  const res = await fetch(playlist.m3u_url, {
-    timeout: 15000,
-    headers: { 'User-Agent': 'BakeGrillTV/1.0' },
-  });
-  return parseM3U(res.data, playlistBaseUrl(playlist.m3u_url));
+  const { channels } = await getRawMergedChannels(playlist.id);
+  return channels;
 }
 
 async function runCheck() {

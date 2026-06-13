@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { URL } = require('url');
+const { classifyPlaylistContent, isHlsPlaylistType } = require('./playlistClassifier');
 
 /**
  * Resolve a stream URL against the playlist base URL.
@@ -77,6 +78,15 @@ function parseHeaderLines(lines, startIdx) {
  */
 function parseM3U(m3uText, baseUrl = null) {
   try {
+    const classification = classifyPlaylistContent(m3uText, baseUrl || '');
+    if (isHlsPlaylistType(classification.type)) {
+      console.warn('[m3uParser] Refusing to parse HLS manifest as IPTV channel list', {
+        type: classification.type,
+        hints: classification.hints,
+      });
+      return [];
+    }
+
     let resolvedBase = baseUrl;
     if (baseUrl) {
       try {

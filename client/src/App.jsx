@@ -35,6 +35,7 @@ const MonitoringDashboard    = lazyWithRetry(() => import('./pages/admin/Monitor
 const ContentSchedules       = lazyWithRetry(() => import('./pages/admin/ContentSchedules'));
 const EmergencyOverride      = lazyWithRetry(() => import('./pages/admin/EmergencyOverride'));
 const ChannelHealth          = lazyWithRetry(() => import('./pages/admin/ChannelHealth'));
+const DirectChannelManagement = lazyWithRetry(() => import('./pages/admin/DirectChannelManagement'));
 const SystemHealth           = lazyWithRetry(() => import('./pages/admin/SystemHealth'));
 const FeatureFlags           = lazyWithRetry(() => import('./pages/admin/FeatureFlags'));
 const SlideTemplates         = lazyWithRetry(() => import('./pages/admin/SlideTemplates'));
@@ -371,6 +372,14 @@ function AnimatedRoutes() {
           element={
             <AdminRoute>
               <ChannelHealth />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/direct-channels"
+          element={
+            <AdminRoute>
+              <DirectChannelManagement />
             </AdminRoute>
           }
         />

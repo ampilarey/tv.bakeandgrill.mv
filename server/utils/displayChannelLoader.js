@@ -1,6 +1,5 @@
-const { parseM3U, playlistBaseUrl } = require('./m3uParser');
 const { enrichChannelsForPlaylist } = require('./channelEnrichment');
-const { fetch } = require('./httpClient');
+const { getRawMergedChannels } = require('./playlistChannelMerge');
 
 function normalizePlaylistIds(body, fallbackSingle) {
   const raw = body?.playlist_ids ?? body?.playlistIds;
@@ -62,22 +61,18 @@ async function loadDisplayChannels(db, display, req, { playableOnly = 'soft' } =
   let primaryPlaylist = null;
   const allEnriched = [];
   const kioskChannels = [];
-  const seenIds = new Set();
+  const seenAll = new Set();
+  const seenKiosk = new Set();
   const multi = playlistIds.length > 1;
 
   for (const pid of playlistIds) {
-    const [playlists] = await db.query('SELECT * FROM playlists WHERE id = ?', [pid]);
-    const playlist = playlists[0];
-    if (!playlist?.m3u_url) continue;
-    if (!primaryPlaylist) primaryPlaylist = playlist;
-
     try {
-      const m3uResponse = await fetch(playlist.m3u_url, {
-        timeout: 10000,
-        headers: { 'User-Agent': 'BakeGrillTV/1.0' },
-      });
-      const parsed = parseM3U(m3uResponse.data, playlistBaseUrl(playlist.m3u_url));
-      const tagged = parsed.map((ch) => ({
+      const { playlist, channels } = await getRawMergedChannels(pid);
+      if (!playlist) continue;
+      if (!primaryPlaylist) primaryPlaylist = playlist;
+      if (!channels.length) continue;
+
+      const tagged = channels.map((ch) => ({
         ...ch,
         id: multi ? `${pid}-${ch.id}` : ch.id,
         source_playlist_id: pid,
@@ -95,14 +90,14 @@ async function loadDisplayChannels(db, display, req, { playableOnly = 'soft' } =
       });
 
       for (const ch of all) {
-        if (!seenIds.has(ch.id)) {
-          seenIds.add(ch.id);
+        if (!seenAll.has(ch.id)) {
+          seenAll.add(ch.id);
           allEnriched.push(ch);
         }
       }
       for (const ch of kiosk) {
-        if (!seenIds.has(`k-${ch.id}`)) {
-          seenIds.add(`k-${ch.id}`);
+        if (!seenKiosk.has(ch.id)) {
+          seenKiosk.add(ch.id);
           kioskChannels.push(ch);
         }
       }

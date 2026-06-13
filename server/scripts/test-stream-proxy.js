@@ -153,6 +153,23 @@ function testPlaybackProxyEligibility() {
   assert('auto mode proxy_url is built', autoEnriched.proxy_url && autoEnriched.proxy_url.includes('/api/stream/'));
   assert('auto mode playback_url prefers direct', autoEnriched.playback_url === autoEnriched.direct_url);
 
+  const directStream = enrichChannel(
+    {
+      id: 'direct-55',
+      url: 'https://cdn.example.com/manual.m3u8',
+      name: 'Manual',
+      source_type: 'direct_stream',
+      stream_type: 'hls',
+      playback_mode: 'auto',
+    },
+    { is_hls: 1, is_live: 1 },
+    null,
+    { id: 2 },
+    mockReq
+  );
+  assert('direct_stream merge shape enriches', directStream.id === 'direct-55');
+  assert('direct_stream proxy path', directStream.proxy_url.includes('/api/stream/direct-55'));
+
   const proxyEnriched = enrichChannel(
     { id: 'rumble', url: 'https://cdn.rumble.cloud/live/chunklist.m3u8', name: 'Rumble' },
     { is_live: 0, is_hls: 1, is_http: 0, needs_proxy: 1, failure_reason_code: 'OFFLINE', last_checked: '2026-01-01' },

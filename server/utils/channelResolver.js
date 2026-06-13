@@ -1,37 +1,30 @@
-const { fetch } = require('./httpClient');
-const { parseM3U, playlistBaseUrl } = require('./m3uParser');
-const m3uCache = require('./m3uCache');
-const { getDatabase } = require('../database/init');
+const { getRawMergedChannels, findChannelInMerged } = require('./playlistChannelMerge');
+const { parseDirectChannelId } = require('../services/directChannelService');
+
+function normalizeChannelIdForPlaylist(channelId, playlistId) {
+  if (!channelId) return channelId;
+  const id = String(channelId);
+  const prefix = `${playlistId}-`;
+  if (id.startsWith(prefix)) return id.slice(prefix.length);
+  return id;
+}
 
 async function getPlaylistChannels(playlistId) {
-  const db = getDatabase();
-  const [playlists] = await db.query(
-    'SELECT * FROM playlists WHERE id = ? AND is_active = TRUE',
-    [playlistId]
-  );
-  if (!playlists.length) return { playlist: null, channels: [] };
-
-  const playlist = playlists[0];
-  let channels = m3uCache.get(playlistId, playlist.m3u_url);
-
-  if (!channels) {
-    const response = await fetch(playlist.m3u_url, {
-      timeout: 10000,
-      headers: { 'User-Agent': 'BakeGrillTV/1.0' },
-    });
-    channels = parseM3U(response.data, playlistBaseUrl(playlist.m3u_url));
-    if (channels?.length) m3uCache.set(playlistId, playlist.m3u_url, channels);
-  }
-
-  return { playlist, channels: channels || [] };
+  const { playlist, channels } = await getRawMergedChannels(playlistId);
+  return { playlist, channels };
 }
 
 async function resolveChannel(playlistId, channelId) {
-  const { playlist, channels } = await getPlaylistChannels(playlistId);
+  const normalizedId = normalizeChannelIdForPlaylist(channelId, playlistId);
+  const { playlist, channels } = await getRawMergedChannels(playlistId);
   if (!playlist) return null;
-  const channel = channels.find((c) => c.id === channelId);
+
+  let channel = channels.find((c) => c.id === channelId || c.id === normalizedId);
+  if (!channel && parseDirectChannelId(normalizedId)) {
+    channel = channels.find((c) => c.id === `direct-${parseDirectChannelId(normalizedId)}`);
+  }
   if (!channel) return null;
   return { playlist, channel };
 }
 
-module.exports = { getPlaylistChannels, resolveChannel };
+module.exports = { getPlaylistChannels, resolveChannel, normalizeChannelIdForPlaylist };

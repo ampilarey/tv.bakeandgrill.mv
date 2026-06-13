@@ -55,7 +55,7 @@ export function getPrePlayError(channel, isIOS) {
   if (channel.is_drm) return 'Stream blocked';
   if (channel.play_status === 'blocked') return 'Stream blocked';
   if (channel.play_status === 'unsupported') {
-    return 'Unsupported codec';
+    return 'Video codec not supported on this device';
   }
   if (!getStreamUrl(channel)) {
     if (channel.play_status === 'offline') {
@@ -120,7 +120,7 @@ export function mapPlaybackError({ reasonCode, mediaError, hlsError, timedOut, c
       return REASON_MESSAGES.MANIFEST_OK_SEGMENT_FAIL;
     }
     if (hlsError.type === 'networkError') return REASON_MESSAGES.SEGMENT_FETCH_FAILED;
-    if (hlsError.type === 'mediaError') return REASON_MESSAGES.UNSUPPORTED_CODEC;
+    if (hlsError.type === 'mediaError') return REASON_MESSAGES.MEDIA_CODEC_FAILURE;
     return REASON_MESSAGES.UNKNOWN_ERROR;
   }
 
@@ -129,7 +129,7 @@ export function mapPlaybackError({ reasonCode, mediaError, hlsError, timedOut, c
       case mediaError.MEDIA_ERR_NETWORK:
         return REASON_MESSAGES.SEGMENT_FETCH_FAILED;
       case mediaError.MEDIA_ERR_DECODE:
-        return REASON_MESSAGES.UNSUPPORTED_CODEC;
+        return REASON_MESSAGES.MEDIA_CODEC_FAILURE;
       case mediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
         return 'Stream incompatible with this device';
       default:

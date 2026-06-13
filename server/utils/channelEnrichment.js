@@ -30,6 +30,11 @@ function normalizeStoredNeedsProxy(stored, ch, health) {
 }
 
 function resolvePlaybackMode(ch, diagnosis, override = {}) {
+  if (ch?.source_type === 'direct_stream' && ch?.playback_mode) {
+    const m = ch.playback_mode;
+    if (m === 'auto' || m === 'direct' || m === 'proxy') return m;
+  }
+
   const explicit = override.playback_mode;
   if (explicit === 'auto' || explicit === 'direct' || explicit === 'proxy') {
     return explicit;
@@ -100,6 +105,7 @@ function enrichChannel(ch, health, override, playlist, req) {
 
   const urlIsHttp = h.is_http === 1 || (h.is_http == null && urlIsHttpScheme(ch.url));
   const urlIsHls = ch.url ? isHlsUrl(ch.url) : false;
+  const streamTypeHls = ch.stream_type === 'hls';
   const inferredNeedsProxy =
     urlIsHttp || channelNeedsReferrerOrUa(ch) ? 1 : 0;
 
@@ -119,7 +125,7 @@ function enrichChannel(ch, health, override, playlist, req) {
     playable_tv_browser: h.playable_tv_browser ?? null,
     needs_proxy: normalizeStoredNeedsProxy(h.needs_proxy, ch, h) ?? inferredNeedsProxy,
     is_drm: h.is_drm ?? 0,
-    is_hls: h.is_hls ?? (urlIsHls ? 1 : 0),
+    is_hls: h.is_hls ?? (urlIsHls || streamTypeHls ? 1 : 0),
     is_http: urlIsHttp ? 1 : 0,
     manifest_reachable: h.manifest_reachable ?? null,
     first_segment_reachable: h.first_segment_reachable ?? null,

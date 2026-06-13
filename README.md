@@ -225,6 +225,59 @@ Use case: "Happy Hour starting now — show promo for 1 hour"
 
 ---
 
+## M3U playlists vs direct streams
+
+**M3U playlist** — a remote URL that lists many IPTV channels (`#EXTINF` with channel names). Channels are fetched and parsed on each load (cached ~5 minutes).
+
+**Direct stream** — a single HLS (`.m3u8`), MP4, or web video URL added manually by an admin. Stored in the `direct_channels` table and merged with M3U channels for playback, health checks, and kiosk displays.
+
+If you paste a direct HLS URL into the playlist form, the server returns `409 DIRECT_HLS_NOT_IPTV` and offers **Add as Direct Stream** instead of creating bogus "Unknown Channel" entries from HLS segment lines.
+
+### Adding direct streams (admin)
+
+- **Admin → Direct Streams** (`/admin/direct-channels`)
+- **Add one:** name, URL, category, logo, playback mode (`auto` / `direct` / `proxy`), optional User-Agent and Referer
+- **Quick add:** paste URL → Test → default name "New HLS Channel"
+- **Bulk add:** one URL per line, `name|url|group`, or CSV `name,url,group`
+- Default target playlist: **Direct Streams** (also assign to any existing playlist for mixed M3U + manual channels)
+
+### Direct stream API (admin)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/channels/direct/test` | Probe URL without saving |
+| `POST` | `/api/channels/direct` | Create channel |
+| `POST` | `/api/channels/direct/bulk/preview` | Parse bulk text |
+| `POST` | `/api/channels/direct/bulk` | Import preview rows |
+| `GET` | `/api/channels/direct` | List (`?playlistId=N`) |
+| `PUT` | `/api/channels/direct/:id` | Update (`direct-{dbId}`) |
+| `DELETE` | `/api/channels/direct/:id` | Delete (blocks if referenced) |
+| `POST` | `/api/channels/direct/:id/retest` | Re-run probe |
+
+Viewers see merged channels via existing `GET /api/channels?playlistId=N`. Direct channel IDs are `direct-{dbId}`.
+
+### Playback modes & transport
+
+- **`auto`** — try direct browser URL first; on CORS/network failure, fall back to signed proxy (shared `useHlsPlaybackController`)
+- **`direct`** — origin URL only
+- **`proxy`** — signed `/api/stream/direct-N/…` only
+
+Set `STREAM_PROXY_USER_AGENT` for upstream fetches. Optional `DIRECT_STREAMS_PLAYLIST_ID` pins the default Direct Streams playlist.
+
+### Migration & rollback
+
+Apply: `server/database/migrations/2026-06-13-direct-channels.sql` (idempotent — creates `direct_channels`, nullable `playlists.m3u_url`, `playlist_kind`, seeds Direct Streams).
+
+Rollback (manual): `DROP TABLE direct_channels;` then restore `m3u_url NOT NULL` if you removed nullable support.
+
+### Tests
+
+```bash
+cd server && npm run test:direct && npm run test:stream && npm run test:hls-transport
+```
+
+---
+
 ## Channel Diagnosis & Playback
 
 ### How diagnosis works
@@ -280,6 +333,8 @@ Direct HTTPS streams without special requirements use the original URL as `playb
 | `STREAM_TOKEN_TTL_SEC` | 600 | Signed stream token lifetime |
 | `STREAM_PROXY_TIMEOUT_MS` | 15000 | Proxy fetch timeout |
 | `CHANNEL_PROBE_TIMEOUT_MS` | 12000 | Health probe timeout |
+| `DIRECT_STREAMS_PLAYLIST_ID` | (auto) | Override default Direct Streams playlist ID |
+| `PLAYLIST_PROBE_MAX_BYTES` | 8192 | Bytes fetched when validating new playlist URLs |
 | `MAX_STORAGE_MB` | 2048 | Total media library disk quota |
 
 Manual test checklist: [`docs/CHANNEL_PLAYBACK_TEST_CHECKLIST.md`](docs/CHANNEL_PLAYBACK_TEST_CHECKLIST.md)
