@@ -9,6 +9,7 @@ import BottomBarOverlay  from '../components/overlays/BottomBarOverlay';
 import PopupCardOverlay  from '../components/overlays/PopupCardOverlay';
 import SplitRightPanel   from '../components/overlays/SplitRightPanel';
 import { getStreamUrl, isHlsStream, PLAYBACK_TIMEOUT_MS } from '../hooks/usePlaybackGuard';
+import useHlsPlaybackController from '../hooks/useHlsPlaybackController';
 import { APP_VERSION } from '../utils/version';
 
 const HEARTBEAT_INTERVAL_MS    = 25_000;
@@ -132,6 +133,18 @@ export default function KioskModePage() {
   const [display, setDisplay]               = useState(null);
   const [channels, setChannels]             = useState([]);
   const [currentChannel, setCurrentChannel] = useState(null);
+  const kioskPlaylistId = currentChannel?.source_playlist_id || display?.playlistId || null;
+  const {
+    activeStreamUrl,
+    transportRevision,
+    handleHlsFatalError,
+    handleNativeVideoError,
+    destroyPlayer: destroyHlsPlayer,
+  } = useHlsPlaybackController({
+    channel: currentChannel,
+    playlistId: kioskPlaylistId,
+    onChannelUpdate: setCurrentChannel,
+  });
   const [error, setError]                   = useState('');
   const [loading, setLoading]               = useState(true);
   const [isMuted, setIsMuted]               = useState(false);
@@ -739,7 +752,7 @@ export default function KioskModePage() {
   // ── Video player ─────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const streamUrl = getStreamUrl(currentChannel);
+    const streamUrl = activeStreamUrl || getStreamUrl(currentChannel);
     if (!streamUrl || !videoRef.current) return;
 
     const video = videoRef.current;
@@ -748,8 +761,6 @@ export default function KioskModePage() {
                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const isHLS = isHlsStream(streamUrl, currentChannel);
 
-    let retryCount = 0;
-    const maxRetries = 5;
     let hasConfirmedPlayback = false;
     let lastPlaybackTime = 0;
     let playTimeout = null;
@@ -776,11 +787,7 @@ export default function KioskModePage() {
     const startPT = () => {
       clearPT();
       playTimeout = setTimeout(() => {
-        if (!hasConfirmedPlayback && retryCount < maxRetries) {
-          retryCount++;
-          clearRDT();
-          retryDelayTimeout = setTimeout(() => setupPlayer(), 2000);
-        } else if (!hasConfirmedPlayback) {
+        if (!hasConfirmedPlayback) {
           advanceToNextChannel();
         }
       }, PLAYBACK_TIMEOUT_MS);
@@ -788,7 +795,7 @@ export default function KioskModePage() {
 
     const setupPlayer = () => {
       clearPT();
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+      destroyHlsPlayer(hlsRef);
 
       if (isHLS && (isIOS || (!Hls.isSupported() && video.canPlayType('application/vnd.apple.mpegurl') !== ''))) {
         video.src = ''; video.load();
@@ -799,7 +806,29 @@ export default function KioskModePage() {
         video.src = streamUrl;
         startPT();
         video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
-      } else if (isHLS && Hls.isSupported()) {
+
+        const onNativeError = async () => {
+          if (!video.error) return;
+          const result = await handleNativeVideoError(video.error);
+          if (result.action === 'switch_transport' || result.action === 'reload') {
+            video.src = result.url;
+            video.load();
+            video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
+            return;
+          }
+          if (result.action === 'retry_same') {
+            video.src = streamUrl;
+            video.load();
+            video.play().catch(() => {});
+            return;
+          }
+          if (result.action === 'fatal') advanceToNextChannel();
+        };
+        video.addEventListener('error', onNativeError);
+        return () => video.removeEventListener('error', onNativeError);
+      }
+
+      if (isHLS && Hls.isSupported()) {
         const isMobileKiosk = /Android|iPhone|iPad/i.test(navigator.userAgent);
         const hls = new Hls({ enableWorker: !isMobileKiosk, lowLatencyMode: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
         hlsRef.current = hls;
@@ -811,18 +840,32 @@ export default function KioskModePage() {
           video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
         });
         hls.on(Hls.Events.ERROR, (_, d) => {
-          if (d.fatal && retryCount < maxRetries) {
-            retryCount++;
-            clearRDT();
-            retryDelayTimeout = setTimeout(() => setupPlayer(), 5000);
-          }
+          if (!d.fatal) return;
+          handleHlsFatalError(d).then((result) => {
+            switch (result.action) {
+              case 'recover_media':
+                hls.recoverMediaError();
+                break;
+              case 'switch_transport':
+              case 'reload':
+                destroyHlsPlayer(hlsRef);
+                break;
+              case 'fatal':
+              default:
+                destroyHlsPlayer(hlsRef);
+                advanceToNextChannel();
+                break;
+            }
+          });
         });
-      } else {
-        video.src = streamUrl;
-        video.playsInline = true;
-        startPT();
-        video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
+        return undefined;
       }
+
+      video.src = streamUrl;
+      video.playsInline = true;
+      startPT();
+      video.play().catch(() => { video.muted = true; setIsMuted(true); video.play().catch(() => {}); });
+      return undefined;
     };
 
     const onTimeUpdate = () => {
@@ -833,15 +876,16 @@ export default function KioskModePage() {
     };
     video.addEventListener('timeupdate', onTimeUpdate);
 
-    setupPlayer();
+    const removeNativeError = setupPlayer();
 
     return () => {
       clearPT();
       clearRDT();
       video.removeEventListener('timeupdate', onTimeUpdate);
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+      if (typeof removeNativeError === 'function') removeNativeError();
+      destroyHlsPlayer(hlsRef);
     };
-  }, [currentChannel, playbackGeneration]);
+  }, [currentChannel, playbackGeneration, activeStreamUrl, transportRevision, handleHlsFatalError, handleNativeVideoError, destroyHlsPlayer]);
 
   // ── Auto-failover: switch to media playlist when stream fails too long ───
 

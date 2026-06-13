@@ -13,6 +13,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { fetchRange, streamRange, redactUrl } = require('../utils/httpClient');
 const { rewriteManifest, isHlsManifestContent, isHlsManifestBody } = require('../utils/hlsManifest');
 const { shouldUsePlaybackProxy, enrichChannel } = require('../utils/channelEnrichment');
+const { buildOriginFetchHeaders, resolveUserAgent } = require('../utils/streamProxyHeaders');
 const { issueStreamToken } = require('../utils/streamToken');
 
 let passed = 0;
@@ -117,10 +118,15 @@ function testHlsDetection() {
 function testPlaybackProxyEligibility() {
   console.log('\nplayback proxy eligibility\n');
   const tvmChannel = { url: 'https://cdn.example.com/live/tvm', requires_referrer: 0, requires_user_agent: 0 };
-  const tvmDiag = { is_hls: 1, is_http: 0, needs_proxy: 1 };
+  const tvmDiagAuto = { is_hls: 1, is_http: 0, needs_proxy: 0 };
   assert(
-    'HTTPS HLS without headers uses direct URL (not proxy)',
-    shouldUsePlaybackProxy(tvmChannel, tvmDiag) === false
+    'HTTPS HLS without proxy signals uses direct (not forced proxy)',
+    shouldUsePlaybackProxy(tvmChannel, tvmDiagAuto) === false
+  );
+  const tvmDiagExplicit = { is_hls: 1, is_http: 0, needs_proxy: 1 };
+  assert(
+    'HTTPS HLS with needs_proxy=1 uses proxy',
+    shouldUsePlaybackProxy(tvmChannel, tvmDiagExplicit) === true
   );
   assert(
     'HTTP stream still uses proxy',
@@ -133,18 +139,61 @@ function testPlaybackProxyEligibility() {
       { is_hls: 1, is_http: 0, needs_proxy: 0 }
     ) === true
   );
-  const offlineEnriched = enrichChannel(
-    { id: 'tvm', url: 'https://cdn.example.com/live/tvm', name: 'TVM' },
+
+  const mockReq = { protocol: 'https', get: () => 'tv.example.com' };
+  const autoEnriched = enrichChannel(
+    { id: 'tvm', url: 'https://cdn.example.com/live/tvm.m3u8', name: 'TVM' },
+    { is_live: 1, is_hls: 1, is_http: 0, needs_proxy: 0, last_checked: '2026-01-01' },
+    null,
+    { id: 1 },
+    mockReq
+  );
+  assert('auto mode HTTPS HLS exposes dual URLs', autoEnriched.playback_mode === 'auto');
+  assert('auto mode direct_url is origin', autoEnriched.direct_url === 'https://cdn.example.com/live/tvm.m3u8');
+  assert('auto mode proxy_url is built', autoEnriched.proxy_url && autoEnriched.proxy_url.includes('/api/stream/'));
+  assert('auto mode playback_url prefers direct', autoEnriched.playback_url === autoEnriched.direct_url);
+
+  const proxyEnriched = enrichChannel(
+    { id: 'rumble', url: 'https://cdn.rumble.cloud/live/chunklist.m3u8', name: 'Rumble' },
     { is_live: 0, is_hls: 1, is_http: 0, needs_proxy: 1, failure_reason_code: 'OFFLINE', last_checked: '2026-01-01' },
     null,
     { id: 1 },
-    { protocol: 'https', get: () => 'tv.example.com' }
+    mockReq
   );
   assert(
-    'offline probe still gets direct playback_url for HTTPS HLS',
-    offlineEnriched.play_status === 'offline' &&
-      offlineEnriched.playback_url === 'https://cdn.example.com/live/tvm'
+    'needs_proxy=1 forces proxy playback_mode',
+    proxyEnriched.playback_mode === 'proxy'
   );
+  assert(
+    'needs_proxy=1 playback_url uses proxy',
+    proxyEnriched.playback_url === proxyEnriched.proxy_url
+  );
+  assert(
+    'offline probe still exposes direct_url for browser fallback metadata',
+    proxyEnriched.direct_url === 'https://cdn.rumble.cloud/live/chunklist.m3u8'
+  );
+}
+
+function testProxyHeaders() {
+  console.log('\nproxy headers');
+  const prevUa = process.env.STREAM_PROXY_USER_AGENT;
+  process.env.STREAM_PROXY_USER_AGENT = 'TestProxyAgent/9.9';
+  const defaultHeaders = buildOriginFetchHeaders({}, { resourceType: 'manifest' });
+  assert('default env User-Agent', defaultHeaders['User-Agent'] === 'TestProxyAgent/9.9');
+  assert('manifest Accept header', defaultHeaders.Accept.includes('mpegurl'));
+  assert('Accept-Encoding identity on manifest', defaultHeaders['Accept-Encoding'] === 'identity');
+
+  const channelHeaders = buildOriginFetchHeaders(
+    { httpUserAgent: 'VLC/3.0.0', httpReferrer: 'https://ref.example/' },
+    { resourceType: 'segment' }
+  );
+  assert('channel User-Agent forwarded', channelHeaders['User-Agent'] === 'VLC/3.0.0');
+  assert('channel Referer forwarded', channelHeaders.Referer === 'https://ref.example/');
+  assert('segment Accept is wildcard', channelHeaders.Accept === '*/*');
+
+  if (prevUa === undefined) delete process.env.STREAM_PROXY_USER_AGENT;
+  else process.env.STREAM_PROXY_USER_AGENT = prevUa;
+  assert('resolveUserAgent falls back', resolveUserAgent({}) === (prevUa || 'BakeGrillTV/1.0'));
 }
 
 async function testStreamRangeSecurity() {
@@ -235,6 +284,7 @@ async function run() {
   testManifestRewrite();
   testHlsDetection();
   testPlaybackProxyEligibility();
+  testProxyHeaders();
   testStreamTokenIssue();
   await testStreamRangeSecurity();
   await testIntegrationOptional();

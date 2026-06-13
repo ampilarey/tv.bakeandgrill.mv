@@ -3,6 +3,7 @@ const express = require('express');
 const { fetch, fetchRange, streamRange, redactUrl } = require('../utils/httpClient');
 const { verifyToken: verifyStreamToken, issueStreamToken } = require('../utils/streamToken');
 const { rewriteManifest, isHlsManifestContent, isHlsManifestBody } = require('../utils/hlsManifest');
+const { buildOriginFetchHeaders, redactHostname } = require('../utils/streamProxyHeaders');
 const { resolveChannel } = require('../utils/channelResolver');
 const { getDatabase } = require('../database/init');
 const { urlHash } = require('../services/channelDiagnosis');
@@ -18,11 +19,8 @@ function segmentUrlHash(absoluteUrl) {
   return crypto.createHash('sha256').update(absoluteUrl).digest('hex').slice(0, 32);
 }
 
-function buildHeaders(channel) {
-  const headers = { 'User-Agent': 'BakeGrillTV/1.0' };
-  if (channel.httpUserAgent) headers['User-Agent'] = channel.httpUserAgent;
-  if (channel.httpReferrer) headers['Referer'] = channel.httpReferrer;
-  return headers;
+function newRequestId() {
+  return crypto.randomUUID();
 }
 
 function buildProxySegUrl(req, channelId, playlistId, urlHashVal, absoluteUrl) {
@@ -36,6 +34,17 @@ function buildProxySegUrl(req, channelId, playlistId, urlHashVal, absoluteUrl) {
   });
   const u = encodeURIComponent(absoluteUrl);
   return `${host}/api/stream/${channelId}/seg?token=${encodeURIComponent(segToken)}&u=${u}`;
+}
+
+function logProxyEvent(requestId, fields) {
+  console.info('[StreamProxy]', { requestId, ...fields });
+}
+
+function mapUpstreamErrorCode(err) {
+  if (err.code === 'MAX_BYTES_EXCEEDED') return 'MAX_BYTES_EXCEEDED';
+  if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') return 'PROXY_TIMEOUT';
+  if (err.code === 'PROXY_RUNTIME_ERROR') return 'PROXY_RUNTIME_ERROR';
+  return 'SEGMENT_FETCH_FAILED';
 }
 
 async function assertChannelAccess(playlistId, channel) {
@@ -95,18 +104,60 @@ async function shouldTreatSegAsManifest(segmentUrl, headers, rangeHeader) {
   }
 }
 
-async function sendProxiedManifest(req, res, { channelId, playlistId, urlHashVal, manifestUrl, headers }) {
-  const manifestRes = await fetch(manifestUrl, {
-    timeout: PROXY_TIMEOUT_MS,
-    headers,
-    maxBytes: 2097152,
+async function sendProxiedManifest(req, res, {
+  requestId,
+  channelId,
+  playlistId,
+  urlHashVal,
+  manifestUrl,
+  headers,
+  stage = 'manifest',
+}) {
+  const started = Date.now();
+  let manifestRes;
+  try {
+    manifestRes = await fetch(manifestUrl, {
+      timeout: PROXY_TIMEOUT_MS,
+      headers,
+      maxBytes: 2097152,
+    });
+  } catch (err) {
+    logProxyEvent(requestId, {
+      stage,
+      channelId,
+      hostname: redactHostname(manifestUrl),
+      statusCode: err.status || null,
+      contentType: null,
+      elapsedMs: Date.now() - started,
+      code: err.code || 'MANIFEST_FETCH_FAILED',
+    });
+    throw err;
+  }
+
+  const statusCode = manifestRes.status;
+  const contentType = manifestRes.headers?.['content-type'] || null;
+  logProxyEvent(requestId, {
+    stage,
+    channelId,
+    hostname: redactHostname(manifestUrl),
+    statusCode,
+    contentType,
+    elapsedMs: Date.now() - started,
   });
+
+  if (!isOkStatus(statusCode)) {
+    const err = new Error(`Origin returned HTTP ${statusCode}`);
+    err.status = statusCode;
+    err.code = stage === 'nested_manifest' ? 'NESTED_PLAYLIST_FAILED' : 'MANIFEST_FETCH_FAILED';
+    throw err;
+  }
 
   if (!isHlsManifestBody(manifestRes.data)) {
     return res.status(502).json({
       success: false,
       error: 'Invalid stream manifest',
       code: 'MANIFEST_INVALID',
+      requestId,
     });
   }
 
@@ -124,36 +175,53 @@ async function sendProxiedManifest(req, res, { channelId, playlistId, urlHashVal
  * GET /api/stream/:channelId/master.m3u8?token=...&playlistId=N
  */
 router.get('/:channelId/master.m3u8', asyncHandler(async (req, res) => {
+  const requestId = newRequestId();
   const { channelId } = req.params;
   const { token, playlistId } = req.query;
 
   const payload = verifyStreamToken(token);
   if (!payload || payload.channelId !== channelId || String(payload.playlistId) !== String(playlistId)) {
-    return res.status(401).json({ success: false, error: 'Invalid or expired stream token' });
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid or expired stream token',
+      code: 'TOKEN_EXPIRED',
+      requestId,
+    });
   }
 
   const resolved = await resolveChannel(playlistId, channelId);
-  if (!resolved) return res.status(404).json({ success: false, error: 'Channel not found' });
+  if (!resolved) return res.status(404).json({ success: false, error: 'Channel not found', requestId });
 
   const { channel } = resolved;
   if (urlHash(channel.url) !== payload.urlHash) {
-    return res.status(403).json({ success: false, error: 'Token does not match channel' });
+    return res.status(403).json({ success: false, error: 'Token does not match channel', requestId });
   }
 
   await assertChannelAccess(playlistId, channel);
 
-  const headers = buildHeaders(channel);
+  const headers = buildOriginFetchHeaders(channel, { resourceType: 'manifest' });
   try {
     return await sendProxiedManifest(req, res, {
+      requestId,
       channelId,
       playlistId,
       urlHashVal: payload.urlHash,
       manifestUrl: channel.url,
       headers,
+      stage: 'manifest',
     });
   } catch (err) {
-    console.warn('[StreamProxy] Manifest fetch failed', { url: redactUrl(channel.url), code: err.code });
-    return res.status(502).json({ success: false, error: 'Failed to fetch stream manifest', code: 'MANIFEST_FETCH_FAILED' });
+    const code = err.code === 'NESTED_PLAYLIST_FAILED'
+      ? 'NESTED_PLAYLIST_FAILED'
+      : err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT'
+        ? 'PROXY_TIMEOUT'
+        : 'MANIFEST_FETCH_FAILED';
+    return res.status(502).json({
+      success: false,
+      error: 'Failed to fetch stream manifest',
+      code,
+      requestId,
+    });
   }
 }));
 
@@ -161,71 +229,89 @@ router.get('/:channelId/master.m3u8', asyncHandler(async (req, res) => {
  * GET /api/stream/:channelId/seg?token=...&u=...
  */
 router.get('/:channelId/seg', asyncHandler(async (req, res) => {
+  const requestId = newRequestId();
   const { channelId } = req.params;
   const { token, u } = req.query;
 
   const payload = verifyStreamToken(token);
   if (!payload || payload.channelId !== channelId || payload.scope !== 'segment') {
-    return res.status(401).json({ success: false, error: 'Invalid segment token' });
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid segment token',
+      code: 'TOKEN_EXPIRED',
+      requestId,
+    });
   }
 
   const segmentUrl = resolveSegmentUrl(payload, u);
   if (!segmentUrl) {
-    return res.status(403).json({ success: false, error: 'Segment URL does not match token' });
+    return res.status(403).json({ success: false, error: 'Segment URL does not match token', requestId });
   }
 
   const resolved = await resolveChannel(payload.playlistId, channelId);
-  if (!resolved) return res.status(404).json({ success: false, error: 'Channel not found' });
+  if (!resolved) return res.status(404).json({ success: false, error: 'Channel not found', requestId });
 
   const { channel } = resolved;
   if (urlHash(channel.url) !== payload.urlHash) {
-    return res.status(403).json({ success: false, error: 'Token mismatch' });
+    return res.status(403).json({ success: false, error: 'Token mismatch', requestId });
   }
 
   await assertChannelAccess(payload.playlistId, channel);
 
-  const headers = buildHeaders(channel);
   const rangeHeader = req.headers.range;
+  const headers = buildOriginFetchHeaders(channel, {
+    resourceType: rangeHeader ? 'range' : 'segment',
+  });
 
   try {
     if (await shouldTreatSegAsManifest(segmentUrl, headers, rangeHeader)) {
       return await sendProxiedManifest(req, res, {
+        requestId,
         channelId,
         playlistId: payload.playlistId,
         urlHashVal: payload.urlHash,
         manifestUrl: segmentUrl,
-        headers,
+        headers: buildOriginFetchHeaders(channel, { resourceType: 'manifest' }),
+        stage: 'nested_manifest',
       });
     }
 
     const looksLikeKey = /\.key(\?|$)/i.test(segmentUrl);
     const maxBytes = looksLikeKey ? KEY_MAX_BYTES : SEGMENT_MAX_BYTES;
+    const started = Date.now();
 
-    await streamRange(segmentUrl, {
+    const result = await streamRange(segmentUrl, {
       headers,
       rangeHeader: rangeHeader || null,
       maxBytes,
       timeout: PROXY_TIMEOUT_MS,
       res,
     });
-  } catch (err) {
-    console.warn('[StreamProxy] Segment failed', {
+
+    logProxyEvent(requestId, {
+      stage: 'segment',
       channelId,
-      playlistId: payload.playlistId,
-      statusCode: err.status,
-      code: err.code,
-      url: redactUrl(segmentUrl),
+      hostname: redactHostname(segmentUrl),
+      statusCode: result?.status || res.statusCode,
+      contentType: result?.contentType || null,
+      elapsedMs: Date.now() - started,
+    });
+  } catch (err) {
+    logProxyEvent(requestId, {
+      stage: 'segment',
+      channelId,
+      hostname: redactHostname(segmentUrl),
+      statusCode: err.status || null,
+      contentType: null,
+      elapsedMs: null,
+      code: mapUpstreamErrorCode(err),
     });
     if (!res.headersSent) {
-      const code = err.code === 'MAX_BYTES_EXCEEDED'
-        ? 'MAX_BYTES_EXCEEDED'
-        : err.code === 'PROXY_RUNTIME_ERROR' || err.code === 'ECONNABORTED'
-          ? 'PROXY_RUNTIME_ERROR'
-          : 'SEGMENT_FETCH_FAILED';
       res.status(502).json({
         success: false,
         error: 'Failed to fetch segment',
-        code,
+        code: mapUpstreamErrorCode(err),
+        requestId,
       });
     }
   }

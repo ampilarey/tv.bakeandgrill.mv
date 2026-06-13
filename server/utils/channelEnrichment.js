@@ -10,28 +10,63 @@ function channelNeedsReferrerOrUa(ch) {
   return !!(ch.requires_referrer || ch.requires_user_agent || ch.httpReferrer || ch.httpUserAgent);
 }
 
-/** Proxy only when required — HTTPS HLS plays direct in Safari / many CDNs. */
+function channelIsHls(ch, diagnosis) {
+  return diagnosis.is_hls === 1 || (ch.url && isHlsUrl(ch.url));
+}
+
+/** Whether the initial playback_url should use the server proxy. */
 function shouldUsePlaybackProxy(ch, diagnosis) {
   if (diagnosis.is_http === 1 || urlIsHttpScheme(ch.url)) return true;
   if (channelNeedsReferrerOrUa(ch)) return true;
-  if (diagnosis.needs_proxy !== 1) return false;
-  const isHls =
-    diagnosis.is_hls === 1 || (ch.url && isHlsUrl(ch.url));
-  if (isHls && diagnosis.is_http !== 1 && !channelNeedsReferrerOrUa(ch)) {
-    return false;
-  }
-  return true;
+  if (diagnosis.needs_proxy === 1) return true;
+  return false;
 }
 
 function normalizeStoredNeedsProxy(stored, ch, health) {
   const inferred =
     (health?.is_http === 1 || urlIsHttpScheme(ch.url) || channelNeedsReferrerOrUa(ch)) ? 1 : 0;
   if (stored == null) return inferred;
-  if (stored === 1) {
-    const isHls = health?.is_hls === 1 || (ch.url && isHlsUrl(ch.url));
-    if (isHls && health?.is_http !== 1 && !channelNeedsReferrerOrUa(ch)) return inferred;
-  }
   return stored;
+}
+
+function resolvePlaybackMode(ch, diagnosis, override = {}) {
+  const explicit = override.playback_mode;
+  if (explicit === 'auto' || explicit === 'direct' || explicit === 'proxy') {
+    return explicit;
+  }
+
+  if (diagnosis.is_http === 1 || urlIsHttpScheme(ch.url)) return 'proxy';
+  if (channelNeedsReferrerOrUa(ch)) return 'proxy';
+  if (diagnosis.needs_proxy === 1) return 'proxy';
+
+  const isHls = channelIsHls(ch, diagnosis);
+  if (isHls) return 'auto';
+
+  return 'direct';
+}
+
+function buildTransportUrls(ch, playlist, req, diagnosis, playStatus) {
+  const hash = ch.url ? urlHash(ch.url) : null;
+  const blocked = diagnosis.is_drm || playStatus === 'blocked' || !ch.url;
+
+  if (blocked) {
+    return { direct_url: null, proxy_url: null };
+  }
+
+  const direct_url = ch.url;
+  let proxy_url = null;
+  try {
+    proxy_url = buildPlaybackProxyUrl(ch.id, playlist.id, hash, req);
+  } catch {
+    proxy_url = null;
+  }
+
+  return { direct_url, proxy_url };
+}
+
+function resolvePlaybackUrl(playbackMode, direct_url, proxy_url) {
+  if (playbackMode === 'proxy') return proxy_url || direct_url;
+  return direct_url || proxy_url;
 }
 
 /** Kiosk auto-play: only health-checked playable channels. */
@@ -45,10 +80,14 @@ function isVisibleInPlayableFilter(channel) {
   if (!channel || channel.is_hidden === 1) return false;
   if (channel.play_status === 'playable') return true;
   if (channel.play_status === 'unknown' || channel.play_status === 'needs_recheck') {
-    return !!(channel.playback_url || channel.url);
+    return !!(channel.playback_url || channel.direct_url || channel.url);
   }
   // Server probe may fail from the host while the stream works in the user's browser.
-  if (channel.play_status === 'offline' && (channel.playback_url || channel.url) && channel.is_drm !== 1) {
+  if (
+    channel.play_status === 'offline' &&
+    (channel.playback_url || channel.direct_url || channel.url) &&
+    channel.is_drm !== 1
+  ) {
     return true;
   }
   return false;
@@ -61,7 +100,6 @@ function enrichChannel(ch, health, override, playlist, req) {
 
   const urlIsHttp = h.is_http === 1 || (h.is_http == null && urlIsHttpScheme(ch.url));
   const urlIsHls = ch.url ? isHlsUrl(ch.url) : false;
-  const healthIsHls = h.is_hls === 1;
   const inferredNeedsProxy =
     urlIsHttp || channelNeedsReferrerOrUa(ch) ? 1 : 0;
 
@@ -94,18 +132,17 @@ function enrichChannel(ch, health, override, playlist, req) {
     o
   );
 
-  let playback_url = null;
-  if (!diagnosis.is_drm && play_status !== 'blocked' && ch.url) {
-    const useProxy = shouldUsePlaybackProxy(ch, diagnosis);
-    playback_url = useProxy
-      ? buildPlaybackProxyUrl(ch.id, playlist.id, hash, req)
-      : ch.url;
-  }
+  const playback_mode = resolvePlaybackMode(ch, diagnosis, o);
+  const { direct_url, proxy_url } = buildTransportUrls(ch, playlist, req, diagnosis, play_status);
+  const playback_url = resolvePlaybackUrl(playback_mode, direct_url, proxy_url);
 
   return {
     ...ch,
     ...diagnosis,
     play_status,
+    direct_url,
+    proxy_url,
+    playback_mode,
     playback_url,
   };
 }
@@ -127,12 +164,24 @@ async function loadHealthAndOverrides(playlistId) {
     healthMap = new Map(healthRows.map((r) => [r.url_hash, r]));
 
     const [overrideRows] = await db.query(
-      'SELECT url_hash, is_hidden, is_trusted FROM channel_overrides WHERE playlist_id = ?',
+      'SELECT url_hash, is_hidden, is_trusted, playback_mode FROM channel_overrides WHERE playlist_id = ?',
       [playlistId]
     );
     overrideMap = new Map(overrideRows.map((r) => [r.url_hash, r]));
   } catch (err) {
-    console.warn('[channelEnrichment] Could not load health/override:', err.message);
+    if (err.code === 'ER_BAD_FIELD_ERROR') {
+      try {
+        const [overrideRows] = await db.query(
+          'SELECT url_hash, is_hidden, is_trusted FROM channel_overrides WHERE playlist_id = ?',
+          [playlistId]
+        );
+        overrideMap = new Map(overrideRows.map((r) => [r.url_hash, r]));
+      } catch (innerErr) {
+        console.warn('[channelEnrichment] Could not load overrides:', innerErr.message);
+      }
+    } else if (err.code !== 'ER_NO_SUCH_TABLE') {
+      console.warn('[channelEnrichment] Could not load health/override:', err.message);
+    }
   }
 
   return { healthMap, overrideMap };
@@ -183,4 +232,7 @@ module.exports = {
   isStrictlyPlayable,
   isVisibleInPlayableFilter,
   shouldUsePlaybackProxy,
+  resolvePlaybackMode,
+  buildTransportUrls,
+  resolvePlaybackUrl,
 };

@@ -22,6 +22,7 @@ import {
   PLAYBACK_TIMEOUT_MS,
   MAX_PLAYER_RETRIES,
 } from '../hooks/usePlaybackGuard';
+import useHlsPlaybackController from '../hooks/useHlsPlaybackController';
 import PlayerDebugOverlay from '../components/PlayerDebugOverlay';
 
 /** Small coloured dot showing channel live-status */
@@ -58,6 +59,18 @@ export default function PlayerPage() {
   const channelNameFromUrl = searchParams.get('channelName');
   
   const [currentChannel, setCurrentChannel] = useState(null);
+  const {
+    activeStreamUrl,
+    activeTransport,
+    transportRevision,
+    handleHlsFatalError,
+    handleNativeVideoError,
+    destroyPlayer: destroyHlsPlayer,
+  } = useHlsPlaybackController({
+    channel: currentChannel,
+    playlistId,
+    onChannelUpdate: setCurrentChannel,
+  });
   const [isAutoPlay, setIsAutoPlay] = useState(false);
   const [showAllRecent, setShowAllRecent] = useState(false);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
@@ -252,7 +265,7 @@ export default function PlayerPage() {
   useEffect(() => {
     if (!currentChannel || !videoRef.current) return;
 
-    const streamUrl = getStreamUrl(currentChannel);
+    const streamUrl = activeStreamUrl || getStreamUrl(currentChannel);
     const prePlayErr = getPrePlayError(currentChannel, isIOS);
     if (prePlayErr) {
       setVideoError(prePlayErr);
@@ -666,19 +679,35 @@ export default function PlayerPage() {
       // Also try immediate play (might work on some iOS versions/situations)
       tryPlayWithFallback();
       
-      // Handle video errors — auto-retry transient live HLS glitches before showing overlay
-      const handleError = (e) => {
+      // Handle video errors — transport fallback then media recovery
+      const handleError = async (e) => {
         console.error('Video error:', e);
         if (!video.error) return;
 
         const errorCode = video.error.code;
-        const retriable =
-          errorCode === video.error.MEDIA_ERR_NETWORK ||
-          errorCode === video.error.MEDIA_ERR_DECODE;
+        if (errorCode === video.error.MEDIA_ERR_ABORTED) {
+          clearPlaybackTimeout();
+          video.controls = true;
+          setReconnecting(false);
+          setVideoError('Playback aborted. Tap the play button to try again.');
+          setVideoLoading(false);
+          return;
+        }
 
-        if (errorCode !== video.error.MEDIA_ERR_ABORTED && retriable && mediaErrorRetries < MAX_PLAYER_RETRIES) {
-          mediaErrorRetries += 1;
-          console.warn(`iOS HLS media error ${errorCode} — retry ${mediaErrorRetries}/${MAX_PLAYER_RETRIES}`);
+        const result = await handleNativeVideoError(video.error);
+
+        if (result.action === 'switch_transport' || result.action === 'reload') {
+          setReconnecting(true);
+          setVideoError(null);
+          setVideoLoading(true);
+          video.controls = true;
+          video.src = result.url;
+          video.load();
+          video.play().catch(() => {});
+          return;
+        }
+
+        if (result.action === 'retry_same') {
           setReconnecting(true);
           setVideoError(null);
           setVideoLoading(false);
@@ -693,25 +722,22 @@ export default function PlayerPage() {
 
         clearPlaybackTimeout();
         video.controls = true;
-        const mapped = mapPlaybackError({ mediaError: video.error, channel: currentChannel });
+        const mapped = mapPlaybackError({
+          reasonCode: result.reasonCode,
+          mediaError: video.error,
+          channel: currentChannel,
+        });
         setReconnecting(false);
-        setVideoError(errorCode === video.error.MEDIA_ERR_ABORTED
-          ? 'Playback aborted. Tap the play button to try again.'
-          : mapped);
+        setVideoError(mapped);
         setVideoLoading(false);
 
-        if (currentChannel?.url && playlistId && errorCode !== video.error.MEDIA_ERR_ABORTED) {
-          const reasonCode = errorCode === video.error.MEDIA_ERR_DECODE
-            ? 'UNSUPPORTED_CODEC'
-            : errorCode === video.error.MEDIA_ERR_NETWORK
-              ? 'SEGMENT_FETCH_FAILED'
-              : 'PLAYBACK_STALLED';
+        if (currentChannel?.url && playlistId) {
           reportPlaybackFailure({
             url: currentChannel.url,
             playlistId: parseInt(playlistId, 10),
             channelName: currentChannel.name,
-            reasonCode,
-            failureStage: `media_error_${errorCode}`,
+            reasonCode: result.reasonCode || 'PLAYBACK_STALLED',
+            failureStage: result.failureStage,
           });
         }
       };
@@ -1186,85 +1212,57 @@ export default function PlayerPage() {
           url: data.url,
           isMobile,
           isAndroid,
-          isIOS
+          isIOS,
+          transport: activeTransport,
         });
         setVideoLoading(false);
-        
-        // Try to recover from errors
-        if (data.fatal) {
-          clearPlaybackTimeout();
 
-          setDebugHlsError({ type: data.type, details: data.details, fatal: data.fatal });
-          const reasonCode = data.type === Hls.ErrorTypes.MEDIA_ERROR
-            ? 'UNSUPPORTED_CODEC'
-            : data.details?.includes('frag')
-              ? 'SEGMENT_FETCH_FAILED'
-              : data.details?.includes('manifest')
-                ? 'MANIFEST_INVALID'
-                : 'PROXY_RUNTIME_ERROR';
+        if (!data.fatal) return;
 
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              if (retryCountRef.current < MAX_PLAYER_RETRIES) {
-                retryCountRef.current += 1;
-                setReconnecting(true);
-                setVideoError(null);
-                setTimeout(() => {
-                  if (hlsRef.current) {
-                    hlsRef.current.startLoad();
-                    setReconnecting(false);
-                    startPlaybackTimeout();
-                  }
-                }, 1000);
-              } else {
-                setReconnecting(false);
-                setVideoError(mapPlaybackError({ hlsError: data, reasonCode, channel: currentChannel }));
-                reportPlaybackFailure({
-                  url: currentChannel.url,
-                  playlistId: parseInt(playlistId, 10),
-                  channelName: currentChannel.name,
-                  reasonCode,
-                  failureStage: data.details,
-                });
-              }
+        clearPlaybackTimeout();
+        setDebugHlsError({ type: data.type, details: data.details, fatal: data.fatal });
+
+        handleHlsFatalError(data).then((result) => {
+          switch (result.action) {
+            case 'recover_media':
+              setReconnecting(true);
+              setVideoError(null);
+              setTimeout(() => {
+                if (hlsRef.current) {
+                  hlsRef.current.recoverMediaError();
+                  setReconnecting(false);
+                  startPlaybackTimeout();
+                }
+              }, 1000);
               break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              if (retryCountRef.current < MAX_PLAYER_RETRIES) {
-                retryCountRef.current += 1;
-                setReconnecting(true);
-                setVideoError(null);
-                setTimeout(() => {
-                  if (hlsRef.current) {
-                    hlsRef.current.recoverMediaError();
-                    setReconnecting(false);
-                    startPlaybackTimeout();
-                  }
-                }, 1000);
-              } else {
-                setReconnecting(false);
-                setVideoError(mapPlaybackError({ hlsError: data, reasonCode: 'UNSUPPORTED_CODEC', channel: currentChannel }));
-                reportPlaybackFailure({
-                  url: currentChannel.url,
-                  playlistId: parseInt(playlistId, 10),
-                  channelName: currentChannel.name,
-                  reasonCode: 'UNSUPPORTED_CODEC',
-                  failureStage: data.details,
-                });
-              }
+            case 'switch_transport':
+            case 'reload':
+              setReconnecting(true);
+              setVideoError(null);
+              destroyHlsPlayer(hlsRef);
               break;
+            case 'fatal':
             default:
-              setVideoError(mapPlaybackError({ hlsError: data, reasonCode, channel: currentChannel }));
+              setReconnecting(false);
+              setVideoError(mapPlaybackError({
+                reasonCode: result.reasonCode,
+                hlsError: data,
+                channel: currentChannel,
+              }));
               reportPlaybackFailure({
                 url: currentChannel.url,
                 playlistId: parseInt(playlistId, 10),
                 channelName: currentChannel.name,
-                reasonCode,
-                failureStage: data.details,
+                reasonCode: result.reasonCode || 'UNKNOWN_ERROR',
+                failureStage: result.failureStage || data.details,
               });
-              hls.destroy();
+              if (hlsRef.current) {
+                hlsRef.current.destroy();
+                hlsRef.current = null;
+              }
               break;
           }
-        }
+        });
       });
       
       // Set up history logging timer (for HLS.js path)
@@ -1417,7 +1415,7 @@ export default function PlayerPage() {
       };
     }
 
-  }, [currentChannel?.id, currentChannel?.playback_url, currentChannel?.url, playlistId, isIOS]);
+  }, [currentChannel?.id, activeStreamUrl, transportRevision, playlistId, isIOS]);
 
   // Show Now Playing overlay when channel changes
   useEffect(() => {

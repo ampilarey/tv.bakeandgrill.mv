@@ -17,7 +17,8 @@ const REASON_CODES = new Set([
   'UNSUPPORTED_AUDIO', 'GEO_BLOCKED_OR_FORBIDDEN', 'EXPIRED_URL', 'REQUIRES_REFERRER',
   'REQUIRES_USER_AGENT', 'DRM_OR_PROTECTED_STREAM', 'PROXY_REQUIRED', 'RATE_LIMITED',
   'PLAYBACK_STALLED', 'SEGMENT_FETCH_FAILED', 'PROXY_RUNTIME_ERROR', 'PLAYBACK_START_TIMEOUT',
-  'UNKNOWN_ERROR',
+  'DIRECT_CORS_OR_NETWORK_FAILURE', 'PROXY_ORIGIN_FAILURE', 'MEDIA_CODEC_FAILURE',
+  'ORIGIN_PROBE_FAILURE', 'UNKNOWN_ERROR',
 ]);
 
 const REASON_MESSAGES = {
@@ -70,11 +71,10 @@ function isHlsUrl(url) {
   }
 }
 
+const { buildOriginFetchHeaders } = require('../utils/streamProxyHeaders');
+
 function buildFetchHeaders(channel) {
-  const headers = { 'User-Agent': 'BakeGrillTV/1.0' };
-  if (channel?.httpUserAgent) headers['User-Agent'] = channel.httpUserAgent;
-  if (channel?.httpReferrer) headers['Referer'] = channel.httpReferrer;
-  return headers;
+  return buildOriginFetchHeaders(channel, { resourceType: 'manifest' });
 }
 
 function emptyDiagnosis(channel, playlistId) {

@@ -5,11 +5,18 @@ import api from '../services/api';
 
 export const PLAYBACK_TIMEOUT_MS = 20000;
 export const PLAYBACK_STALL_RETRY_MS = 8000;
-export const MAX_PLAYER_RETRIES = 5;
+/** Retries on the same transport URL — transport fallback is separate. */
+export const MAX_PLAYER_RETRIES = 2;
 
-export function getStreamUrl(channel) {
+export function getStreamUrl(channel, transport = null) {
   if (!channel) return null;
-  return channel.playback_url || channel.url || null;
+  if (transport === 'proxy') {
+    return channel.proxy_url || channel.playback_url || channel.direct_url || channel.url || null;
+  }
+  if (transport === 'direct') {
+    return channel.direct_url || channel.playback_url || channel.url || null;
+  }
+  return channel.playback_url || channel.direct_url || channel.url || null;
 }
 
 export function isProgressiveVideoUrl(url) {
@@ -94,6 +101,10 @@ const REASON_MESSAGES = {
   PLAYBACK_STALLED: 'Playback stalled while loading video segments',
   SEGMENT_FETCH_FAILED: 'Stream started but next video segment failed',
   PROXY_RUNTIME_ERROR: 'Stream proxy failed',
+  DIRECT_CORS_OR_NETWORK_FAILURE: 'Stream blocked in browser — retrying via proxy',
+  PROXY_ORIGIN_FAILURE: 'Stream proxy could not reach the origin',
+  MEDIA_CODEC_FAILURE: 'Unsupported codec',
+  ORIGIN_PROBE_FAILURE: 'Stream offline',
   UNKNOWN_ERROR: 'Stream offline',
 };
 

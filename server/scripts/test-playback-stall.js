@@ -82,6 +82,9 @@ function moduleSmoke() {
   assert('PLAYBACK_STALLED in REASON_CODES', REASON_CODES.has('PLAYBACK_STALLED'));
   assert('SEGMENT_FETCH_FAILED in REASON_CODES', REASON_CODES.has('SEGMENT_FETCH_FAILED'));
   assert('PLAYBACK_START_TIMEOUT in REASON_CODES', REASON_CODES.has('PLAYBACK_START_TIMEOUT'));
+  assert('DIRECT_CORS_OR_NETWORK_FAILURE in REASON_CODES', REASON_CODES.has('DIRECT_CORS_OR_NETWORK_FAILURE'));
+  assert('PROXY_ORIGIN_FAILURE in REASON_CODES', REASON_CODES.has('PROXY_ORIGIN_FAILURE'));
+  assert('MEDIA_CODEC_FAILURE in REASON_CODES', REASON_CODES.has('MEDIA_CODEC_FAILURE'));
 
   const { streamRange } = require('../utils/httpClient');
   assert('streamRange exported', typeof streamRange === 'function');
